@@ -37,37 +37,24 @@
         <!-- TAB: TIMELINE -->
         <div id="tab-timeline" class="hidden">
             <div class="card">
-                <h2>Timeline 24h (Rolling)</h2>
-                <div id="timelineInfo" class="timeline-info"></div>
+                <h2>Timeline</h2>
+                <div class="timeline-scroll">
+                    <div id="timelineContainer" class="timeline-container">
+                        <div id="timelineDays" class="timeline-days"></div>
 
-                <div class="timeline-wrapper">
-                    <div class="timeline-inner">
-                        <!-- Scale giờ -->
-                        <div id="timelineScale" class="timeline-scale"></div>
+                        <div class="timeline-header" id="timelineHeader"></div>
 
-                        <!-- Thân timeline -->
-                        <div class="timeline-main">
-                            <!-- Nền: hôm nay (trắng) / tương lai (xám) -->
-                            <div id="timelineBgToday" class="timeline-bg timeline-bg-today"></div>
-                            <div id="timelineBgFuture" class="timeline-bg timeline-bg-future"></div>
+                        <div class="timeline-lane timeline-lane-normal" id="lane-normal"></div>
+                        <div class="timeline-lane timeline-lane-background" id="lane-background"></div>
+                        <div class="timeline-lane timeline-lane-pending" id="lane-pending"></div>
 
-                            <!-- Lane 1: Normal tasks -->
-                            <div class="timeline-lane timeline-lane-normal">
-                                <span class="timeline-lane-label">Normal tasks</span>
-                            </div>
-                            <!-- Lane 2: Background -->
-                            <div class="timeline-lane timeline-lane-background">
-                                <span class="timeline-lane-label">Background</span>
-                            </div>
-                            <!-- Lane 3: Pending -->
-                            <div class="timeline-lane timeline-lane-pending">
-                                <span class="timeline-lane-label">Pending</span>
-                            </div>
-
-                            <!-- Current time marker -->
-                            <div id="timelineCurrentMarker" class="timeline-current-marker"></div>
-                        </div>
+                        <div id="timelineCurrentLine" class="timeline-current-line"></div>
                     </div>
+                </div>
+                <div class="timeline-legend">
+                    <span class="legend-box legend-normal"></span> Normal
+                    <span class="legend-box legend-background"></span> Background
+                    <span class="legend-box legend-pending"></span> Pending
                 </div>
             </div>
         </div>
@@ -86,6 +73,21 @@
 
                 <label>Deadline:</label>
                 <input id="deadline" type="datetime-local" />
+
+                <div class="pill-group">
+                    <div class="pill-group-title">Loại task</div>
+                    <div class="pill-row">
+                        <label class="mode-label">
+                            <input type="radio" name="typeAdd" value="normal" checked />
+                            Normal
+                        </label>
+                        <label class="mode-label">
+                            <input type="radio" name="typeAdd" value="pending" />
+                            Pending
+                        </label>
+                        <!-- Background sẽ thêm UI sau, hiện chưa mở -->
+                    </div>
+                </div>
 
                 <div class="pill-group">
                     <div class="pill-group-title">Chế độ thời gian</div>
@@ -124,13 +126,6 @@
                         <button type="button" class="pill session-pill-add" data-value="EVENING" onclick="togglePill(this)">Tối</button>
                         <button type="button" class="pill session-pill-add" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
                     </div>
-                </div>
-
-                <div class="pill-group">
-                    <label class="pending-label">
-                        <input type="checkbox" id="pendingAdd" onchange="onPendingAddChange(this.checked)" />
-                        Pending (ghi chú / ý tưởng, chưa tính trọng số & chưa xếp vào timeline chính)
-                    </label>
                 </div>
 
                 <button onclick="addTask()">Thêm</button>
@@ -206,6 +201,20 @@
         <input id="editDeadline" type="datetime-local"/>
 
         <div class="pill-group">
+            <div class="pill-group-title">Loại task</div>
+            <div class="pill-row">
+                <label class="mode-label">
+                    <input type="radio" name="typeEdit" value="normal" />
+                    Normal
+                </label>
+                <label class="mode-label">
+                    <input type="radio" name="typeEdit" value="pending" />
+                    Pending
+                </label>
+            </div>
+        </div>
+
+        <div class="pill-group">
             <div class="pill-group-title">Chế độ thời gian</div>
             <div class="pill-row">
                 <label class="mode-label">
@@ -242,13 +251,6 @@
                 <button type="button" class="pill session-pill-edit" data-value="EVENING" onclick="togglePill(this)">Tối</button>
                 <button type="button" class="pill session-pill-edit" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
             </div>
-        </div>
-
-        <div class="pill-group">
-            <label class="pending-label">
-                <input type="checkbox" id="editPending" onchange="onPendingEditChange(this.checked)" />
-                Pending (ghi chú / ý tưởng)
-            </label>
         </div>
 
         <button onclick="saveEdit()">Lưu</button>
