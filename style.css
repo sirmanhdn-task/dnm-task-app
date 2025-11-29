@@ -1,217 +1,88 @@
-/* ========== BASE ========== */
-
-body {
-    font-family: Arial, sans-serif;
-    background: #f5f5f5;
+/* ========== RESET ========== */
+body, h1, h2, h3, p, button, input, textarea {
     margin: 0;
     padding: 0;
+    font-family: Arial, sans-serif;
 }
 
+body {
+    background: #fafafa;
+}
+
+/* ========== CONTAINER ========== */
 .container {
-    width: 95%;
+    width: 100%;
     max-width: 900px;
-    margin: 10px auto 40px auto;
+    margin: 0 auto;
+    padding: 12px;
 }
 
-h1 {
-    text-align: center;
-    margin-top: 10px;
-    margin-bottom: 15px;
-    font-size: 24px;
+.card {
+    background: white;
+    padding: 14px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    box-shadow: 0 0 2px rgba(0,0,0,0.1);
 }
 
-/* ========== AUTH ========== */
-
+/* ========== AUTH BAR ========== */
 .auth-bar {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    background: #ffffff;
-    padding: 8px 10px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.login-btn,
-.logout-btn {
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    color: #fff;
-    font-size: 13px;
-}
-
-.login-btn {
-    background: #1976d2;
-}
-.login-btn:hover {
-    background: #125a9c;
-}
-
-.logout-btn {
-    background: #e53935;
-}
-.logout-btn:hover {
-    background: #c62828;
-}
-
-#notLoggedInMessage {
-    background: #fff3cd;
-    border-radius: 8px;
-    padding: 10px 12px;
     margin-bottom: 15px;
-    border: 1px solid #ffeeba;
-    color: #856404;
+}
+
+.login-btn, .logout-btn {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.hidden {
+    display: none !important;
 }
 
 /* ========== TABS ========== */
-
 .tab-nav {
     display: flex;
-    background: #ffffff;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    overflow: hidden;
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .tab-btn {
     flex: 1;
-    padding: 12px 0;
+    padding: 10px;
+    background: #ddd;
     border: none;
-    background: transparent;
     cursor: pointer;
-    font-weight: 600;
-    font-size: 14px;
-    text-align: center;
-    color: #555;
-}
-
-.tab-btn:hover {
-    background: #eee;
+    border-radius: 6px;
 }
 
 .tab-active {
-    background: #e3f2fd;
-    border-bottom: 3px solid #1976d2;
-    color: #1976d2;
+    background: #2196f3;
+    color: white;
 }
 
-/* ========== CARDS / FORM ========== */
-
-.card {
-    background: #ffffff;
-    padding: 12px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-}
-
-.form-section {
-    background: #ffffff;
-    padding: 12px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-input, textarea {
+/* ========== FORM SECTION ========== */
+.form-section input,
+.form-section textarea {
     width: 100%;
     padding: 8px;
-    margin: 5px 0 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-sizing: border-box;
-    font-size: 14px;
-}
-
-textarea {
-    min-height: 60px;
-    resize: vertical;
+    margin-bottom: 10px;
 }
 
 button {
-    padding: 10px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    background: #2196f3;
-    color: #fff;
-}
-button:hover {
-    background: #1976d2;
+    padding: 8px 12px;
+    margin-top: 8px;
 }
 
-/* ========== TASK LIST ========== */
-
-.task-card {
-    background: #ffffff;
-    padding: 10px;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-}
-
-.task-title {
-    font-size: 16px;
-    font-weight: bold;
-    margin-bottom: 6px;
-}
-
-.task-footer {
-    margin-top: 10px;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.edit-btn {
-    background: #ff9800;
-}
-.edit-btn:hover {
-    background: #ef6c00;
-}
-
-.delete-btn {
-    background: #e53935;
-}
-.delete-btn:hover {
-    background: #c62828;
-}
-
-.calendar-btn {
-    background: #43a047;
-}
-.calendar-btn:hover {
-    background: #2e7d32;
-}
-
-.calendar-open-btn {
-    background: #5c6bc0;
-}
-.calendar-open-btn:hover {
-    background: #3949ab;
-}
-
-/* ========== PILLS ========== */
-
+/* ========== PILL GROUPS ========== */
 .pill-group {
-    margin: 8px 0 10px 0;
+    margin: 10px 0;
 }
 
 .pill-group-title {
     font-size: 13px;
     margin-bottom: 4px;
-    font-weight: 600;
 }
 
 .pill-row {
@@ -221,69 +92,51 @@ button:hover {
 }
 
 .pill {
-    width: auto;
     padding: 6px 10px;
-    background: #eeeeee;
-    border-radius: 999px;
-    border: 1px solid #ccc;
-    color: #000;
-    font-size: 12px;
+    border-radius: 15px;
+    border: 1px solid #aaa;
+    background: #eee;
     cursor: pointer;
-    user-select: none;
-}
-
-.pill:hover {
-    background: #e0e0e0;
-}
-
-.pill-selected {
-    background: #1976d2;
-    color: #fff;
-    border-color: #1976d2;
-}
-
-.pill-disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.mode-label {
     font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
 }
 
-/* ========== PENDING STYLE ========== */
+.pill.active {
+    background: #2196f3;
+    color: white;
+}
 
+/* Pending label */
 .pending-label {
     font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
-.task-pending {
+/* ========== TASK LIST CARD ========== */
+.task-card {
+    background: white;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    border-left: 4px solid #2196f3;
+}
+
+.task-card.pending {
     background: #eeeeee;
-    border: 1px dashed #9e9e9e;
+    border-left-color: #757575;
 }
 
-.task-pending .task-title {
-    color: #424242;
+.task-card.done {
+    opacity: 0.5;
+    border-left-color: #4caf50;
 }
 
-.task-badge-pending {
-    display: inline-block;
-    padding: 2px 6px;
-    border-radius: 999px;
-    background: #9e9e9e;
-    color: #fff;
-    font-size: 11px;
-    margin-left: 6px;
+/* Task controls */
+.task-controls {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
 }
 
 /* ========== POPUP ========== */
-
 .popup {
     position: fixed;
     top: 0;
@@ -298,37 +151,131 @@ button:hover {
 
 .popup-content {
     background: white;
-    width: 90%;
-    max-width: 420px;
-    padding: 15px;
+    padding: 18px;
     border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    width: 90%;
+    max-width: 450px;
 }
 
 .close-btn {
-    margin-top: 8px;
-    padding: 8px;
+    margin-left: 10px;
+}
+
+/* =========================================================
+   ===============   TIMELINE V4 STYLING    =================
+   ========================================================= */
+
+/* Wrapper to allow horizontal scroll on mobile */
+.timeline-wrapper {
     width: 100%;
-    background: #888;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+.timeline-inner {
+    min-width: 900px;
+    width: 100%;
+}
+
+/* Scale giờ */
+.timeline-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 4px 0;
+    color: #444;
+}
+
+/* Thân timeline */
+.timeline-main {
+    position: relative;
+    width: 100%;
     border-radius: 6px;
-    color: white;
-    cursor: pointer;
-}
-.close-btn:hover {
-    background: #555;
+    overflow: hidden;
+    border: 1px solid #ccc;
 }
 
-/* ========== TASK DONE STYLE ========== */
-
-.task-done {
-    opacity: 0.5;
-}
-.task-done .task-title {
-    text-decoration: line-through;
+/* Nền hôm nay và ngày mai */
+.timeline-bg {
+    position: absolute;
+    top: 0;
+    bottom: 0;
 }
 
-/* ========== UTIL ========== */
+.timeline-bg-today {
+    background: white;
+    z-index: 1;
+}
 
-.hidden {
-    display: none !important;
+.timeline-bg-future {
+    background: #f3f3f3;
+    z-index: 1;
+}
+
+/* Lanes (3 lane stacked) */
+.timeline-lane {
+    position: relative;
+    width: 100%;
+    z-index: 2;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    padding-left: 6px;
+}
+
+/* Lane heights */
+.timeline-lane-normal {
+    height: 60px;
+    background: #e3f2fd;
+}
+
+.timeline-lane-background {
+    height: 40px;
+    background: #fff8e1;
+}
+
+.timeline-lane-pending {
+    height: 30px;
+    background: #eeeeee;
+}
+
+.timeline-lane-label {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+/* Marker thời gian hiện tại */
+.timeline-current-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: red;
+    z-index: 3;
+}
+
+/* Timeline info text */
+.timeline-info {
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #555;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .timeline-scale {
+        font-size: 10px;
+    }
+    .timeline-lane-label {
+        font-size: 10px;
+    }
+    .timeline-lane-normal {
+        height: 50px;
+    }
+    .timeline-lane-background {
+        height: 35px;
+    }
+    .timeline-lane-pending {
+        height: 26px;
+    }
 }
