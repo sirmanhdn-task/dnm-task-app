@@ -1,619 +1,455 @@
-// ========== Firebase init ==========
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+/* ==========================================================
+   ===============   FIREBASE INIT   =========================
+   ========================================================== */
+
+import {
+    initializeApp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+
 import {
     getAuth,
     GoogleAuthProvider,
     signInWithPopup,
-    signOut,
-    onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+    onAuthStateChanged,
+    signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
 import {
     getFirestore,
     collection,
-    doc,
     addDoc,
+    doc,
+    getDoc,
+    getDocs,
     setDoc,
+    updateDoc,
     deleteDoc,
-    onSnapshot,
     query,
     where,
-    getDoc,
-    serverTimestamp
-} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    orderBy
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Config Firebase
+/* --- CONFIG --- */
 const firebaseConfig = {
-  apiKey: "AIzaSyBw6vBtXo6RKu_VfRQNW64sbgSlyWjwhOU",
-  authDomain: "dnmtaskmanager.firebaseapp.com",
-  projectId: "dnmtaskmanager",
-  storageBucket: "dnmtaskmanager.firebasestorage.app",
-  messagingSenderId: "606685816362",
-  appId: "1:606685816362:web:bf4e80d51323c079c70553"
+    apiKey: "AIzaSyBw6vBtXo6RRu_VfRQNW64sbgSlyWjwhOU",
+    authDomain: "dnmtaskmanager.firebaseapp.com",
+    projectId: "dnmtaskmanager",
+    storageBucket: "dnmtaskmanager.appspot.com",
+    messagingSenderId: "606685816362",
+    appId: "1:606685816362:web:bf4e80d51323c079c70553"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db   = getFirestore(app);
+const provider = new GoogleAuthProvider();
 
-// ========== STATE ==========
-const state = {
-    currentUser: null,
+const db = getFirestore(app);
+let tasksCol;
+let settingsDocRef;
+
+/* ==========================================================
+   ===============   STATE & HELPERS   ========================
+   ========================================================== */
+
+let state = {
+    user: null,
     tasks: [],
-    currentTab: "list",
     settings: {
-        quickBoost: 999999,
+        quickBoost: 200,
         timeMatchMultiplier: 1.5,
-        deadlinePenaltyFactor: 1,
-        estimatedWeight: 1,
+        deadlinePenaltyFactor: 0.8,
+        estimatedWeight: 0.3,
         hideDone: false
     }
 };
 
-// ========== LOCAL SETTINGS ==========
-const SETTINGS_KEY = "dnmSettingsV3";
+let editingTaskId = null;
 
-function loadSettingsFromLocalStorage() {
+/* ==========================================================
+   ===============   AUTH UI  =================================
+   ========================================================== */
+
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const userInfo = document.getElementById("userInfo");
+const userName = document.getElementById("userName");
+const loginArea = document.getElementById("loginArea");
+const appContent = document.getElementById("appContent");
+const notLoggedInMessage = document.getElementById("notLoggedInMessage");
+
+loginBtn.onclick = () => {
+    signInWithPopup(auth, provider).catch(err => {
+        alert("Lỗi đăng nhập: " + err.message);
+    });
+};
+
+logoutBtn.onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, async user => {
+    if (user) {
+        state.user = user;
+        userName.innerText = user.displayName;
+        loginArea.classList.add("hidden");
+        userInfo.classList.remove("hidden");
+        notLoggedInMessage.classList.add("hidden");
+        appContent.classList.remove("hidden");
+
+        tasksCol = collection(db, `users/${user.uid}/tasks`);
+        settingsDocRef = doc(db, `users/${user.uid}/settings/default`);
+
+        await loadSettings();
+        await loadTasks();
+
+        switchTab("list");
+    } else {
+        state.user = null;
+        loginArea.classList.remove("hidden");
+        userInfo.classList.add("hidden");
+        appContent.classList.add("hidden");
+        notLoggedInMessage.classList.remove("hidden");
+    }
+});
+
+/* ==========================================================
+   ===============   SETTINGS   ===============================
+   ========================================================== */
+
+async function loadSettings() {
     try {
-        const raw = localStorage.getItem(SETTINGS_KEY);
-        if (!raw) return;
-        const obj = JSON.parse(raw);
-        if (typeof obj.quickBoost === "number") state.settings.quickBoost = obj.quickBoost;
-        if (typeof obj.timeMatchMultiplier === "number") state.settings.timeMatchMultiplier = obj.timeMatchMultiplier;
-        if (typeof obj.deadlinePenaltyFactor === "number") state.settings.deadlinePenaltyFactor = obj.deadlinePenaltyFactor;
-        if (typeof obj.estimatedWeight === "number") state.settings.estimatedWeight = obj.estimatedWeight;
-        if (typeof obj.hideDone === "boolean") state.settings.hideDone = obj.hideDone;
-    } catch(e) {
-        console.error("Error loading settings:", e);
+        let s = await getDoc(settingsDocRef);
+        if (s.exists()) {
+            state.settings = s.data();
+        } else {
+            await setDoc(settingsDocRef, state.settings);
+        }
+        renderSettings();
+    } catch (err) {
+        console.error("Load settings error:", err);
     }
 }
 
-function saveSettingsToLocalStorage() {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+function renderSettings() {
+    document.getElementById("settingQuickBoost").value = state.settings.quickBoost;
+    document.getElementById("settingTimeMatchMultiplier").value = state.settings.timeMatchMultiplier;
+    document.getElementById("settingDeadlinePenalty").value = state.settings.deadlinePenaltyFactor;
+    document.getElementById("settingEstimatedWeight").value = state.settings.estimatedWeight;
+    document.getElementById("settingHideDone").checked = state.settings.hideDone;
+
+    document.getElementById("settingsNowInfo").innerHTML =
+        "Giờ hiện tại: " + new Date().toLocaleString();
 }
 
-loadSettingsFromLocalStorage();
+async function updateNumericSetting(field, value) {
+    let v = Number(value);
+    if (Number.isNaN(v)) return;
+    state.settings[field] = v;
+    await updateDoc(settingsDocRef, { [field]: v });
+}
 
-// ========== AUTH ==========
-const loginBtn = document.getElementById("loginBtn");
-const logoutBtn = document.getElementById("logoutBtn");
-const userInfoDiv = document.getElementById("userInfo");
-const loginAreaDiv = document.getElementById("loginArea");
-const userNameSpan = document.getElementById("userName");
-const notLoggedInMessage = document.getElementById("notLoggedInMessage");
-const appContent = document.getElementById("appContent");
-const taskListDiv = document.getElementById("taskList");
+async function updateBoolSetting(field, value) {
+    state.settings[field] = value;
+    await updateDoc(settingsDocRef, { [field]: value });
+}
 
-const provider = new GoogleAuthProvider();
-loginBtn.onclick = () => signInWithPopup(auth, provider);
-logoutBtn.onclick = () => signOut(auth);
+/* ==========================================================
+   ===============   LOAD TASKS   =============================
+   ========================================================== */
 
-onAuthStateChanged(auth, user => {
-    state.currentUser = user || null;
-
-    if (!user) {
-        userInfoDiv.classList.add("hidden");
-        loginAreaDiv.classList.remove("hidden");
-        notLoggedInMessage.classList.remove("hidden");
-        appContent.classList.add("hidden");
+async function loadTasks() {
+    try {
+        let qy = query(tasksCol, orderBy("seqId", "asc"));
+        let snap = await getDocs(qy);
         state.tasks = [];
-        taskListDiv.innerHTML = "";
+        snap.forEach(docSnap => {
+            let t = docSnap.data();
+            t.id = docSnap.id;
+            state.tasks.push(t);
+        });
+        renderTasks();
+    } catch (err) {
+        console.error("Load tasks error:", err);
+    }
+}
+
+/* ==========================================================
+   ===============   ADD TASK   ===============================
+   ========================================================== */
+
+function gatherSelectedValues(cls) {
+    let arr = [];
+    document.querySelectorAll(`.${cls}.active`).forEach(btn => {
+        arr.push(btn.dataset.value);
+    });
+    return arr;
+}
+
+function onPendingAddChange(checked) {
+    let pills = document.querySelectorAll(".weekday-pill-add, .session-pill-add, input[name='modeAdd']");
+    pills.forEach(el => el.disabled = checked);
+}
+
+async function addTask() {
+    let name = document.getElementById("name").value.trim();
+    if (!name) {
+        alert("Nhập tên công việc.");
         return;
     }
 
-    userNameSpan.textContent = user.displayName || user.email;
-    userInfoDiv.classList.remove("hidden");
-    loginAreaDiv.classList.add("hidden");
-    notLoggedInMessage.classList.add("hidden");
-    appContent.classList.remove("hidden");
+    let desc = document.getElementById("description").value.trim();
+    let est = Number(document.getElementById("estimated").value);
+    let deadline = document.getElementById("deadline").value;
 
-    listenTasks();
-});
+    let pending = document.getElementById("pendingAdd").checked;
 
-// ========== TAB SWITCH ==========
-window.switchTab = function(tab) {
-    state.currentTab = tab;
+    let mode = document.querySelector("input[name='modeAdd']:checked")?.value || "PREFER";
+    let weekdays = gatherSelectedValues("weekday-pill-add");
+    let sessions = gatherSelectedValues("session-pill-add");
 
-    document.getElementById("tab-timeline").classList.add("hidden");
-    document.getElementById("tab-list").classList.add("hidden");
-    document.getElementById("tab-settings").classList.add("hidden");
+    let seqId = state.tasks.length > 0
+        ? Math.max(...state.tasks.map(t => t.seqId || 0)) + 1
+        : 1;
+
+    let newTask = {
+        name,
+        description: desc,
+        estimated: est,
+        deadline,
+        mode,
+        weekdays,
+        sessions,
+        pending,
+        done: false,
+        seqId
+    };
+
+    try {
+        await addDoc(tasksCol, newTask);
+        await loadTasks();
+        clearAddForm();
+    } catch (err) {
+        alert("Lỗi thêm công việc: " + err.message);
+    }
+}
+
+function clearAddForm() {
+    document.getElementById("name").value = "";
+    document.getElementById("description").value = "";
+    document.getElementById("estimated").value = 10;
+    document.getElementById("deadline").value = "";
+    document.getElementById("pendingAdd").checked = false;
+
+    document.querySelectorAll(".weekday-pill-add, .session-pill-add")
+        .forEach(b => b.classList.remove("active"));
+}
+
+/* ==========================================================
+   ===============   SCORE COMPUTE   ==========================
+   ========================================================== */
+
+function computeScore(task) {
+    if (task.done) return -1;
+    if (task.pending) return -0.5;
+
+    const cfg = state.settings;
+    const now = Date.now();
+    const dl = task.deadline ? new Date(task.deadline).getTime() : now + 999999999;
+    let timeLeft = (dl - now) / 60000;
+    if (timeLeft < 1) timeLeft = 1;
+
+    const t = Number(task.estimated) || 1;
+    let score;
+
+    if (t <= 5) {
+        score = cfg.quickBoost;
+    } else {
+        score = (1 / timeLeft) * cfg.timeMatchMultiplier;
+        score += (1 / t) * cfg.estimatedWeight;
+        score -= (timeLeft / 1000) * cfg.deadlinePenaltyFactor;
+    }
+
+    return score;
+}
+
+/* ==========================================================
+   ===============   RENDER TASK LIST   =======================
+   ========================================================== */
+
+function renderTasks() {
+    let listDiv = document.getElementById("taskList");
+    listDiv.innerHTML = "";
+
+    let tasks = [...state.tasks];
+
+    tasks.forEach(t => t.score = computeScore(t));
+
+    tasks.sort((a, b) => {
+        if (a.score === b.score) return b.seqId - a.seqId;
+        return b.score - a.score;
+    });
+
+    tasks.forEach(task => {
+        if (state.settings.hideDone && task.done) return;
+
+        let div = document.createElement("div");
+        div.className = "task-card";
+        if (task.pending) div.classList.add("pending");
+        if (task.done) div.classList.add("done");
+
+        div.innerHTML = `
+            <h3>${task.name}</h3>
+            <p>${task.description || ""}</p>
+            <p>Thời gian: ${task.estimated} phút</p>
+            <p>Deadline: ${task.deadline || "Không có"}</p>
+            <p>Score: ${task.score.toFixed(3)}</p>
+        `;
+
+        if (task.pending) {
+            div.innerHTML += `<p>[PENDING]</p>`;
+        }
+
+        let ctrl = document.createElement("div");
+        ctrl.className = "task-controls";
+
+        if (!task.pending && !task.done) {
+            let doneBtn = document.createElement("button");
+            doneBtn.innerText = "Done";
+            doneBtn.onclick = () => markDone(task);
+            ctrl.appendChild(doneBtn);
+        }
+
+        if (task.done) {
+            let undoneBtn = document.createElement("button");
+            undoneBtn.innerText = "Undone";
+            undoneBtn.onclick = () => markUndone(task);
+            ctrl.appendChild(undoneBtn);
+        }
+
+        let editBtn = document.createElement("button");
+        editBtn.innerText = "Sửa";
+        editBtn.onclick = () => openEditPopup(task);
+        ctrl.appendChild(editBtn);
+
+        let delBtn = document.createElement("button");
+        delBtn.innerText = "Xóa";
+        delBtn.onclick = () => deleteTask(task);
+        ctrl.appendChild(delBtn);
+
+        div.appendChild(ctrl);
+        listDiv.appendChild(div);
+    });
+}
+
+/* ==========================================================
+   ===============   TASK UPDATE   ============================
+   ========================================================== */
+
+async function markDone(task) {
+    await updateDoc(doc(tasksCol, task.id), { done: true });
+    loadTasks();
+}
+
+async function markUndone(task) {
+    await updateDoc(doc(tasksCol, task.id), { done: false });
+    loadTasks();
+}
+
+async function deleteTask(task) {
+    if (!confirm("Xóa công việc này?")) return;
+    await deleteDoc(doc(tasksCol, task.id));
+    loadTasks();
+}
+
+/* ==========================================================
+   ===============   EDIT POPUP   =============================
+   ========================================================== */
+
+function openEditPopup(task) {
+    editingTaskId = task.id;
+
+    document.getElementById("editName").value = task.name;
+    document.getElementById("editDescription").value = task.description;
+    document.getElementById("editEstimated").value = task.estimated;
+    document.getElementById("editDeadline").value = task.deadline;
+
+    document.querySelectorAll(".weekday-pill-edit, .session-pill-edit")
+        .forEach(b => b.classList.remove("active"));
+
+    task.weekdays?.forEach(w => {
+        document.querySelector(`.weekday-pill-edit[data-value='${w}']`)?.classList.add("active");
+    });
+    task.sessions?.forEach(s => {
+        document.querySelector(`.session-pill-edit[data-value='${s}']`)?.classList.add("active");
+    });
+
+    document.getElementsByName("modeEdit").forEach(r => {
+        r.checked = (r.value === task.mode);
+    });
+
+    document.getElementById("editPending").checked = task.pending;
+
+    onPendingEditChange(task.pending);
+
+    document.getElementById("editPopup").classList.remove("hidden");
+}
+
+function togglePill(btn) {
+    btn.classList.toggle("active");
+}
+
+function onPendingEditChange(checked) {
+    let elems = document.querySelectorAll(".weekday-pill-edit, .session-pill-edit, input[name='modeEdit']");
+    elems.forEach(e => e.disabled = checked);
+}
+
+function closePopup() {
+    document.getElementById("editPopup").classList.add("hidden");
+}
+
+async function saveEdit() {
+    if (!editingTaskId) return;
+
+    let name = document.getElementById("editName").value.trim();
+    let desc = document.getElementById("editDescription").value.trim();
+    let est = Number(document.getElementById("editEstimated").value);
+    let deadline = document.getElementById("editDeadline").value;
+
+    let pending = document.getElementById("editPending").checked;
+
+    let mode = document.querySelector("input[name='modeEdit']:checked")?.value || "PREFER";
+    let weekdays = gatherSelectedValues("weekday-pill-edit");
+    let sessions = gatherSelectedValues("session-pill-edit");
+
+    let updateObj = {
+        name,
+        description: desc,
+        estimated: est,
+        deadline,
+        pending,
+        mode,
+        weekdays,
+        sessions
+    };
+
+    await updateDoc(doc(tasksCol, editingTaskId), updateObj);
+    closePopup();
+    loadTasks();
+}
+
+/* ==========================================================
+   ===============   TAB SWITCH   =============================
+   ========================================================== */
+
+function switchTab(tab) {
+    ["timeline", "list", "settings"].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add("hidden");
+    });
 
     document.getElementById(`tab-${tab}`).classList.remove("hidden");
 
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("tab-active"));
     document.getElementById(`tab-btn-${tab}`).classList.add("tab-active");
 
+    if (tab === "timeline") renderTimeline();
     if (tab === "list") renderTasks();
     if (tab === "settings") renderSettings();
-};
-
-// ========== TIME HELPERS ==========
-function getWeekdayKey(date) {
-    return ["SUN","MON","TUE","WED","THU","FRI","SAT"][date.getDay()];
-}
-
-function getCurrentSessionKey() {
-    const now = new Date();
-    const m = now.getHours()*60 + now.getMinutes();
-    if (m>=4*60 && m<6*60) return "DAWN";
-    if (m>=6*60 && m<11*60) return "MORNING";
-    if (m>=11*60 && m<13*60) return "NOON";
-    if (m>=13*60 && m<17*60) return "AFTERNOON";
-    if (m>=17*60 && m<23*60) return "EVENING";
-    return "NIGHT";
-}
-
-// ========== SCORE ==========
-function computeScore(task) {
-    // Done luôn -1
-    if (task.done) return -1;
-
-    // Pending: không tham gia chấm điểm, nhưng vẫn khác Done
-    if (task.pending) return -0.5;
-
-    const cfg = state.settings;
-    const now = Date.now();
-    const dl = new Date(task.deadline).getTime();
-    let timeLeft = (dl - now)/60000;
-    if (timeLeft < 1) timeLeft = 1;
-
-    const t = Number(task.estimated) || 1;
-
-    let score;
-    if (t <= 5) {
-        score = cfg.quickBoost;
-    } else {
-        const num = Math.pow(Math.max(t,1), cfg.estimatedWeight || 1);
-        const den = Math.pow(Math.max(timeLeft,1), cfg.deadlinePenaltyFactor || 1);
-        score = num / den;
-    }
-
-    const weekdays = task.weekdays || [];
-    const sessions = task.sessions || [];
-    const mode = task.mode || "PREFER";
-
-    const today = getWeekdayKey(new Date());
-    const nowSession = getCurrentSessionKey();
-
-    const matchDay = weekdays.length === 0 || weekdays.includes(today);
-    const matchSession = sessions.length === 0 || sessions.includes(nowSession);
-    const hasConstraint = weekdays.length > 0 || sessions.length > 0;
-    const matched = hasConstraint && matchDay && matchSession;
-
-    if (mode === "STRICT") {
-        if (matched) score *= cfg.timeMatchMultiplier;
-        else score = 0;
-    } else {
-        if (matched) score *= cfg.timeMatchMultiplier;
-    }
-
-    return score;
-}
-
-// ========== STATUS RANK (Normal < Pending < Done) ==========
-function taskStatusRank(t) {
-    if (t.done) return 2;
-    if (t.pending) return 1;
-    return 0; // normal
-}
-
-// ========== seqId ==========
-async function getNextTaskSeqId() {
-    if (!state.currentUser) throw new Error("No user");
-
-    const ref = doc(db, "meta", state.currentUser.uid);
-    const snap = await getDoc(ref);
-
-    let current = 0;
-    if (snap.exists()) {
-        current = snap.data().lastTaskSeq || 0;
-    }
-
-    const next = current + 1;
-    await setDoc(ref, { lastTaskSeq: next }, { merge: true });
-
-    return next;
-}
-
-// ========== LISTEN TASKS ==========
-function listenTasks() {
-    const q = query(collection(db, "tasks"), where("uid","==",state.currentUser.uid));
-    onSnapshot(q, snap => {
-        const arr = [];
-        snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
-        state.tasks = arr;
-
-        if (state.currentTab === "list") renderTasks();
-    });
-}
-
-// ========== ADD TASK ==========
-window.addTask = async function() {
-    const name = document.getElementById("name").value.trim();
-    const description = document.getElementById("description").value.trim();
-    const estimated = Number(document.getElementById("estimated").value);
-    const deadline = document.getElementById("deadline").value;
-    const pending = document.getElementById("pendingAdd").checked;
-
-    if (!name || !deadline || !estimated) {
-        alert("Thiếu tên, thời lượng hoặc deadline.");
-        return;
-    }
-
-    if (!state.currentUser) {
-        alert("Hãy đăng nhập.");
-        return;
-    }
-
-    const seqId = await getNextTaskSeqId();
-
-    let mode = "PREFER";
-    let weekdays = [];
-    let sessions = [];
-
-    if (!pending) {
-        const modeEl = document.querySelector('input[name="modeAdd"]:checked');
-        mode = modeEl ? modeEl.value : "PREFER";
-
-        weekdays = getSelectedValues(".weekday-pill-add");
-        sessions = getSelectedValues(".session-pill-add");
-    }
-
-    await addDoc(collection(db, "tasks"), {
-        uid: state.currentUser.uid,
-        seqId,
-        done: false,
-        pending,
-        name,
-        description,
-        estimated,
-        deadline,
-        mode,
-        weekdays,
-        sessions,
-        createdAt: serverTimestamp()
-    });
-
-    document.getElementById("name").value = "";
-    document.getElementById("description").value = "";
-    document.getElementById("estimated").value = 10;
-    document.getElementById("deadline").value = "";
-    document.getElementById("pendingAdd").checked = false;
-    onPendingAddChange(false);
-
-    // reset pills
-    document.querySelectorAll(".weekday-pill-add, .session-pill-add")
-        .forEach(el => el.classList.remove("pill-selected"));
-};
-
-// ========== RENDER TASKS ==========
-function renderTasks() {
-    taskListDiv.innerHTML = "";
-
-    if (!state.tasks.length) {
-        taskListDiv.innerHTML = "<p>Chưa có công việc nào.</p>";
-        return;
-    }
-
-    const sortedAll = state.tasks
-        .map(t => ({ ...t, score: computeScore(t) }))
-        .sort((a,b) => {
-            const ra = taskStatusRank(a);
-            const rb = taskStatusRank(b);
-            if (ra !== rb) return ra - rb; // Normal(0) → Pending(1) → Done(2)
-
-            if (b.score !== a.score) return b.score - a.score;
-            return (b.seqId||0) - (a.seqId||0);
-        });
-
-    const list = state.settings.hideDone
-        ? sortedAll.filter(t => !t.done)
-        : sortedAll;
-
-    if (!list.length) {
-        taskListDiv.innerHTML = "<p>Không có task (có thể đang ẩn task Done).</p>";
-        return;
-    }
-
-    list.forEach(t => {
-        let classes = "task-card";
-        if (t.done) classes += " task-done";
-        if (t.pending) classes += " task-pending";
-
-        const div = document.createElement("div");
-        div.className = classes;
-
-        const dateStr = new Date(t.deadline).toLocaleString();
-        const weekdaysArr = t.weekdays || [];
-        const sessionsArr = t.sessions || [];
-
-        const weekdayText = weekdaysArr.length ? "Thứ: " + weekdaysArr.join(", ") : "Thứ: bất kỳ";
-        const sessionText = sessionsArr.length ? "Buổi: " + sessionsArr.join(", ") : "Buổi: bất kỳ";
-
-        const hasConstraint = weekdaysArr.length > 0 || sessionsArr.length > 0;
-        const matched = hasConstraint &&
-                        (weekdaysArr.length === 0 || weekdaysArr.includes(getWeekdayKey(new Date()))) &&
-                        (sessionsArr.length === 0 || sessionsArr.includes(getCurrentSessionKey()));
-
-        let modeText = (t.mode || "PREFER") === "STRICT" ? "CHỈ" : "ƯU TIÊN";
-        if (t.pending) {
-            modeText = "PENDING";
-        } else if (matched) {
-            modeText = `<span style="color:#2e7d32;font-weight:bold">${modeText}</span>`;
-        } else {
-            modeText = `<span style="color:#777">${modeText}</span>`;
-        }
-
-        const scoreStr = t.pending ? "-" : t.score.toFixed(2);
-
-        let footerHtml = "";
-
-        if (t.done) {
-            // DONE: Sửa + UNDONE + Xóa
-            footerHtml = `
-                <button class="edit-btn">Sửa</button>
-                <button class="done-btn" style="background:#009688">UNDONE</button>
-                <button class="delete-btn">Xóa</button>
-            `;
-        } else if (t.pending) {
-            // PENDING: chỉ Sửa + Xóa
-            footerHtml = `
-                <button class="edit-btn">Sửa</button>
-                <button class="delete-btn">Xóa</button>
-            `;
-        } else {
-            // NORMAL: full nút
-            footerHtml = `
-                <button class="edit-btn">Sửa</button>
-                <button class="calendar-btn">Calendar</button>
-                <button class="calendar-open-btn">OpenCal</button>
-                <button class="done-btn" style="background:#009688">Done</button>
-                <button class="delete-btn">Xóa</button>
-            `;
-        }
-
-        div.innerHTML = `
-            <div class="task-title">
-                #${t.seqId} ${t.name}
-                ${t.pending ? '<span class="task-badge-pending">PENDING</span>' : ""}
-            </div>
-            <div>${t.description || ""}</div>
-            <div>Thời gian: ${t.estimated} phút</div>
-            <div>Deadline: ${dateStr}</div>
-            <div>${modeText} | ${weekdayText} | ${sessionText}</div>
-            <div>Score: ${scoreStr}</div>
-
-            <div class="task-footer">
-                ${footerHtml}
-            </div>
-        `;
-
-        const editBtn       = div.querySelector(".edit-btn");
-        const doneBtn       = div.querySelector(".done-btn");
-        const deleteBtn     = div.querySelector(".delete-btn");
-        const calendarBtn   = div.querySelector(".calendar-btn");
-        const openCalBtn    = div.querySelector(".calendar-open-btn");
-
-        if (editBtn)    editBtn.onclick    = () => openEditPopup(t);
-        if (doneBtn) {
-            if (t.done) doneBtn.onclick = () => unDone(t);
-            else doneBtn.onclick        = () => markDone(t);
-        }
-        if (deleteBtn)  deleteBtn.onclick  = () => deleteTask(t);
-        if (calendarBtn)calendarBtn.onclick= () => addToCalendar(t);
-        if (openCalBtn) openCalBtn.onclick = () => openCalendarDate(t);
-
-        taskListDiv.appendChild(div);
-    });
-}
-
-// ========== DONE / UNDONE / DELETE ==========
-async function markDone(task) {
-    await setDoc(doc(db,"tasks",task.id), { done: true }, { merge:true });
-}
-
-async function unDone(task) {
-    await setDoc(doc(db,"tasks",task.id), { done: false }, { merge:true });
-}
-
-async function deleteTask(task) {
-    if (!confirm("Xóa công việc này?")) return;
-    await deleteDoc(doc(db,"tasks",task.id));
-}
-
-// ========== EDIT POPUP ==========
-let editingTask = null;
-
-window.openEditPopup = function(task) {
-    editingTask = task;
-
-    document.getElementById("editName").value = task.name;
-    document.getElementById("editDescription").value = task.description || "";
-    document.getElementById("editEstimated").value = task.estimated;
-    document.getElementById("editDeadline").value = task.deadline;
-
-    // mode
-    document.querySelectorAll('input[name="modeEdit"]').forEach(r => r.checked = false);
-    const modeRadio = document.querySelector(`input[name="modeEdit"][value="${task.mode}"]`);
-    if (modeRadio) modeRadio.checked = true;
-
-    // pills
-    document.querySelectorAll(".weekday-pill-edit, .session-pill-edit")
-        .forEach(el => el.classList.remove("pill-selected"));
-
-    (task.weekdays || []).forEach(v => {
-        const el = document.querySelector(`.weekday-pill-edit[data-value="${v}"]`);
-        if (el) el.classList.add("pill-selected");
-    });
-
-    (task.sessions || []).forEach(v => {
-        const el = document.querySelector(`.session-pill-edit[data-value="${v}"]`);
-        if (el) el.classList.add("pill-selected");
-    });
-
-    // pending
-    const editPending = document.getElementById("editPending");
-    editPending.checked = !!task.pending;
-    onPendingEditChange(editPending.checked);
-
-    document.getElementById("editPopup").classList.remove("hidden");
-};
-
-window.closePopup = function() {
-    editingTask = null;
-    document.getElementById("editPopup").classList.add("hidden");
-};
-
-window.saveEdit = async function() {
-    if (!editingTask) return closePopup();
-
-    const name = document.getElementById("editName").value.trim();
-    const desc = document.getElementById("editDescription").value.trim();
-    const est  = Number(document.getElementById("editEstimated").value);
-    const dl   = document.getElementById("editDeadline").value;
-    const pending = document.getElementById("editPending").checked;
-
-    if (!name || !dl || !est) {
-        alert("Thiếu thông tin.");
-        return;
-    }
-
-    let mode = "PREFER";
-    let weekdays = [];
-    let sessions = [];
-
-    if (!pending) {
-        const modeEl = document.querySelector('input[name="modeEdit"]:checked');
-        mode = modeEl ? modeEl.value : "PREFER";
-
-        weekdays = getSelectedValues(".weekday-pill-edit");
-        sessions = getSelectedValues(".session-pill-edit");
-    }
-
-    await setDoc(doc(db, "tasks", editingTask.id), {
-        name,
-        description: desc,
-        estimated: est,
-        deadline: dl,
-        pending,
-        mode,
-        weekdays,
-        sessions
-    }, { merge: true });
-
-    closePopup();
-};
-
-// ========== CALENDAR ==========
-function addToCalendar(task) {
-    const title = encodeURIComponent(task.name);
-    const details = encodeURIComponent(task.description || "");
-
-    const start = new Date(task.deadline);
-    const end   = new Date(start.getTime() + (Number(task.estimated)||0)*60000);
-
-    const fmt = d => d.toISOString().replace(/[-:]/g,"").replace(".000","");
-
-    const url =
-        `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}` +
-        `&dates=${fmt(start)}/${fmt(end)}&details=${details}`;
-
-    window.open(url, "_blank");
-}
-
-function openCalendarDate(task) {
-    const d = new Date(task.deadline);
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,"0");
-    const day = String(d.getDate()).padStart(2,"0");
-
-    const url = `https://calendar.google.com/calendar/r/day/${y}/${m}/${day}`;
-    window.open(url, "_blank");
-}
-
-// ========== SETTINGS ==========
-function renderSettings() {
-    const s = state.settings;
-
-    document.getElementById("settingQuickBoost").value = s.quickBoost;
-    document.getElementById("settingTimeMatchMultiplier").value = s.timeMatchMultiplier;
-    document.getElementById("settingDeadlinePenalty").value = s.deadlinePenaltyFactor;
-    document.getElementById("settingEstimatedWeight").value = s.estimatedWeight;
-
-    const hide = document.getElementById("settingHideDone");
-    hide.checked = s.hideDone;
-
-    updateNowInfo();
-}
-
-function updateNowInfo() {
-    const el = document.getElementById("settingsNowInfo");
-    if (!el) return;
-
-    const now = new Date();
-    const wd = getWeekdayKey(now);
-    const sess = getCurrentSessionKey();
-
-    const dayMap = {
-        MON:"Thứ 2",TUE:"Thứ 3",WED:"Thứ 4",THU:"Thứ 5",
-        FRI:"Thứ 6",SAT:"Thứ 7",SUN:"Chủ nhật"
-    };
-    const sessMap = {
-        DAWN:"Sáng sớm",MORNING:"Sáng",NOON:"Trưa",
-        AFTERNOON:"Chiều",EVENING:"Tối",NIGHT:"Đêm"
-    };
-
-    el.textContent = `Hôm nay: ${dayMap[wd] || wd} – Buổi: ${sessMap[sess] || sess}`;
-}
-
-window.updateNumericSetting = function(key, value) {
-    const v = parseFloat(value);
-    if (isNaN(v)) return;
-    state.settings[key] = v;
-    saveSettingsToLocalStorage();
-    if (state.currentTab === "list") renderTasks();
-};
-
-window.updateBoolSetting = function(key, checked) {
-    state.settings[key] = !!checked;
-    saveSettingsToLocalStorage();
-    if (state.currentTab === "list") renderTasks();
-};
-
-// ========== PENDING UI TOGGLE ==========
-function togglePendingControls(type, isPending) {
-    const modeName = type === "add" ? "modeAdd" : "modeEdit";
-    document.querySelectorAll(`input[name="${modeName}"]`).forEach(r => {
-        r.disabled = isPending;
-    });
-
-    const weekdayClass = type === "add" ? ".weekday-pill-add" : ".weekday-pill-edit";
-    const sessionClass = type === "add" ? ".session-pill-add" : ".session-pill-edit";
-
-    [weekdayClass, sessionClass].forEach(sel => {
-        document.querySelectorAll(sel).forEach(btn => {
-            btn.disabled = isPending;
-            if (isPending) btn.classList.add("pill-disabled");
-            else btn.classList.remove("pill-disabled");
-        });
-    });
-}
-
-window.onPendingAddChange = function(checked) {
-    togglePendingControls("add", checked);
-};
-
-window.onPendingEditChange = function(checked) {
-    togglePendingControls("edit", checked);
-};
-
-// ========== PILLS ==========
-window.togglePill = function(el) {
-    if (el.disabled) return;
-    el.classList.toggle("pill-selected");
-};
-
-function getSelectedValues(selector) {
-    return Array.from(document.querySelectorAll(selector))
-        .filter(el => el.classList.contains("pill-selected"))
-        .map(el => el.dataset.value);
 }
