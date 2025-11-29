@@ -21,7 +21,7 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-// Config
+// Config Firebase của bạn
 const firebaseConfig = {
   apiKey: "AIzaSyBw6vBtXo6RKu_VfRQNW64sbgSlyWjwhOU",
   authDomain: "dnmtaskmanager.firebaseapp.com",
@@ -63,9 +63,10 @@ function loadSettingsFromLocalStorage() {
         if (typeof obj.estimatedWeight === "number") state.settings.estimatedWeight = obj.estimatedWeight;
         if (typeof obj.hideDone === "boolean") state.settings.hideDone = obj.hideDone;
     } catch(e) {
-        console.error("Error load settings:", e);
+        console.error("Error loading settings:", e);
     }
 }
+
 function saveSettingsToLocalStorage() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
 }
@@ -94,8 +95,8 @@ onAuthStateChanged(auth, user => {
         loginAreaDiv.classList.remove("hidden");
         notLoggedInMessage.classList.remove("hidden");
         appContent.classList.add("hidden");
-        taskListDiv.innerHTML = "";
         state.tasks = [];
+        taskListDiv.innerHTML = "";
         return;
     }
 
@@ -108,7 +109,7 @@ onAuthStateChanged(auth, user => {
     listenTasks();
 });
 
-// ========== TAB ==========
+// ========== TAB SWITCH ==========
 window.switchTab = function(tab) {
     state.currentTab = tab;
 
@@ -133,7 +134,13 @@ function getWeekdayKey(date) {
 function getCurrentSessionKey() {
     const now = new Date();
     const m = now.getHours()*60 + now.getMinutes();
-    if (m>=4*60 && m<6*60) return "DAW
+    if (m>=4*60 && m<6*60) return "DAWN";
+    if (m>=6*60 && m<11*60) return "MORNING";
+    if (m>=11*60 && m<13*60) return "NOON";
+    if (m>=13*60 && m<17*60) return "AFTERNOON";
+    if (m>=17*60 && m<23*60) return "EVENING";
+    return "NIGHT";
+}
 
 // ========== SCORE ==========
 function computeScore(task) {
@@ -180,7 +187,7 @@ function computeScore(task) {
 
 // ========== seqId ==========
 async function getNextTaskSeqId() {
-    if (!state.currentUser) throw new Error("Chưa đăng nhập");
+    if (!state.currentUser) throw new Error("No user");
 
     const ref = doc(db, "meta", state.currentUser.uid);
     const snap = await getDoc(ref);
@@ -198,10 +205,12 @@ async function getNextTaskSeqId() {
 
 // ========== LISTEN TASKS ==========
 function listenTasks() {
-    const q = query(collection(db, "tasks"), where("uid", "==", state.currentUser.uid));
+    const q = query(collection(db, "tasks"), where("uid","==",state.currentUser.uid));
     onSnapshot(q, snap => {
-        state.tasks = [];
-        snap.forEach(d => state.tasks.push({ id: d.id, ...d.data() }));
+        const arr = [];
+        snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+        state.tasks = arr;
+
         if (state.currentTab === "list") renderTasks();
     });
 }
@@ -214,16 +223,19 @@ window.addTask = async function() {
     const deadline = document.getElementById("deadline").value;
 
     if (!name || !deadline || !estimated) {
-        return alert("Thiếu tên, thời lượng hoặc deadline.");
+        alert("Thiếu tên, thời lượng hoặc deadline.");
+        return;
     }
+
     if (!state.currentUser) {
-        return alert("Bạn cần đăng nhập.");
+        alert("Hãy đăng nhập.");
+        return;
     }
 
     const seqId = await getNextTaskSeqId();
 
-    const modeInput = document.querySelector('input[name="modeAdd"]:checked');
-    const mode = modeInput ? modeInput.value : "PREFER";
+    const modeEl = document.querySelector('input[name="modeAdd"]:checked');
+    const mode = modeEl ? modeEl.value : "PREFER";
 
     const weekdays = getSelectedValues(".weekday-pill-add");
     const sessions = getSelectedValues(".session-pill-add");
@@ -249,6 +261,7 @@ window.addTask = async function() {
 // ========== RENDER TASKS ==========
 function renderTasks() {
     taskListDiv.innerHTML = "";
+
     if (!state.tasks.length) {
         taskListDiv.innerHTML = "<p>Chưa có công việc nào.</p>";
         return;
@@ -259,17 +272,13 @@ function renderTasks() {
         .sort((a,b) => {
             if (a.done !== b.done) return a.done ? 1 : -1;
             if (b.score !== a.score) return b.score - a.score;
-            const aSeq = a.seqId || 0;
-            const bSeq = b.seqId || 0;
-            return bSeq - aSeq;
+            return (b.seqId||0) - (a.seqId||0);
         });
 
-    const list = state.settings.hideDone
-        ? sortedAll.filter(t => !t.done)
-        : sortedAll;
+    const list = state.settings.hideDone ? sortedAll.filter(t => !t.done) : sortedAll;
 
     if (!list.length) {
-        taskListDiv.innerHTML = "<p>Không có task (có thể đã ẩn task Done).</p>";
+        taskListDiv.innerHTML = "<p>Không có task (có thể đang ẩn task Done).</p>";
         return;
     }
 
@@ -277,24 +286,24 @@ function renderTasks() {
         const div = document.createElement("div");
         div.className = "task-card" + (t.done ? " task-done" : "");
 
+        const dateStr = new Date(t.deadline).toLocaleString();
         const weekdayText = t.weekdays?.length ? "Thứ: " + t.weekdays.join(", ") : "Thứ: bất kỳ";
         const sessionText = t.sessions?.length ? "Buổi: " + t.sessions.join(", ") : "Buổi: bất kỳ";
-        const dateStr = new Date(t.deadline).toLocaleString();
 
         const hasConstraint = (t.weekdays?.length || 0) > 0 || (t.sessions?.length || 0) > 0;
-        const matchDay = !t.weekdays?.length || t.weekdays.includes(getWeekdayKey(new Date()));
-        const matchSession = !t.sessions?.length || t.sessions.includes(getCurrentSessionKey());
-        const matched = hasConstraint && matchDay && matchSession;
+        const matched = hasConstraint &&
+                        (!t.weekdays.length || t.weekdays.includes(getWeekdayKey(new Date()))) &&
+                        (!t.sessions.length || t.sessions.includes(getCurrentSessionKey()));
 
         let modeText = t.mode === "STRICT" ? "CHỈ" : "ƯU TIÊN";
         if (matched) {
             modeText = `<span style="color:#2e7d32;font-weight:bold">${modeText}</span>`;
         } else {
-            modeText = `<span style="color:#555;">${modeText}</span>`;
+            modeText = `<span style="color:#777">${modeText}</span>`;
         }
 
         div.innerHTML = `
-            <div class="task-title">#${t.seqId ?? "?"} ${t.name}</div>
+            <div class="task-title">#${t.seqId} ${t.name}</div>
             <div>${t.description || ""}</div>
             <div>Thời gian: ${t.estimated} phút</div>
             <div>Deadline: ${dateStr}</div>
@@ -311,7 +320,7 @@ function renderTasks() {
                         <button class="calendar-btn">Calendar</button>
                         <button class="calendar-open-btn">OpenCal</button>
                         <button class="done-btn" style="background:#009688">Done</button>
-                      `
+                    `
                 }
 
                 <button class="delete-btn">Xóa</button>
@@ -321,33 +330,33 @@ function renderTasks() {
         const btns = div.querySelectorAll("button");
 
         if (!t.done) {
-            btns[0].onclick = () => openEditPopup(t);     // sửa
-            btns[1].onclick = () => addToCalendar(t);     // calendar
-            btns[2].onclick = () => openCalendarDate(t);  // open cal
-            btns[3].onclick = () => markDone(t);          // done
-            btns[4].onclick = () => deleteTask(t);        // xóa
+            btns[0].onclick = () => openEditPopup(t);
+            btns[1].onclick = () => addToCalendar(t);
+            btns[2].onclick = () => openCalendarDate(t);
+            btns[3].onclick = () => markDone(t);
+            btns[4].onclick = () => deleteTask(t);
         } else {
-            btns[0].onclick = () => openEditPopup(t);     // sửa
-            btns[1].onclick = () => unDone(t);            // UNDONE
-            btns[2].onclick = () => deleteTask(t);        // xóa
+            btns[0].onclick = () => openEditPopup(t);
+            btns[1].onclick = () => unDone(t);
+            btns[2].onclick = () => deleteTask(t);
         }
 
         taskListDiv.appendChild(div);
     });
 }
 
-// ========== MARK DONE / UNDONE / DELETE ==========
+// ========== DONE / UNDONE / DELETE ==========
 async function markDone(task) {
-    await setDoc(doc(db, "tasks", task.id), { done: true }, { merge: true });
+    await setDoc(doc(db,"tasks",task.id), { done: true }, { merge:true });
 }
 
 async function unDone(task) {
-    await setDoc(doc(db, "tasks", task.id), { done: false }, { merge: true });
+    await setDoc(doc(db,"tasks",task.id), { done: false }, { merge:true });
 }
 
 async function deleteTask(task) {
-    if (!confirm("Bạn chắc muốn xóa công việc này?")) return;
-    await deleteDoc(doc(db, "tasks", task.id));
+    if (!confirm("Xóa công việc này?")) return;
+    await deleteDoc(doc(db,"tasks",task.id));
 }
 
 // ========== EDIT POPUP ==========
@@ -361,21 +370,19 @@ window.openEditPopup = function(task) {
     document.getElementById("editEstimated").value = task.estimated;
     document.getElementById("editDeadline").value = task.deadline;
 
-    document.querySelectorAll(`input[name="modeEdit"]`).forEach(r => r.checked = false);
+    document.querySelectorAll('input[name="modeEdit"]').forEach(r => r.checked = false);
     const modeRadio = document.querySelector(`input[name="modeEdit"][value="${task.mode}"]`);
     if (modeRadio) modeRadio.checked = true;
 
     document.querySelectorAll(".weekday-pill-edit, .session-pill-edit")
         .forEach(el => el.classList.remove("pill-selected"));
 
-    const weekdays = task.weekdays || [];
-    weekdays.forEach(v => {
+    (task.weekdays || []).forEach(v => {
         const el = document.querySelector(`.weekday-pill-edit[data-value="${v}"]`);
         if (el) el.classList.add("pill-selected");
     });
 
-    const sessions = task.sessions || [];
-    sessions.forEach(v => {
+    (task.sessions || []).forEach(v => {
         const el = document.querySelector(`.session-pill-edit[data-value="${v}"]`);
         if (el) el.classList.add("pill-selected");
     });
@@ -396,10 +403,13 @@ window.saveEdit = async function() {
     const est  = Number(document.getElementById("editEstimated").value);
     const dl   = document.getElementById("editDeadline").value;
 
-    if (!name || !dl || !est) return alert("Thiếu tên/thời lượng/deadline.");
+    if (!name || !dl || !est) {
+        alert("Thiếu thông tin.");
+        return;
+    }
 
-    const modeInput = document.querySelector('input[name="modeEdit"]:checked');
-    const mode = modeInput ? modeInput.value : "PREFER";
+    const modeEl = document.querySelector('input[name="modeEdit"]:checked');
+    const mode = modeEl ? modeEl.value : "PREFER";
 
     const weekdays = getSelectedValues(".weekday-pill-edit");
     const sessions = getSelectedValues(".session-pill-edit");
@@ -427,7 +437,10 @@ function addToCalendar(task) {
 
     const fmt = d => d.toISOString().replace(/[-:]/g,"").replace(".000","");
 
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(start)}/${fmt(end)}&details=${details}`;
+    const url =
+        `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}` +
+        `&dates=${fmt(start)}/${fmt(end)}&details=${details}`;
+
     window.open(url, "_blank");
 }
 
@@ -445,17 +458,13 @@ function openCalendarDate(task) {
 function renderSettings() {
     const s = state.settings;
 
-    const qi = document.getElementById("settingQuickBoost");
-    const ti = document.getElementById("settingTimeMatchMultiplier");
-    const di = document.getElementById("settingDeadlinePenalty");
-    const ei = document.getElementById("settingEstimatedWeight");
-    const hi = document.getElementById("settingHideDone");
+    document.getElementById("settingQuickBoost").value = s.quickBoost;
+    document.getElementById("settingTimeMatchMultiplier").value = s.timeMatchMultiplier;
+    document.getElementById("settingDeadlinePenalty").value = s.deadlinePenaltyFactor;
+    document.getElementById("settingEstimatedWeight").value = s.estimatedWeight;
 
-    if (qi) qi.value = s.quickBoost;
-    if (ti) ti.value = s.timeMatchMultiplier;
-    if (di) di.value = s.deadlinePenaltyFactor;
-    if (ei) ei.value = s.estimatedWeight;
-    if (hi) hi.checked = s.hideDone;
+    const hide = document.getElementById("settingHideDone");
+    hide.checked = s.hideDone;
 
     updateNowInfo();
 }
@@ -469,16 +478,12 @@ function updateNowInfo() {
     const sess = getCurrentSessionKey();
 
     const dayMap = {
-        MON:"Thứ 2",TUE:"Thứ 3",WED:"Thứ 4",
-        THU:"Thứ 5",FRI:"Thứ 6",SAT:"Thứ 7",SUN:"Chủ nhật"
+        MON:"Thứ 2",TUE:"Thứ 3",WED:"Thứ 4",THU:"Thứ 5",
+        FRI:"Thứ 6",SAT:"Thứ 7",SUN:"Chủ nhật"
     };
     const sessMap = {
-        DAWN:"Sáng sớm",
-        MORNING:"Sáng",
-        NOON:"Trưa",
-        AFTERNOON:"Chiều",
-        EVENING:"Tối",
-        NIGHT:"Đêm"
+        DAWN:"Sáng sớm",MORNING:"Sáng",NOON:"Trưa",
+        AFTERNOON:"Chiều",EVENING:"Tối",NIGHT:"Đêm"
     };
 
     el.textContent = `Hôm nay: ${dayMap[wd] || wd} – Buổi: ${sessMap[sess] || sess}`;
