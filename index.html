@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>DNM Task Scheduler V3.2</title>
+    <title>DNM Task Scheduler V4</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -34,11 +34,41 @@
             <button id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
         </div>
 
-        <!-- TAB: TIMELINE (placeholder, sẽ nâng cấp ở V4) -->
+        <!-- TAB: TIMELINE -->
         <div id="tab-timeline" class="hidden">
             <div class="card">
-                <h2>Timeline</h2>
-                <p>Timeline chi tiết với 3 lane (Task / Background / Pending) sẽ được xây ở các phiên bản sau.</p>
+                <h2>Timeline 24h (Rolling)</h2>
+                <div id="timelineInfo" class="timeline-info"></div>
+
+                <div class="timeline-wrapper">
+                    <div class="timeline-inner">
+                        <!-- Scale giờ -->
+                        <div id="timelineScale" class="timeline-scale"></div>
+
+                        <!-- Thân timeline -->
+                        <div class="timeline-main">
+                            <!-- Nền: hôm nay (trắng) / tương lai (xám) -->
+                            <div id="timelineBgToday" class="timeline-bg timeline-bg-today"></div>
+                            <div id="timelineBgFuture" class="timeline-bg timeline-bg-future"></div>
+
+                            <!-- Lane 1: Normal tasks -->
+                            <div class="timeline-lane timeline-lane-normal">
+                                <span class="timeline-lane-label">Normal tasks</span>
+                            </div>
+                            <!-- Lane 2: Background -->
+                            <div class="timeline-lane timeline-lane-background">
+                                <span class="timeline-lane-label">Background</span>
+                            </div>
+                            <!-- Lane 3: Pending -->
+                            <div class="timeline-lane timeline-lane-pending">
+                                <span class="timeline-lane-label">Pending</span>
+                            </div>
+
+                            <!-- Current time marker -->
+                            <div id="timelineCurrentMarker" class="timeline-current-marker"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
