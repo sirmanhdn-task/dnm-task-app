@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>DNM Task Scheduler V3.1</title>
+    <title>DNM Task Scheduler V3.2</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -34,11 +34,11 @@
             <button id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
         </div>
 
-        <!-- TAB: TIMELINE (placeholder) -->
+        <!-- TAB: TIMELINE (placeholder, sẽ nâng cấp ở V4) -->
         <div id="tab-timeline" class="hidden">
             <div class="card">
                 <h2>Timeline</h2>
-                <p>Timeline chi tiết sẽ được xây ở các phiên bản sau.</p>
+                <p>Timeline chi tiết với 3 lane (Task / Background / Pending) sẽ được xây ở các phiên bản sau.</p>
             </div>
         </div>
 
@@ -94,6 +94,13 @@
                         <button type="button" class="pill session-pill-add" data-value="EVENING" onclick="togglePill(this)">Tối</button>
                         <button type="button" class="pill session-pill-add" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
                     </div>
+                </div>
+
+                <div class="pill-group">
+                    <label class="pending-label">
+                        <input type="checkbox" id="pendingAdd" onchange="onPendingAddChange(this.checked)" />
+                        Pending (ghi chú / ý tưởng, chưa tính trọng số & chưa xếp vào timeline chính)
+                    </label>
                 </div>
 
                 <button onclick="addTask()">Thêm</button>
@@ -205,6 +212,13 @@
                 <button type="button" class="pill session-pill-edit" data-value="EVENING" onclick="togglePill(this)">Tối</button>
                 <button type="button" class="pill session-pill-edit" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
             </div>
+        </div>
+
+        <div class="pill-group">
+            <label class="pending-label">
+                <input type="checkbox" id="editPending" onchange="onPendingEditChange(this.checked)" />
+                Pending (ghi chú / ý tưởng)
+            </label>
         </div>
 
         <button onclick="saveEdit()">Lưu</button>
