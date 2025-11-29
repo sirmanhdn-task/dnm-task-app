@@ -796,16 +796,20 @@ setInterval(() => {
 }, 60000);
 
 window.jumpToNow = function() {
-    const line = document.getElementById("timelineCurrentLine");
     const scrollBox = document.querySelector(".timeline-scroll");
+    const line = document.getElementById("timelineCurrentLine");
+    if (!scrollBox || !line) return;
 
-    if (!line || !scrollBox) return;
+    // Lấy vị trí tuyệt đối của timelineContainer
+    const containerRect = scrollBox.getBoundingClientRect();
+    const lineRect = line.getBoundingClientRect();
 
-    // vị trí pixel của current line
-    const x = line.offsetLeft;
+    // Tính vị trí line tương đối so với scrollBox
+    const relativeLeft = (lineRect.left - containerRect.left) + scrollBox.scrollLeft;
 
     scrollBox.scrollTo({
-        left: x - scrollBox.clientWidth/2,  // đưa vào giữa màn hình
+        left: relativeLeft - scrollBox.clientWidth / 2,
         behavior: "smooth"
     });
 };
+
