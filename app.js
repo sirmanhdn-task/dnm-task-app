@@ -799,19 +799,46 @@ setInterval(() => {
     }
 }, 60000);
 
-window.zoomIn = function() {
+window.zoomIn = function () {
+    const scrollBox = document.querySelector(".timeline-scroll");
+    if (!scrollBox) return;
+
     if (zoomLevel === 4) return;
+
+    const oldZoom = zoomLevel;
+    const centerX = scrollBox.scrollLeft + scrollBox.clientWidth / 2;
+    const centerMinute = centerX / oldZoom;
+
     zoomLevel = zoomLevel * 2;
     document.getElementById("zoomDisplay").innerText = (zoomLevel * 100) + "%";
+
     renderTimeline();
+
+    const newScrollLeft = centerMinute * zoomLevel - scrollBox.clientWidth / 2;
+
+    scrollBox.scrollLeft = newScrollLeft;
 };
 
-window.zoomOut = function() {
+window.zoomOut = function () {
+    const scrollBox = document.querySelector(".timeline-scroll");
+    if (!scrollBox) return;
+
     if (zoomLevel === 1) return;
+
+    const oldZoom = zoomLevel;
+    const centerX = scrollBox.scrollLeft + scrollBox.clientWidth / 2;
+    const centerMinute = centerX / oldZoom;
+
     zoomLevel = zoomLevel / 2;
     document.getElementById("zoomDisplay").innerText = (zoomLevel * 100) + "%";
+
     renderTimeline();
+
+    const newScrollLeft = centerMinute * zoomLevel - scrollBox.clientWidth / 2;
+
+    scrollBox.scrollLeft = newScrollLeft;
 };
+
 
 
 window.jumpToNow = function() {
