@@ -31,7 +31,7 @@ import {
 
 /* --- CONFIG --- */
 const firebaseConfig = {
-    apiKey: "AIzaSyBw6vBtXo6Rku_VfRQNW64sbgSlyWjwhOU",
+    apiKey: "AIzaSyBw6vBtXo6RKu_VfRQNW64sbgSlyWjwhOU",
     authDomain: "dnmtaskmanager.firebaseapp.com",
     projectId: "dnmtaskmanager",
     storageBucket: "dnmtaskmanager.appspot.com",
