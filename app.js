@@ -21,7 +21,7 @@ import {
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-// Config Firebase của bạn
+// Config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBw6vBtXo6RKu_VfRQNW64sbgSlyWjwhOU",
   authDomain: "dnmtaskmanager.firebaseapp.com",
@@ -144,7 +144,11 @@ function getCurrentSessionKey() {
 
 // ========== SCORE ==========
 function computeScore(task) {
+    // Done luôn -1
     if (task.done) return -1;
+
+    // Pending: không tham gia chấm điểm, nhưng vẫn khác Done
+    if (task.pending) return -0.5;
 
     const cfg = state.settings;
     const now = Date.now();
@@ -185,6 +189,13 @@ function computeScore(task) {
     return score;
 }
 
+// ========== STATUS RANK (Normal < Pending < Done) ==========
+function taskStatusRank(t) {
+    if (t.done) return 2;
+    if (t.pending) return 1;
+    return 0; // normal
+}
+
 // ========== seqId ==========
 async function getNextTaskSeqId() {
     if (!state.currentUser) throw new Error("No user");
@@ -221,6 +232,7 @@ window.addTask = async function() {
     const description = document.getElementById("description").value.trim();
     const estimated = Number(document.getElementById("estimated").value);
     const deadline = document.getElementById("deadline").value;
+    const pending = document.getElementById("pendingAdd").checked;
 
     if (!name || !deadline || !estimated) {
         alert("Thiếu tên, thời lượng hoặc deadline.");
@@ -234,16 +246,23 @@ window.addTask = async function() {
 
     const seqId = await getNextTaskSeqId();
 
-    const modeEl = document.querySelector('input[name="modeAdd"]:checked');
-    const mode = modeEl ? modeEl.value : "PREFER";
+    let mode = "PREFER";
+    let weekdays = [];
+    let sessions = [];
 
-    const weekdays = getSelectedValues(".weekday-pill-add");
-    const sessions = getSelectedValues(".session-pill-add");
+    if (!pending) {
+        const modeEl = document.querySelector('input[name="modeAdd"]:checked');
+        mode = modeEl ? modeEl.value : "PREFER";
+
+        weekdays = getSelectedValues(".weekday-pill-add");
+        sessions = getSelectedValues(".session-pill-add");
+    }
 
     await addDoc(collection(db, "tasks"), {
         uid: state.currentUser.uid,
         seqId,
         done: false,
+        pending,
         name,
         description,
         estimated,
@@ -256,6 +275,14 @@ window.addTask = async function() {
 
     document.getElementById("name").value = "";
     document.getElementById("description").value = "";
+    document.getElementById("estimated").value = 10;
+    document.getElementById("deadline").value = "";
+    document.getElementById("pendingAdd").checked = false;
+    onPendingAddChange(false);
+
+    // reset pills
+    document.querySelectorAll(".weekday-pill-add, .session-pill-add")
+        .forEach(el => el.classList.remove("pill-selected"));
 };
 
 // ========== RENDER TASKS ==========
@@ -270,12 +297,17 @@ function renderTasks() {
     const sortedAll = state.tasks
         .map(t => ({ ...t, score: computeScore(t) }))
         .sort((a,b) => {
-            if (a.done !== b.done) return a.done ? 1 : -1;
+            const ra = taskStatusRank(a);
+            const rb = taskStatusRank(b);
+            if (ra !== rb) return ra - rb; // Normal(0) → Pending(1) → Done(2)
+
             if (b.score !== a.score) return b.score - a.score;
             return (b.seqId||0) - (a.seqId||0);
         });
 
-    const list = state.settings.hideDone ? sortedAll.filter(t => !t.done) : sortedAll;
+    const list = state.settings.hideDone
+        ? sortedAll.filter(t => !t.done)
+        : sortedAll;
 
     if (!list.length) {
         taskListDiv.innerHTML = "<p>Không có task (có thể đang ẩn task Done).</p>";
@@ -283,63 +315,92 @@ function renderTasks() {
     }
 
     list.forEach(t => {
+        let classes = "task-card";
+        if (t.done) classes += " task-done";
+        if (t.pending) classes += " task-pending";
+
         const div = document.createElement("div");
-        div.className = "task-card" + (t.done ? " task-done" : "");
+        div.className = classes;
 
         const dateStr = new Date(t.deadline).toLocaleString();
-        const weekdayText = t.weekdays?.length ? "Thứ: " + t.weekdays.join(", ") : "Thứ: bất kỳ";
-        const sessionText = t.sessions?.length ? "Buổi: " + t.sessions.join(", ") : "Buổi: bất kỳ";
+        const weekdaysArr = t.weekdays || [];
+        const sessionsArr = t.sessions || [];
 
-        const hasConstraint = (t.weekdays?.length || 0) > 0 || (t.sessions?.length || 0) > 0;
+        const weekdayText = weekdaysArr.length ? "Thứ: " + weekdaysArr.join(", ") : "Thứ: bất kỳ";
+        const sessionText = sessionsArr.length ? "Buổi: " + sessionsArr.join(", ") : "Buổi: bất kỳ";
+
+        const hasConstraint = weekdaysArr.length > 0 || sessionsArr.length > 0;
         const matched = hasConstraint &&
-                        (!t.weekdays.length || t.weekdays.includes(getWeekdayKey(new Date()))) &&
-                        (!t.sessions.length || t.sessions.includes(getCurrentSessionKey()));
+                        (weekdaysArr.length === 0 || weekdaysArr.includes(getWeekdayKey(new Date()))) &&
+                        (sessionsArr.length === 0 || sessionsArr.includes(getCurrentSessionKey()));
 
-        let modeText = t.mode === "STRICT" ? "CHỈ" : "ƯU TIÊN";
-        if (matched) {
+        let modeText = (t.mode || "PREFER") === "STRICT" ? "CHỈ" : "ƯU TIÊN";
+        if (t.pending) {
+            modeText = "PENDING";
+        } else if (matched) {
             modeText = `<span style="color:#2e7d32;font-weight:bold">${modeText}</span>`;
         } else {
             modeText = `<span style="color:#777">${modeText}</span>`;
         }
 
+        const scoreStr = t.pending ? "-" : t.score.toFixed(2);
+
+        let footerHtml = "";
+
+        if (t.done) {
+            // DONE: Sửa + UNDONE + Xóa
+            footerHtml = `
+                <button class="edit-btn">Sửa</button>
+                <button class="done-btn" style="background:#009688">UNDONE</button>
+                <button class="delete-btn">Xóa</button>
+            `;
+        } else if (t.pending) {
+            // PENDING: chỉ Sửa + Xóa
+            footerHtml = `
+                <button class="edit-btn">Sửa</button>
+                <button class="delete-btn">Xóa</button>
+            `;
+        } else {
+            // NORMAL: full nút
+            footerHtml = `
+                <button class="edit-btn">Sửa</button>
+                <button class="calendar-btn">Calendar</button>
+                <button class="calendar-open-btn">OpenCal</button>
+                <button class="done-btn" style="background:#009688">Done</button>
+                <button class="delete-btn">Xóa</button>
+            `;
+        }
+
         div.innerHTML = `
-            <div class="task-title">#${t.seqId} ${t.name}</div>
+            <div class="task-title">
+                #${t.seqId} ${t.name}
+                ${t.pending ? '<span class="task-badge-pending">PENDING</span>' : ""}
+            </div>
             <div>${t.description || ""}</div>
             <div>Thời gian: ${t.estimated} phút</div>
             <div>Deadline: ${dateStr}</div>
             <div>${modeText} | ${weekdayText} | ${sessionText}</div>
-            <div>Score: ${t.score.toFixed(2)}</div>
+            <div>Score: ${scoreStr}</div>
 
             <div class="task-footer">
-                <button class="edit-btn">Sửa</button>
-
-                ${
-                    t.done
-                    ? `<button class="done-btn" style="background:#009688">UNDONE</button>`
-                    : `
-                        <button class="calendar-btn">Calendar</button>
-                        <button class="calendar-open-btn">OpenCal</button>
-                        <button class="done-btn" style="background:#009688">Done</button>
-                    `
-                }
-
-                <button class="delete-btn">Xóa</button>
+                ${footerHtml}
             </div>
         `;
 
-        const btns = div.querySelectorAll("button");
+        const editBtn       = div.querySelector(".edit-btn");
+        const doneBtn       = div.querySelector(".done-btn");
+        const deleteBtn     = div.querySelector(".delete-btn");
+        const calendarBtn   = div.querySelector(".calendar-btn");
+        const openCalBtn    = div.querySelector(".calendar-open-btn");
 
-        if (!t.done) {
-            btns[0].onclick = () => openEditPopup(t);
-            btns[1].onclick = () => addToCalendar(t);
-            btns[2].onclick = () => openCalendarDate(t);
-            btns[3].onclick = () => markDone(t);
-            btns[4].onclick = () => deleteTask(t);
-        } else {
-            btns[0].onclick = () => openEditPopup(t);
-            btns[1].onclick = () => unDone(t);
-            btns[2].onclick = () => deleteTask(t);
+        if (editBtn)    editBtn.onclick    = () => openEditPopup(t);
+        if (doneBtn) {
+            if (t.done) doneBtn.onclick = () => unDone(t);
+            else doneBtn.onclick        = () => markDone(t);
         }
+        if (deleteBtn)  deleteBtn.onclick  = () => deleteTask(t);
+        if (calendarBtn)calendarBtn.onclick= () => addToCalendar(t);
+        if (openCalBtn) openCalBtn.onclick = () => openCalendarDate(t);
 
         taskListDiv.appendChild(div);
     });
@@ -370,10 +431,12 @@ window.openEditPopup = function(task) {
     document.getElementById("editEstimated").value = task.estimated;
     document.getElementById("editDeadline").value = task.deadline;
 
+    // mode
     document.querySelectorAll('input[name="modeEdit"]').forEach(r => r.checked = false);
     const modeRadio = document.querySelector(`input[name="modeEdit"][value="${task.mode}"]`);
     if (modeRadio) modeRadio.checked = true;
 
+    // pills
     document.querySelectorAll(".weekday-pill-edit, .session-pill-edit")
         .forEach(el => el.classList.remove("pill-selected"));
 
@@ -386,6 +449,11 @@ window.openEditPopup = function(task) {
         const el = document.querySelector(`.session-pill-edit[data-value="${v}"]`);
         if (el) el.classList.add("pill-selected");
     });
+
+    // pending
+    const editPending = document.getElementById("editPending");
+    editPending.checked = !!task.pending;
+    onPendingEditChange(editPending.checked);
 
     document.getElementById("editPopup").classList.remove("hidden");
 };
@@ -402,23 +470,31 @@ window.saveEdit = async function() {
     const desc = document.getElementById("editDescription").value.trim();
     const est  = Number(document.getElementById("editEstimated").value);
     const dl   = document.getElementById("editDeadline").value;
+    const pending = document.getElementById("editPending").checked;
 
     if (!name || !dl || !est) {
         alert("Thiếu thông tin.");
         return;
     }
 
-    const modeEl = document.querySelector('input[name="modeEdit"]:checked');
-    const mode = modeEl ? modeEl.value : "PREFER";
+    let mode = "PREFER";
+    let weekdays = [];
+    let sessions = [];
 
-    const weekdays = getSelectedValues(".weekday-pill-edit");
-    const sessions = getSelectedValues(".session-pill-edit");
+    if (!pending) {
+        const modeEl = document.querySelector('input[name="modeEdit"]:checked');
+        mode = modeEl ? modeEl.value : "PREFER";
+
+        weekdays = getSelectedValues(".weekday-pill-edit");
+        sessions = getSelectedValues(".session-pill-edit");
+    }
 
     await setDoc(doc(db, "tasks", editingTask.id), {
         name,
         description: desc,
         estimated: est,
         deadline: dl,
+        pending,
         mode,
         weekdays,
         sessions
@@ -503,8 +579,36 @@ window.updateBoolSetting = function(key, checked) {
     if (state.currentTab === "list") renderTasks();
 };
 
+// ========== PENDING UI TOGGLE ==========
+function togglePendingControls(type, isPending) {
+    const modeName = type === "add" ? "modeAdd" : "modeEdit";
+    document.querySelectorAll(`input[name="${modeName}"]`).forEach(r => {
+        r.disabled = isPending;
+    });
+
+    const weekdayClass = type === "add" ? ".weekday-pill-add" : ".weekday-pill-edit";
+    const sessionClass = type === "add" ? ".session-pill-add" : ".session-pill-edit";
+
+    [weekdayClass, sessionClass].forEach(sel => {
+        document.querySelectorAll(sel).forEach(btn => {
+            btn.disabled = isPending;
+            if (isPending) btn.classList.add("pill-disabled");
+            else btn.classList.remove("pill-disabled");
+        });
+    });
+}
+
+window.onPendingAddChange = function(checked) {
+    togglePendingControls("add", checked);
+};
+
+window.onPendingEditChange = function(checked) {
+    togglePendingControls("edit", checked);
+};
+
 // ========== PILLS ==========
 window.togglePill = function(el) {
+    if (el.disabled) return;
     el.classList.toggle("pill-selected");
 };
 
