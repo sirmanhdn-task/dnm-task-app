@@ -36,6 +36,8 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 
 // ========== STATE ==========
+let zoomLevel = 1; // 1=100%, 2=200%, 4=400%
+
 const state = {
     currentUser: null,
     tasks: [],
@@ -675,7 +677,8 @@ function renderTimeline() {
     totalMinutes = totalDays * 1440;
     state.timeline.totalMinutes = totalMinutes;
 
-    const pxPerMinute = state.timeline.pxPerMinute;
+    const pxPerMinute = zoomLevel;
+
     const totalWidth = totalMinutes * pxPerMinute;
 
     container.style.width = totalWidth + "px";
@@ -777,7 +780,8 @@ function updateTimelineCurrentLine() {
     const now = new Date();
     const diffMin = (now - todayStart)/60000;
     const totalMinutes = state.timeline.totalMinutes;
-    const pxPerMinute = state.timeline.pxPerMinute;
+    const pxPerMinute = zoomLevel;
+
 
     if (diffMin < 0 || diffMin > totalMinutes) {
         currentLine.style.display = "none";
@@ -794,6 +798,21 @@ setInterval(() => {
         updateTimelineCurrentLine();
     }
 }, 60000);
+
+window.zoomIn = function() {
+    if (zoomLevel === 4) return;
+    zoomLevel = zoomLevel * 2;
+    document.getElementById("zoomDisplay").innerText = (zoomLevel * 100) + "%";
+    renderTimeline();
+};
+
+window.zoomOut = function() {
+    if (zoomLevel === 1) return;
+    zoomLevel = zoomLevel / 2;
+    document.getElementById("zoomDisplay").innerText = (zoomLevel * 100) + "%";
+    renderTimeline();
+};
+
 
 window.jumpToNow = function() {
     const scrollBox = document.querySelector(".timeline-scroll");
