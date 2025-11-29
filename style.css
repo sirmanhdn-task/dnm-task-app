@@ -452,3 +452,14 @@ button:hover {
 .hidden {
     display: none !important;
 }
+.jump-now-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    background: #0288d1;
+    color: #fff;
+    cursor: pointer;
+}
+.jump-now-btn:hover {
+    background: #01579b;
+}
