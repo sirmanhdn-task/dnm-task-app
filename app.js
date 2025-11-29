@@ -35,13 +35,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
-// ========== STATE ==========
+// zoom level for timeline
 let zoomLevel = 1; // 1=100%, 2=200%, 4=400%
 
+// ========== STATE ==========
 const state = {
     currentUser: null,
     tasks: [],
-    currentTab: "list",
+    backgroundTasks: [],
+    currentTab: "timeline",
     settings: {
         quickBoost: 999999,
         timeMatchMultiplier: 1.5,
@@ -50,14 +52,13 @@ const state = {
         hideDone: false
     },
     timeline: {
-        pxPerMinute: 1,   // 1 phút = 1 px (1 ngày = 1440px)
         todayStart: null,
         totalMinutes: 1440
     }
 };
 
 // ========== LOCAL SETTINGS ==========
-const SETTINGS_KEY = "dnmSettingsV3";
+const SETTINGS_KEY = "dnmSettingsV5";
 
 function loadSettingsFromLocalStorage() {
     try {
@@ -103,6 +104,7 @@ onAuthStateChanged(auth, user => {
         notLoggedInMessage.classList.remove("hidden");
         appContent.classList.add("hidden");
         state.tasks = [];
+        state.backgroundTasks = [];
         taskListDiv.innerHTML = "";
         return;
     }
@@ -114,6 +116,7 @@ onAuthStateChanged(auth, user => {
     appContent.classList.remove("hidden");
 
     listenTasks();
+    listenBackgroundTasks();
 });
 
 // ========== TAB SWITCH ==========
@@ -122,6 +125,7 @@ window.switchTab = function(tab) {
 
     document.getElementById("tab-timeline").classList.add("hidden");
     document.getElementById("tab-list").classList.add("hidden");
+    document.getElementById("tab-background").classList.add("hidden");
     document.getElementById("tab-settings").classList.add("hidden");
 
     document.getElementById(`tab-${tab}`).classList.remove("hidden");
@@ -132,6 +136,7 @@ window.switchTab = function(tab) {
     if (tab === "list") renderTasks();
     if (tab === "settings") renderSettings();
     if (tab === "timeline") renderTimeline();
+    if (tab === "background") renderBackgroundTasks();
 };
 
 // ========== TIME HELPERS ==========
@@ -157,7 +162,6 @@ function getTodayStart() {
 
 // ========== TYPE HELPER ==========
 function getTaskType(task) {
-    // Ưu tiên field type, fallback từ pending boolean nếu có
     if (task.type === "normal" || task.type === "pending" || task.type === "background") {
         return task.type;
     }
@@ -169,13 +173,8 @@ function getTaskType(task) {
 function computeScore(task) {
     const type = getTaskType(task);
 
-    // Done luôn -1
     if (task.done) return -1;
-
-    // Pending: không tham gia chấm điểm chính
     if (type === "pending") return -0.5;
-
-    // Background: không tham gia scoring
     if (type === "background") return -1;
 
     const cfg = state.settings;
@@ -217,13 +216,13 @@ function computeScore(task) {
     return score;
 }
 
-// ========== STATUS RANK (Normal < Pending < Background < Done) ==========
+// ========== STATUS RANK ==========
 function taskStatusRank(t) {
     const type = getTaskType(t);
     if (t.done) return 3;
     if (type === "background") return 2;
     if (type === "pending") return 1;
-    return 0; // normal
+    return 0;
 }
 
 // ========== seqId ==========
@@ -253,6 +252,25 @@ function listenTasks() {
         state.tasks = arr;
 
         if (state.currentTab === "list") renderTasks();
+        if (state.currentTab === "timeline") renderTimeline();
+    });
+}
+
+// ========== LISTEN BACKGROUND TASKS ==========
+function listenBackgroundTasks() {
+    const q = query(collection(db, "backgroundTasks"), where("uid","==",state.currentUser.uid));
+    onSnapshot(q, snap => {
+        const arr = [];
+        snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+
+        arr.sort((a,b) => {
+            if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
+            return (a.startTime || "").localeCompare(b.startTime || "");
+        });
+
+        state.backgroundTasks = arr;
+
+        if (state.currentTab === "background") renderBackgroundTasks();
         if (state.currentTab === "timeline") renderTimeline();
     });
 }
@@ -314,7 +332,6 @@ window.addTask = async function() {
     document.getElementById("estimated").value = 10;
     document.getElementById("deadline").value = "";
 
-    // reset pills
     document.querySelectorAll(".weekday-pill-add, .session-pill-add")
         .forEach(el => el.classList.remove("pill-selected"));
 };
@@ -333,8 +350,7 @@ function renderTasks() {
         .sort((a,b) => {
             const ra = taskStatusRank(a);
             const rb = taskStatusRank(b);
-            if (ra !== rb) return ra - rb; // Normal(0) → Pending(1) → Background(2) → Done(3)
-
+            if (ra !== rb) return ra - rb;
             if (b.score !== a.score) return b.score - a.score;
             return (b.seqId||0) - (a.seqId||0);
         });
@@ -387,20 +403,17 @@ function renderTasks() {
         let footerHtml = "";
 
         if (t.done) {
-            // DONE: Sửa + UNDONE + Xóa
             footerHtml = `
                 <button class="edit-btn">Sửa</button>
                 <button class="done-btn" style="background:#009688">UNDONE</button>
                 <button class="delete-btn">Xóa</button>
             `;
         } else if (type === "pending") {
-            // PENDING: chỉ Sửa + Xóa
             footerHtml = `
                 <button class="edit-btn">Sửa</button>
                 <button class="delete-btn">Xóa</button>
             `;
         } else {
-            // NORMAL / BACKGROUND (hiện chưa có background UI)
             footerHtml = `
                 <button class="edit-btn">Sửa</button>
                 <button class="calendar-btn">Calendar</button>
@@ -471,17 +484,14 @@ window.openEditPopup = function(task) {
     document.getElementById("editEstimated").value = task.estimated;
     document.getElementById("editDeadline").value = task.deadline;
 
-    // type
     document.querySelectorAll('input[name="typeEdit"]').forEach(r => {
         r.checked = (r.value === type);
     });
 
-    // mode
     document.querySelectorAll('input[name="modeEdit"]').forEach(r => r.checked = false);
     const modeRadio = document.querySelector(`input[name="modeEdit"][value="${task.mode}"]`);
     if (modeRadio) modeRadio.checked = true;
 
-    // pills
     document.querySelectorAll(".weekday-pill-edit, .session-pill-edit")
         .forEach(el => el.classList.remove("pill-selected"));
 
@@ -636,7 +646,91 @@ function getSelectedValues(selector) {
         .map(el => el.dataset.value);
 }
 
-// ========== TIMELINE RENDERING V4 ==========
+// ========== BACKGROUND TASKS CRUD ==========
+
+window.addBackgroundTask = async function() {
+    const name = document.getElementById("bgName").value.trim();
+    const description = document.getElementById("bgDescription").value.trim();
+    const date = document.getElementById("bgDate").value;
+    const startTime = document.getElementById("bgStartTime").value;
+    const endTime = document.getElementById("bgEndTime").value;
+    const parallel = document.getElementById("bgParallel").checked;
+
+    if (!state.currentUser) {
+        alert("Bạn cần đăng nhập.");
+        return;
+    }
+
+    if (!name || !date || !startTime || !endTime) {
+        alert("Thiếu tên, ngày, giờ bắt đầu hoặc giờ kết thúc.");
+        return;
+    }
+
+    if (endTime <= startTime) {
+        alert("Giờ kết thúc phải sau giờ bắt đầu (chưa hỗ trợ qua ngày).");
+        return;
+    }
+
+    await addDoc(collection(db, "backgroundTasks"), {
+        uid: state.currentUser.uid,
+        name,
+        description,
+        date,
+        startTime,
+        endTime,
+        parallel,
+        createdAt: serverTimestamp()
+    });
+
+    document.getElementById("bgName").value = "";
+    document.getElementById("bgDescription").value = "";
+};
+
+window.deleteBackgroundTask = async function(id) {
+    if (!confirm("Xóa background task này?")) return;
+    await deleteDoc(doc(db, "backgroundTasks", id));
+};
+
+function renderBackgroundTasks() {
+    const listDiv = document.getElementById("bgTaskList");
+    if (!listDiv) return;
+
+    listDiv.innerHTML = "";
+
+    if (!state.backgroundTasks || state.backgroundTasks.length === 0) {
+        listDiv.innerHTML = "<p>Chưa có background task nào.</p>";
+        return;
+    }
+
+    state.backgroundTasks.forEach(bg => {
+        const div = document.createElement("div");
+        div.className = "task-card";
+
+        const dateStr = bg.date || "";
+        const timeStr = bg.startTime && bg.endTime
+            ? `${bg.startTime} → ${bg.endTime}`
+            : "";
+
+        const parallelText = bg.parallel
+            ? "Parallel: cho phép task khác chạy cùng"
+            : "Non-parallel: không cho task khác chạy cùng (tương lai sẽ dùng)";
+
+        div.innerHTML = `
+            <div class="task-title">${bg.name}</div>
+            <div>${bg.description || ""}</div>
+            <div>Ngày: ${dateStr}</div>
+            <div>Thời gian: ${timeStr}</div>
+            <div style="font-size:12px;color:#555;">${parallelText}</div>
+            <div class="task-footer">
+                <button class="delete-btn" onclick="deleteBackgroundTask('${bg.id}')">Xóa</button>
+            </div>
+        `;
+
+        listDiv.appendChild(div);
+    });
+}
+
+// ========== TIMELINE RENDERING ==========
 
 function renderTimeline() {
     const container = document.getElementById("timelineContainer");
@@ -647,7 +741,6 @@ function renderTimeline() {
     const lanePending = document.getElementById("lane-pending");
     const daysContainer = document.getElementById("timelineDays");
     const header = document.getElementById("timelineHeader");
-    const currentLine = document.getElementById("timelineCurrentLine");
 
     laneNormal.innerHTML = "";
     laneBackground.innerHTML = "";
@@ -659,7 +752,7 @@ function renderTimeline() {
     const todayStart = getTodayStart();
     state.timeline.todayStart = todayStart;
 
-    let maxEnd = new Date(todayStart.getTime() + 24*60*60000); // tối thiểu 1 ngày
+    let maxEnd = new Date(todayStart.getTime() + 24*60*60000);
 
     tasks.forEach(t => {
         if (!t.deadline) return;
@@ -672,18 +765,15 @@ function renderTimeline() {
     });
 
     let totalMinutes = Math.max(1440, Math.ceil((maxEnd - todayStart)/60000));
-    // làm tròn theo ngày
     const totalDays = Math.max(1, Math.ceil(totalMinutes / 1440));
     totalMinutes = totalDays * 1440;
     state.timeline.totalMinutes = totalMinutes;
 
     const pxPerMinute = zoomLevel;
-
     const totalWidth = totalMinutes * pxPerMinute;
 
     container.style.width = totalWidth + "px";
 
-    // vẽ dải ngày
     for (let d=0; d<totalDays; d++) {
         const dayDiv = document.createElement("div");
         dayDiv.className = "timeline-day-strip";
@@ -694,11 +784,10 @@ function renderTimeline() {
         dayDiv.style.left = left + "px";
         dayDiv.style.width = width + "px";
 
-        // ngày 0: trắng, sau đó tối dần
         if (d === 0) {
             dayDiv.style.background = "#ffffff";
         } else {
-            const shade = 250 - d*10; // giảm dần
+            const shade = 250 - d*10;
             const c = Math.max(210, shade);
             dayDiv.style.background = `rgb(${c},${c},${c})`;
         }
@@ -706,8 +795,7 @@ function renderTimeline() {
         daysContainer.appendChild(dayDiv);
     }
 
-    // header: đánh dấu mỗi 3 giờ
-    for (let m=0; m<=totalMinutes; m+=180) { // 180 phút = 3h
+    for (let m=0; m<=totalMinutes; m+=180) {
         const label = document.createElement("div");
         label.className = "timeline-header-label";
         const left = m * pxPerMinute;
@@ -720,7 +808,7 @@ function renderTimeline() {
         header.appendChild(label);
     }
 
-    // vẽ block
+    // Normal & Pending
     tasks.forEach(t => {
         const type = getTaskType(t);
         if (!t.deadline) return;
@@ -730,44 +818,69 @@ function renderTimeline() {
         const estimated = Number(t.estimated) || 0;
         if (estimated <= 0) return;
 
-        // minutes từ todayStart tới deadline
         let endMin = (dl - todayStart)/60000;
-        if (endMin < 0) return; // quá khứ xa
+        if (endMin < 0) return;
 
-        // anchor theo deadline
         let startMin = endMin - estimated;
         if (startMin < 0) {
             startMin = 0;
             endMin = estimated;
         }
 
-        // clamp
         if (endMin > totalMinutes) endMin = totalMinutes;
         if (startMin > totalMinutes) return;
 
         const lane = (type === "pending")
             ? lanePending
-            : (type === "background" ? laneBackground : laneNormal);
+            : laneNormal;
 
         const block = document.createElement("div");
         block.classList.add("timeline-block");
 
         if (type === "pending") block.classList.add("timeline-block-pending");
-        else if (type === "background") block.classList.add("timeline-block-background");
         else block.classList.add("timeline-block-normal");
 
         const leftPx = startMin * pxPerMinute;
         const widthPx = (endMin - startMin) * pxPerMinute;
 
         block.style.left = leftPx + "px";
-        block.style.width = Math.max(10, widthPx) + "px"; // tối thiểu 10px cho dễ thấy
-
+        block.style.width = Math.max(10, widthPx) + "px";
         block.textContent = t.name || "(No name)";
 
         lane.appendChild(block);
     });
 
-    // vẽ current line
+    // Background lane: V5.0 CHỈ HIỂN THỊ THEO NGÀY HIỆN TẠI (chưa repeat)
+    const todayStr = new Date().toISOString().slice(0,10);
+    (state.backgroundTasks || []).forEach(bg => {
+        if (bg.date !== todayStr) return;
+
+        if (!bg.startTime || !bg.endTime) return;
+
+        const [sh, sm] = bg.startTime.split(":").map(Number);
+        const [eh, em] = bg.endTime.split(":").map(Number);
+        if (isNaN(sh) || isNaN(eh)) return;
+
+        let startMin = sh*60 + sm;
+        let endMin   = eh*60 + em;
+        if (endMin <= startMin) return;
+
+        if (startMin > totalMinutes) return;
+        if (endMin > totalMinutes) endMin = totalMinutes;
+
+        const block = document.createElement("div");
+        block.classList.add("timeline-block", "timeline-block-background");
+
+        const leftPx = startMin * pxPerMinute;
+        const widthPx = (endMin - startMin) * pxPerMinute;
+
+        block.style.left = leftPx + "px";
+        block.style.width = Math.max(10, widthPx) + "px";
+        block.textContent = bg.name || "(BG)";
+
+        laneBackground.appendChild(block);
+    });
+
     updateTimelineCurrentLine();
 }
 
@@ -782,7 +895,6 @@ function updateTimelineCurrentLine() {
     const totalMinutes = state.timeline.totalMinutes;
     const pxPerMinute = zoomLevel;
 
-
     if (diffMin < 0 || diffMin > totalMinutes) {
         currentLine.style.display = "none";
         return;
@@ -792,12 +904,14 @@ function updateTimelineCurrentLine() {
     currentLine.style.left = (diffMin * pxPerMinute) + "px";
 }
 
-// Cập nhật vạch đỏ mỗi phút
+// cập nhật vạch đỏ mỗi phút
 setInterval(() => {
     if (state.currentTab === "timeline") {
         updateTimelineCurrentLine();
     }
 }, 60000);
+
+// ========== ZOOM & JUMP TO NOW ==========
 
 window.zoomIn = function () {
     const scrollBox = document.querySelector(".timeline-scroll");
@@ -815,7 +929,6 @@ window.zoomIn = function () {
     renderTimeline();
 
     const newScrollLeft = centerMinute * zoomLevel - scrollBox.clientWidth / 2;
-
     scrollBox.scrollLeft = newScrollLeft;
 };
 
@@ -835,27 +948,19 @@ window.zoomOut = function () {
     renderTimeline();
 
     const newScrollLeft = centerMinute * zoomLevel - scrollBox.clientWidth / 2;
-
     scrollBox.scrollLeft = newScrollLeft;
 };
 
-
-
-window.jumpToNow = function() {
-    const scrollBox = document.querySelector(".timeline-scroll");
+window.jumpToNow = function () {
     const line = document.getElementById("timelineCurrentLine");
-    if (!scrollBox || !line) return;
+    const scrollBox = document.querySelector(".timeline-scroll");
+    if (!line || !scrollBox) return;
 
-    // Lấy vị trí tuyệt đối của timelineContainer
-    const containerRect = scrollBox.getBoundingClientRect();
-    const lineRect = line.getBoundingClientRect();
-
-    // Tính vị trí line tương đối so với scrollBox
-    const relativeLeft = (lineRect.left - containerRect.left) + scrollBox.scrollLeft;
+    const lineLeft = line.offsetLeft;
+    if (!lineLeft || isNaN(lineLeft)) return;
 
     scrollBox.scrollTo({
-        left: relativeLeft - scrollBox.clientWidth / 2,
+        left: lineLeft - scrollBox.clientWidth/2,
         behavior: "smooth"
     });
 };
-
