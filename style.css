@@ -480,3 +480,31 @@ button:hover {
     transform: scale(0.96);
 }
 
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 20px;
+}
+
+.zoom-controls button {
+    width: 28px;
+    height: 28px;
+    background: #e0e0e0;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.zoom-controls button:hover {
+    background: #c9c9c9;
+}
+
+#zoomDisplay {
+    font-size: 13px;
+    font-weight: 600;
+    width: 50px;
+    text-align: center;
+}
