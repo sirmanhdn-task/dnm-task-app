@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>DNM Task Scheduler V4</title>
+    <title>DNM Task Scheduler V5.0</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -29,25 +29,25 @@
 
         <!-- TAB NAV -->
         <div class="tab-nav">
-            <button id="tab-btn-timeline" class="tab-btn" onclick="switchTab('timeline')">Timeline</button>
-            <button id="tab-btn-list" class="tab-btn tab-active" onclick="switchTab('list')">List</button>
+            <button id="tab-btn-timeline" class="tab-btn tab-active" onclick="switchTab('timeline')">Timeline</button>
+            <button id="tab-btn-list" class="tab-btn" onclick="switchTab('list')">List</button>
+            <button id="tab-btn-background" class="tab-btn" onclick="switchTab('background')">Background</button>
             <button id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
         </div>
 
         <!-- TAB: TIMELINE -->
-        <div id="tab-timeline" class="hidden">
+        <div id="tab-timeline">
             <div class="card">
                 <h2>Timeline</h2>
+
                 <div class="timeline-topbar">
-    <button id="jumpNowBtn" class="jump-now-btn" onclick="jumpToNow()">Hiện tại</button>
-        <div class="zoom-controls">
-        <button onclick="zoomOut()">−</button>
-        <span id="zoomDisplay">100%</span>
-        <button onclick="zoomIn()">+</button>
-    </div>
-
-</div>
-
+                    <button id="jumpNowBtn" class="jump-now-btn" onclick="jumpToNow()">Hiện tại</button>
+                    <div class="zoom-controls">
+                        <button onclick="zoomOut()">−</button>
+                        <span id="zoomDisplay">100%</span>
+                        <button onclick="zoomIn()">+</button>
+                    </div>
+                </div>
 
                 <div class="timeline-scroll">
                     <div id="timelineContainer" class="timeline-container">
@@ -62,6 +62,7 @@
                         <div id="timelineCurrentLine" class="timeline-current-line"></div>
                     </div>
                 </div>
+
                 <div class="timeline-legend">
                     <span class="legend-box legend-normal"></span> Normal
                     <span class="legend-box legend-background"></span> Background
@@ -71,7 +72,7 @@
         </div>
 
         <!-- TAB: LIST -->
-        <div id="tab-list">
+        <div id="tab-list" class="hidden">
 
             <div class="form-section">
                 <h2>Thêm công việc</h2>
@@ -96,7 +97,6 @@
                             <input type="radio" name="typeAdd" value="pending" />
                             Pending
                         </label>
-                        <!-- Background sẽ thêm UI sau, hiện chưa mở -->
                     </div>
                 </div>
 
@@ -144,6 +144,47 @@
 
             <h2>Danh sách công việc</h2>
             <div id="taskList"></div>
+        </div>
+
+        <!-- TAB: BACKGROUND -->
+        <div id="tab-background" class="hidden">
+            <h2>Background tasks</h2>
+
+            <div class="card">
+                <h3>Tạo background task</h3>
+                <div class="form-row">
+                    <label>Tên:</label>
+                    <input type="text" id="bgName" placeholder="VD: Ngủ, Làm ở công ty" />
+                </div>
+                <div class="form-row">
+                    <label>Mô tả:</label>
+                    <textarea id="bgDescription" rows="2" placeholder="Ghi chú thêm (tuỳ chọn)"></textarea>
+                </div>
+                <div class="form-row">
+                    <label>Ngày:</label>
+                    <input type="date" id="bgDate" />
+                </div>
+                <div class="form-row">
+                    <label>Bắt đầu:</label>
+                    <input type="time" id="bgStartTime" />
+                </div>
+                <div class="form-row">
+                    <label>Kết thúc:</label>
+                    <input type="time" id="bgEndTime" />
+                </div>
+                <div class="form-row">
+                    <label>
+                        <input type="checkbox" id="bgParallel" />
+                        Cho phép làm task thường song song (parallel)
+                    </label>
+                </div>
+                <button onclick="addBackgroundTask()">Thêm background task</button>
+            </div>
+
+            <div class="card">
+                <h3>Danh sách background tasks</h3>
+                <div id="bgTaskList"></div>
+            </div>
         </div>
 
         <!-- TAB: SETTINGS -->
