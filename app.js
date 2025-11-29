@@ -794,3 +794,18 @@ setInterval(() => {
         updateTimelineCurrentLine();
     }
 }, 60000);
+
+window.jumpToNow = function() {
+    const line = document.getElementById("timelineCurrentLine");
+    const scrollBox = document.querySelector(".timeline-scroll");
+
+    if (!line || !scrollBox) return;
+
+    // vị trí pixel của current line
+    const x = line.offsetLeft;
+
+    scrollBox.scrollTo({
+        left: x - scrollBox.clientWidth/2,  // đưa vào giữa màn hình
+        behavior: "smooth"
+    });
+};
