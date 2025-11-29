@@ -453,3 +453,99 @@ function switchTab(tab) {
     if (tab === "list") renderTasks();
     if (tab === "settings") renderSettings();
 }
+
+/* ==========================================================
+   ===============   TIMELINE ENGINE V4   =====================
+   ========================================================== */
+
+/* Helper: phút trong ngày */
+function minutesOfDay(d) {
+    return d.getHours() * 60 + d.getMinutes();
+}
+
+/* Convert time (minute offset) → % width */
+function timeToPercent(min, total = 1440) {
+    return (min / total) * 100;
+}
+
+/* Tạo danh sách nhãn giờ trong rolling window */
+function buildHourLabels() {
+    const labels = [];
+
+    let now = new Date();
+    let startHour = now.getHours();
+    let startMinute = now.getMinutes();
+
+    let currentTimeMinutes = startHour * 60 + startMinute;
+
+    for (let i = 0; i <= 24; i++) {
+        let h = (startHour + i) % 24;
+        labels.push(h.toString().padStart(2, "0"));
+    }
+    return labels;
+}
+
+/* Render Timeline */
+function renderTimeline() {
+    let scaleDiv = document.getElementById("timelineScale");
+    let infoDiv = document.getElementById("timelineInfo");
+    let bgToday = document.getElementById("timelineBgToday");
+    let bgFuture = document.getElementById("timelineBgFuture");
+    let marker = document.getElementById("timelineCurrentMarker");
+
+    let now = new Date();
+    let nowMin = minutesOfDay(now);
+
+    /* Rolling window: từ bây giờ → +24h */
+    let total = 1440;
+
+    infoDiv.innerHTML = "Từ: " + now.toLocaleString() + " → +24 giờ";
+
+    /* Scale giờ */
+    let labels = buildHourLabels();
+    scaleDiv.innerHTML = "";
+    labels.forEach(lbl => {
+        let span = document.createElement("div");
+        span.innerText = lbl;
+        scaleDiv.appendChild(span);
+    });
+
+    /* Tính vị trí midnight tiếp theo */
+    let tomorrowMidnight = new Date(now);
+    tomorrowMidnight.setHours(24, 0, 0, 0);
+    let diffToMidnight = (tomorrowMidnight - now) / 60000;
+
+    let todayWidthPercent = timeToPercent(diffToMidnight, total);
+    let futureWidthPercent = 100 - todayWidthPercent;
+
+    bgToday.style.left = "0%";
+    bgToday.style.width = todayWidthPercent + "%";
+
+    bgFuture.style.left = todayWidthPercent + "%";
+    bgFuture.style.width = futureWidthPercent + "%";
+
+    /* Current time marker */
+    marker.style.left = "0%";
+
+    setTimeout(() => updateMarker(), 50);
+}
+
+/* Update marker mỗi phút */
+function updateMarker() {
+    let marker = document.getElementById("timelineCurrentMarker");
+    let now = new Date();
+
+    let tomorrowMidnight = new Date(now);
+    tomorrowMidnight.setHours(24, 0, 0, 0);
+    let diffToMidnight = (tomorrowMidnight - now) / 60000;
+
+    let sinceStartWindow = 1440 - diffToMidnight;
+    let percent = timeToPercent(sinceStartWindow, 1440);
+
+    marker.style.left = percent + "%";
+
+    setTimeout(updateMarker, 60000);
+}
+
+/* LOG */
+console.log("V4 loaded.");
