@@ -355,7 +355,7 @@ button:hover {
     right: 0;
     top: 24px; /* dưới header */
     bottom: 0;
-    background: rgba(0,200,0,0.08); /* default available */
+    background: rgba(0,200,0,0.05); /* default available */
     z-index: 1;
     pointer-events: none;
 }
@@ -486,6 +486,7 @@ button:hover {
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: 8px;
     margin-bottom: 8px;
 }
 
