@@ -1,8 +1,17 @@
+<!-- 
+VERSION: V5.2
+DATE: 2025-01-14
+CHANGES:
+- Thêm shading Available (xanh nhạt) / Unavailable (đỏ nhạt) trên toàn bộ timeline
+- Unavailable dựa trên background task non-parallel (ưu tiên non-parallel nếu chồng nhau)
+- Giữ layout Timeline + List tích hợp, Background, Settings
+-->
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>DNM Task Scheduler V5.1</title>
+    <title>DNM Task Scheduler V5.2</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -53,6 +62,9 @@
                     <div id="timelineContainer" class="timeline-container">
                         <div id="timelineDays" class="timeline-days"></div>
 
+                        <!-- Lớp shading availability -->
+                        <div id="timelineAvailability" class="timeline-availability"></div>
+
                         <div class="timeline-header" id="timelineHeader"></div>
 
                         <div class="timeline-lane timeline-lane-normal" id="lane-normal"></div>
@@ -67,6 +79,12 @@
                     <span class="legend-box legend-normal"></span> Normal
                     <span class="legend-box legend-background"></span> Background
                     <span class="legend-box legend-pending"></span> Pending
+                </div>
+                <div class="timeline-legend">
+                    <span style="display:inline-block;width:20px;height:10px;background:rgba(0,200,0,0.08);border:1px solid #a5d6a7;"></span>
+                    Available
+                    <span style="display:inline-block;width:20px;height:10px;background:rgba(255,0,0,0.08);border:1px solid #ef9a9a;margin-left:10px;"></span>
+                    Unavailable (non-parallel BG)
                 </div>
             </div>
 
