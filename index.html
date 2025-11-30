@@ -1,17 +1,17 @@
-<!-- 
-VERSION: V5.2
-DATE: 2025-01-14
+<!--
+VERSION: V6.1
+DATE: 2025-01-15
 CHANGES:
-- Thêm shading Available (xanh nhạt) / Unavailable (đỏ nhạt) trên toàn bộ timeline
-- Unavailable dựa trên background task non-parallel (ưu tiên non-parallel nếu chồng nhau)
-- Giữ layout Timeline + List tích hợp, Background, Settings
+- Thêm buildSlots() với độ phân giải 10 phút, giới hạn timeline 14 ngày
+- Shading Available/Unavailable dựa trên slots (ưu tiên non-parallel background)
+- Giữ nguyên giao diện: Timeline + List + Background + Settings, zoom, JumpToNow
 -->
 
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>DNM Task Scheduler V5.2</title>
+    <title>DNM Task Scheduler V6.1</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -43,7 +43,7 @@ CHANGES:
             <button id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
         </div>
 
-        <!-- TAB: TIMELINE (bao gồm cả Timeline + List) -->
+        <!-- TAB: TIMELINE (bao gồm Timeline + List) -->
         <div id="tab-timeline">
             <!-- CARD: TIMELINE -->
             <div class="card">
@@ -51,6 +51,7 @@ CHANGES:
 
                 <div class="timeline-topbar">
                     <button id="jumpNowBtn" class="jump-now-btn" onclick="jumpToNow()">Hiện tại</button>
+                    <button id="debugSlotsBtn" class="jump-now-btn" style="background:#555;" onclick="debugSlots()">Debug Slots</button>
                     <div class="zoom-controls">
                         <button onclick="zoomOut()">−</button>
                         <span id="zoomDisplay">100%</span>
@@ -81,7 +82,7 @@ CHANGES:
                     <span class="legend-box legend-pending"></span> Pending
                 </div>
                 <div class="timeline-legend">
-                    <span style="display:inline-block;width:20px;height:10px;background:rgba(0,200,0,0.08);border:1px solid #a5d6a7;"></span>
+                    <span style="display:inline-block;width:20px;height:10px;background:rgba(0,200,0,0.05);border:1px solid #a5d6a7;"></span>
                     Available
                     <span style="display:inline-block;width:20px;height:10px;background:rgba(255,0,0,0.08);border:1px solid #ef9a9a;margin-left:10px;"></span>
                     Unavailable (non-parallel BG)
