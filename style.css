@@ -1,4 +1,6 @@
-/* ========== BASE ========== */
+/* ===========================
+   BASE
+=========================== */
 
 body {
     font-family: Arial, sans-serif;
@@ -13,16 +15,74 @@ body {
     margin: 10px auto 40px auto;
 }
 
-h1 {
-    text-align: center;
-    margin-top: 10px;
-    margin-bottom: 15px;
-    font-size: 24px;
+/* ... các phần base, tabs, card, form, list, background, settings giữ nguyên ... */
+
+/* ===========================
+   TIMELINE
+=========================== */
+
+.timeline-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
 }
 
-/* ... (các đoạn trên giữ nguyên như v6.1, không cắt bớt ở đây để bạn dễ đối chiếu) ... */
+.jump-now-btn {
+    background: #1976d2;
+    color: #fff;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
 
-/* ========== TIMELINE ========== */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.zoom-controls button {
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+#zoomDisplay {
+    min-width: 40px;
+    text-align: center;
+    font-size: 12px;
+}
+
+/* NEW: Day header trên timeline */
+.timeline-day-header {
+    position: relative;
+    overflow: hidden;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+    height: 26px;
+    margin-bottom: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+}
+
+.timeline-day-label {
+    position: absolute;
+    top: 3px;
+    height: 20px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    border-right: 1px solid #eee;
+    display: flex;
+    align-items: center;
+}
+
+/* Timeline scroll + container */
 
 .timeline-scroll {
     overflow-x: auto;
@@ -33,12 +93,13 @@ h1 {
     position: relative;
     min-height: 40px + 40px + 30px;
     border: 1px solid #ddd;
-    border-radius: 8px;
+    border-radius: 0 0 8px 8px;
     background: #fafafa;
     overflow: hidden;
 }
 
-/* Day background strips */
+/* Day strips background */
+
 .timeline-days {
     position: absolute;
     top: 0;
@@ -47,23 +108,43 @@ h1 {
     z-index: 0;
 }
 
-/* Availability overlay */
-.timeline-availability {
+.timeline-day-strip {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: 32px; /* dưới header (có thêm dòng ngày) */
+    top: 0;
     bottom: 0;
-    background: rgba(0,200,0,0.05); /* default available */
-    z-index: 1;
-    pointer-events: none;
 }
 
-/* top header (hours / days) */
+/* Availability shading */
+
+.timeline-availability {
+    position: absolute;
+    top: 20px;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.timeline-availability-slot {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    opacity: 0.12;
+}
+
+.timeline-availability-available {
+    background: #4caf50;
+}
+
+.timeline-availability-unavailable {
+    background: #f44336;
+}
+
+/* Header time labels */
+
 .timeline-header {
     position: relative;
-    height: 32px;
-    border-bottom: 1px solid #ddd;
+    height: 20px;
+    border-bottom: 1px solid #eee;
     font-size: 10px;
     color: #555;
     z-index: 2;
@@ -76,67 +157,59 @@ h1 {
     white-space: nowrap;
 }
 
-.timeline-day-label {
-    position: absolute;
-    top: 16px; /* dòng thứ 2 trong header */
-    transform: translateX(-50%);
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 600;
-}
-
 /* lanes */
+
 .timeline-lane {
     position: relative;
     border-top: 1px solid #eee;
     border-bottom: 1px solid #eee;
-    z-index: 2;
+    height: 40px;
 }
 
 .timeline-lane-normal {
-    height: 40px;
-    background: transparent;
+    background: #e3f2fd;
 }
 
 .timeline-lane-background {
-    height: 40px;
-    background: transparent;
+    background: #fff3e0;
 }
 
 .timeline-lane-pending {
+    background: #f3e5f5;
     height: 30px;
-    background: transparent;
 }
 
 /* blocks */
+
 .timeline-block {
     position: absolute;
-    top: 4px;
-    bottom: 4px;
-    border-radius: 6px;
+    top: 8px;
+    height: 24px;
+    border-radius: 4px;
     font-size: 11px;
-    padding: 2px 4px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
     color: #fff;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    padding: 2px 4px;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .timeline-block-normal {
-    background: #64b5f6;
+    background: #42a5f5;
 }
 
 .timeline-block-background {
-    background: #ffb74d;
+    background: #ffa726;
 }
 
 .timeline-block-pending {
-    background: #9e9e9e;
+    background: #ab47bc;
 }
 
 /* current time line */
-.timeline-current-line {
+
+#timelineCurrentLine {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -146,14 +219,8 @@ h1 {
     z-index: 3;
 }
 
-/* day strip */
-.timeline-day-strip {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-}
-
 /* legend */
+
 .timeline-legend {
     margin-top: 6px;
     font-size: 12px;
@@ -178,7 +245,19 @@ h1 {
 }
 
 .legend-pending {
-    background: #9e9e9e;
+    background: #ba68c8;
 }
 
-/* ... (các phần khác giữ nguyên như v6.1: auth, tabs, popup, zoom-controls, v.v.) ... */
+.legend-available {
+    background: #4caf50;
+}
+
+.legend-unavailable {
+    background: #f44336;
+}
+
+/* ===========================
+   SETTINGS, POPUP, UTIL
+=========================== */
+
+/* ... các phần cuối giữ nguyên như V6.1 (settings form, popup edit, .hidden, v.v.) ... */
