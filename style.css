@@ -345,6 +345,26 @@ button:hover {
     top: 0;
     bottom: 0;
     left: 0;
+    z-index: 0;
+}
+
+/* Availability overlay */
+.timeline-availability {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 24px; /* dưới header */
+    bottom: 0;
+    background: rgba(0,200,0,0.08); /* default available */
+    z-index: 1;
+    pointer-events: none;
+}
+
+.availability-block-unavailable {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(255,0,0,0.08);
 }
 
 /* top header (hours / days) */
@@ -354,6 +374,7 @@ button:hover {
     border-bottom: 1px solid #ddd;
     font-size: 10px;
     color: #555;
+    z-index: 2;
 }
 
 .timeline-header-label {
@@ -368,6 +389,7 @@ button:hover {
     position: relative;
     border-top: 1px solid #eee;
     border-bottom: 1px solid #eee;
+    z-index: 2;
 }
 
 .timeline-lane-normal {
@@ -420,6 +442,7 @@ button:hover {
     width: 2px;
     background: #e53935;
     pointer-events: none;
+    z-index: 3;
 }
 
 /* day strip */
