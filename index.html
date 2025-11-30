@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>DNM Task Scheduler V5.0</title>
+    <title>DNM Task Scheduler V5.1</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -30,13 +30,13 @@
         <!-- TAB NAV -->
         <div class="tab-nav">
             <button id="tab-btn-timeline" class="tab-btn tab-active" onclick="switchTab('timeline')">Timeline</button>
-            <button id="tab-btn-list" class="tab-btn" onclick="switchTab('list')">List</button>
             <button id="tab-btn-background" class="tab-btn" onclick="switchTab('background')">Background</button>
             <button id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
         </div>
 
-        <!-- TAB: TIMELINE -->
+        <!-- TAB: TIMELINE (bao gồm cả Timeline + List) -->
         <div id="tab-timeline">
+            <!-- CARD: TIMELINE -->
             <div class="card">
                 <h2>Timeline</h2>
 
@@ -69,11 +69,8 @@
                     <span class="legend-box legend-pending"></span> Pending
                 </div>
             </div>
-        </div>
 
-        <!-- TAB: LIST -->
-        <div id="tab-list" class="hidden">
-
+            <!-- FORM + LIST dưới Timeline -->
             <div class="form-section">
                 <h2>Thêm công việc</h2>
 
