@@ -139,6 +139,13 @@
                     </div>
                 </div>
 
+                <div class="pill-group">
+                    <label style="font-size:13px;">
+                        <input type="checkbox" id="addCanParallel" />
+                        Có thể làm song song (Parallel OK)
+                    </label>
+                </div>
+
                 <button onclick="addTask()">Thêm</button>
             </div>
 
@@ -303,6 +310,13 @@
                 <button type="button" class="pill session-pill-edit" data-value="EVENING" onclick="togglePill(this)">Tối</button>
                 <button type="button" class="pill session-pill-edit" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
             </div>
+        </div>
+
+        <div class="pill-group">
+            <label style="font-size:13px;">
+                <input type="checkbox" id="editCanParallel" />
+                Có thể làm song song (Parallel OK)
+            </label>
         </div>
 
         <button onclick="saveEdit()">Lưu</button>
