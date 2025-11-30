@@ -736,6 +736,84 @@ function renderBackgroundTasks() {
     });
 }
 
+// ========== V6.0: BUILD SLOTS (resolution = 10 phút) ==========
+function buildSlots() {
+    // Độ phân giải: 10 phút / slot
+    const RES = 10;
+
+    const todayStart = state.timeline.todayStart;
+    const totalMinutes = state.timeline.totalMinutes;
+
+    if (!todayStart || !totalMinutes) {
+        console.warn("buildSlots: todayStart hoặc totalMinutes chưa sẵn sàng");
+        return [];
+    }
+
+    const slots = [];
+    const bg = state.backgroundTasks || [];
+
+    // Tập khoảng thời gian bị chặn (unavailable) từ background non-parallel
+    const unavailable = [];
+
+    bg.forEach(b => {
+        if (!b.date || !b.startTime || !b.endTime) return;
+        if (b.parallel) return; // parallel => không chặn slot
+
+        const baseDate = new Date(b.date + "T00:00:00");
+        if (isNaN(baseDate.getTime())) return;
+
+        const dayIndex = Math.floor((baseDate - todayStart) / (24 * 60 * 60000));
+        // nếu background trước hôm nay thì bỏ qua
+        if (dayIndex < 0) return;
+
+        const [sh, sm] = b.startTime.split(":").map(Number);
+        const [eh, em] = b.endTime.split(":").map(Number);
+
+        if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return;
+
+        const startMin = dayIndex * 1440 + (sh * 60 + sm);
+        const endMin   = dayIndex * 1440 + (eh * 60 + em);
+
+        if (endMin <= startMin) return;
+
+        unavailable.push({ start: startMin, end: endMin });
+    });
+
+    // Chia timeline thành các slot dài RES phút
+    for (let m = 0; m < totalMinutes; m += RES) {
+        let slotStart = m;
+        let slotEnd   = m + RES;
+        if (slotEnd > totalMinutes) slotEnd = totalMinutes;
+
+        let status = "available";
+
+        // Nếu slot giao bất kỳ khoảng unavailable nào thì slot = unavailable
+        for (const un of unavailable) {
+            // Nếu có giao (không tách rời)
+            if (!(slotEnd <= un.start || slotStart >= un.end)) {
+                status = "unavailable";
+                break;
+            }
+        }
+
+        slots.push({
+            start: slotStart,
+            end: slotEnd,
+            status
+        });
+    }
+
+    return slots;
+}
+
+// ========== V6.0: DEBUG SLOT ==========
+window.debugSlots = function () {
+    const s = buildSlots();
+    console.log("=== DEBUG SLOTS (V6.0, RES=10 phút) ===");
+    console.log(s);
+    console.log("Tổng số slot:", s.length);
+};
+
 // ========== TIMELINE RENDERING ==========
 
 function renderTimeline() {
