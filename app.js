@@ -36,10 +36,14 @@ const auth = getAuth(app);
 const db   = getFirestore(app);
 
 // zoom level cho timeline
-let zoomLevel = 1; // 1=100%, 2=200%, 4=400%
+let zoomLevel = 1; // mặc định 100%
+
+// Các mức zoom cho phép (từ 30% đến 400%)
+const ZOOM_LEVELS = [0.3, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 
 // Giới hạn scheduler / shading: 14 ngày
 const MAX_FILL_DAYS = 14;
+
 const MAX_FILL_MINUTES = MAX_FILL_DAYS * 1440;
 
 // ========== STATE ==========
@@ -1072,14 +1076,20 @@ window.zoomIn = function () {
     const scrollBox = document.querySelector(".timeline-scroll");
     if (!scrollBox) return;
 
-    if (zoomLevel === 4) return;
+    // Tìm vị trí zoom hiện tại trong danh sách
+    const currentIndex = ZOOM_LEVELS.indexOf(zoomLevel);
+    if (currentIndex === -1) return;
+
+    // Đang ở mức lớn nhất rồi thì thôi
+    if (currentIndex === ZOOM_LEVELS.length - 1) return;
 
     const oldZoom = zoomLevel;
     const centerX = scrollBox.scrollLeft + scrollBox.clientWidth / 2;
     const centerMinute = centerX / oldZoom;
 
-    zoomLevel = zoomLevel * 2;
-    document.getElementById("zoomDisplay").innerText = (zoomLevel * 100) + "%";
+    // Tăng lên mức zoom tiếp theo
+    zoomLevel = ZOOM_LEVELS[currentIndex + 1];
+    document.getElementById("zoomDisplay").innerText = Math.round(zoomLevel * 100) + "%";
 
     renderTimeline();
 
@@ -1091,14 +1101,20 @@ window.zoomOut = function () {
     const scrollBox = document.querySelector(".timeline-scroll");
     if (!scrollBox) return;
 
-    if (zoomLevel === 1) return;
+    // Tìm vị trí zoom hiện tại trong danh sách
+    const currentIndex = ZOOM_LEVELS.indexOf(zoomLevel);
+    if (currentIndex === -1) return;
+
+    // Đang ở mức nhỏ nhất rồi thì thôi
+    if (currentIndex === 0) return;
 
     const oldZoom = zoomLevel;
     const centerX = scrollBox.scrollLeft + scrollBox.clientWidth / 2;
     const centerMinute = centerX / oldZoom;
 
-    zoomLevel = zoomLevel / 2;
-    document.getElementById("zoomDisplay").innerText = (zoomLevel * 100) + "%";
+    // Giảm xuống mức zoom trước đó
+    zoomLevel = ZOOM_LEVELS[currentIndex - 1];
+    document.getElementById("zoomDisplay").innerText = Math.round(zoomLevel * 100) + "%";
 
     renderTimeline();
 
