@@ -10,12 +10,12 @@ import {
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
-  authDomain: "dnmstasker.firebaseapp.com",
-  projectId: "dnmstasker",
-  storageBucket: "dnmstasker.firebasestorage.app",
-  messagingSenderId: "98582966566",
-  appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
+  apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
+  authDomain: "dnmstasker-3b85f.firebaseapp.com",
+  projectId: "dnmstasker-3b85f",
+  storageBucket: "dnmstasker-3b85f.firebasestorage.app",
+  messagingSenderId: "1053072513804",
+  appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
 };
 
 // KHỞI TẠO FIREBASE
