@@ -252,7 +252,6 @@ function listenTasks() {
         snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
         state.tasks = arr;
 
-        // luôn giữ list mới nhất
         renderTasks();
         if (state.currentTab === "timeline") renderTimeline();
     });
@@ -720,7 +719,7 @@ function renderBackgroundTasks() {
 
         const parallelText = bg.parallel
             ? "Parallel: cho phép task khác chạy cùng"
-            : "Non-parallel: không cho task khác chạy cùng (tương lai sẽ dùng)";
+            : "Non-parallel: không cho task khác chạy cùng (tạo vùng Unavailable)";
 
         div.innerHTML = `
             <div class="task-title">${bg.name}</div>
@@ -748,26 +747,42 @@ function renderTimeline() {
     const lanePending = document.getElementById("lane-pending");
     const daysContainer = document.getElementById("timelineDays");
     const header = document.getElementById("timelineHeader");
+    const availContainer = document.getElementById("timelineAvailability");
 
     laneNormal.innerHTML = "";
     laneBackground.innerHTML = "";
     lanePending.innerHTML = "";
     daysContainer.innerHTML = "";
     header.innerHTML = "";
+    if (availContainer) availContainer.innerHTML = "";
 
     const tasks = state.tasks || [];
+    const bgTasks = state.backgroundTasks || [];
     const todayStart = getTodayStart();
     state.timeline.todayStart = todayStart;
 
     let maxEnd = new Date(todayStart.getTime() + 24*60*60000);
 
+    // mở rộng timeline theo task
     tasks.forEach(t => {
         if (!t.deadline) return;
         const dl = new Date(t.deadline);
-        if (!isNaN(dl.getTime())) {
-            if (dl.getTime() > maxEnd.getTime()) {
-                maxEnd = dl;
-            }
+        if (isNaN(dl.getTime())) return;
+        if (dl.getTime() > maxEnd.getTime()) {
+            maxEnd = dl;
+        }
+    });
+
+    // mở rộng timeline theo background task (theo endTime, ưu tiên ngày xa nhất)
+    bgTasks.forEach(bg => {
+        if (!bg.date || !bg.endTime) return;
+        const [eh, em] = bg.endTime.split(":").map(Number);
+        if (isNaN(eh) || isNaN(em)) return;
+        const baseDate = new Date(bg.date + "T00:00:00");
+        const dayStart = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0,0,0,0);
+        const end = new Date(dayStart.getTime() + (eh*60 + em)*60000);
+        if (end.getTime() > maxEnd.getTime()) {
+            maxEnd = end;
         }
     });
 
@@ -780,7 +795,11 @@ function renderTimeline() {
     const totalWidth = totalMinutes * pxPerMinute;
 
     container.style.width = totalWidth + "px";
+    if (availContainer) {
+        availContainer.style.width = totalWidth + "px";
+    }
 
+    // Day strips
     for (let d=0; d<totalDays; d++) {
         const dayDiv = document.createElement("div");
         dayDiv.className = "timeline-day-strip";
@@ -802,6 +821,7 @@ function renderTimeline() {
         daysContainer.appendChild(dayDiv);
     }
 
+    // Header labels (mỗi 3h)
     for (let m=0; m<=totalMinutes; m+=180) {
         const label = document.createElement("div");
         label.className = "timeline-header-label";
@@ -815,7 +835,48 @@ function renderTimeline() {
         header.appendChild(label);
     }
 
-    // Normal & Pending
+    // ========== Availability shading (ưu tiên non-parallel) ==========
+    // mặc định: toàn timeline = available (background xanh nhạt)
+    // thêm các block đỏ cho non-parallel bg
+    if (availContainer) {
+        const msPerDay = 24*60*60000;
+
+        bgTasks.forEach(bg => {
+            if (!bg.date || !bg.startTime || !bg.endTime) return;
+            if (bg.parallel) return; // chỉ non-parallel mới tạo unavailable
+            const baseDate = new Date(bg.date + "T00:00:00");
+            const dayDelta = baseDate.getTime() - todayStart.getTime();
+            const dayIndex = Math.floor(dayDelta / msPerDay);
+            if (dayIndex < 0) return; // trước hôm nay, bỏ qua
+
+            const [sh, sm] = bg.startTime.split(":").map(Number);
+            const [eh, em] = bg.endTime.split(":").map(Number);
+            if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return;
+
+            let startMinDay = sh*60 + sm;
+            let endMinDay   = eh*60 + em;
+            if (endMinDay <= startMinDay) return;
+
+            let startGlobal = dayIndex*1440 + startMinDay;
+            let endGlobal   = dayIndex*1440 + endMinDay;
+
+            if (endGlobal <= 0) return;
+            if (startGlobal >= totalMinutes) return;
+
+            if (startGlobal < 0) startGlobal = 0;
+            if (endGlobal > totalMinutes) endGlobal = totalMinutes;
+
+            const block = document.createElement("div");
+            block.className = "availability-block-unavailable";
+            const leftPx = startGlobal * pxPerMinute;
+            const widthPx = (endGlobal - startGlobal) * pxPerMinute;
+            block.style.left = leftPx + "px";
+            block.style.width = Math.max(1, widthPx) + "px";
+            availContainer.appendChild(block);
+        });
+    }
+
+    // ========== Normal & Pending tasks ==========
     tasks.forEach(t => {
         const type = getTaskType(t);
         if (!t.deadline) return;
@@ -857,28 +918,35 @@ function renderTimeline() {
         lane.appendChild(block);
     });
 
-    // Background lane: hiển thị background hôm nay
-    const todayStr = new Date().toISOString().slice(0,10);
-    (state.backgroundTasks || []).forEach(bg => {
-        if (bg.date !== todayStr) return;
-        if (!bg.startTime || !bg.endTime) return;
+    // ========== Background lane: vẽ tất cả background theo ngày ==========
+    const msPerDay = 24*60*60000;
+    bgTasks.forEach(bg => {
+        if (!bg.date || !bg.startTime || !bg.endTime) return;
+
+        const baseDate = new Date(bg.date + "T00:00:00");
+        const dayDelta = baseDate.getTime() - todayStart.getTime();
+        const dayIndex = Math.floor(dayDelta / msPerDay);
+        if (dayIndex < 0) return;
 
         const [sh, sm] = bg.startTime.split(":").map(Number);
         const [eh, em] = bg.endTime.split(":").map(Number);
-        if (isNaN(sh) || isNaN(eh)) return;
+        if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return;
 
-        let startMin = sh*60 + sm;
-        let endMin   = eh*60 + em;
-        if (endMin <= startMin) return;
+        let startMinDay = sh*60 + sm;
+        let endMinDay   = eh*60 + em;
+        if (endMinDay <= startMinDay) return;
 
-        if (startMin > totalMinutes) return;
-        if (endMin > totalMinutes) endMin = totalMinutes;
+        let startGlobal = dayIndex*1440 + startMinDay;
+        let endGlobal   = dayIndex*1440 + endMinDay;
+
+        if (startGlobal > totalMinutes) return;
+        if (endGlobal > totalMinutes) endGlobal = totalMinutes;
 
         const block = document.createElement("div");
         block.classList.add("timeline-block", "timeline-block-background");
 
-        const leftPx = startMin * pxPerMinute;
-        const widthPx = (endMin - startMin) * pxPerMinute;
+        const leftPx = startGlobal * pxPerMinute;
+        const widthPx = (endGlobal - startGlobal) * pxPerMinute;
 
         block.style.left = leftPx + "px";
         block.style.width = Math.max(10, widthPx) + "px";
