@@ -1038,3 +1038,16 @@ window.jumpToNow = function () {
         behavior: "smooth"
     });
 };
+
+// ========== SCROLL HORIZONTAL WHEN WHEEL ==========
+const scrollArea = document.querySelector(".timeline-scroll");
+
+if (scrollArea) {
+    scrollArea.addEventListener("wheel", (ev) => {
+        // Chặn scroll dọc trang
+        ev.preventDefault();
+
+        // Dùng deltaY để điều khiển scroll ngang
+        scrollArea.scrollLeft += ev.deltaY * 1; // scale = 1 là tự nhiên
+    }, { passive: false });
+}
