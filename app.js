@@ -324,6 +324,7 @@ window.addTask = async function() {
         mode,
         weekdays,
         sessions,
+        canRunParallel: document.getElementById("addCanParallel").checked,
         createdAt: serverTimestamp()
     });
 
@@ -331,6 +332,7 @@ window.addTask = async function() {
     document.getElementById("description").value = "";
     document.getElementById("estimated").value = 10;
     document.getElementById("deadline").value = "";
+    document.getElementById("addCanParallel").checked = false;
 
     document.querySelectorAll(".weekday-pill-add, .session-pill-add")
         .forEach(el => el.classList.remove("pill-selected"));
@@ -427,6 +429,7 @@ function renderTasks() {
             <div class="task-title">
                 #${t.seqId} ${t.name}
                 ${type === "pending" ? '<span class="task-badge-pending">PENDING</span>' : ""}
+                ${type === "normal" && t.canRunParallel ? '<span class="task-badge-parallel">Parallel OK</span>' : ""}
             </div>
             <div>${t.description || ""}</div>
             <div>Thời gian: ${t.estimated} phút</div>
@@ -483,6 +486,7 @@ window.openEditPopup = function(task) {
     document.getElementById("editDescription").value = task.description || "";
     document.getElementById("editEstimated").value = task.estimated;
     document.getElementById("editDeadline").value = task.deadline;
+    document.getElementById("editCanParallel").checked = !!task.canRunParallel;
 
     document.querySelectorAll('input[name="typeEdit"]').forEach(r => {
         r.checked = (r.value === type);
@@ -552,7 +556,8 @@ window.saveEdit = async function() {
         pending,
         mode,
         weekdays,
-        sessions
+        sessions,
+        canRunParallel: document.getElementById("editCanParallel").checked
     }, { merge: true });
 
     closePopup();
@@ -850,11 +855,10 @@ function renderTimeline() {
         lane.appendChild(block);
     });
 
-    // Background lane: V5.0 CHỈ HIỂN THỊ THEO NGÀY HIỆN TẠI (chưa repeat)
+    // Background lane: hiển thị background hôm nay
     const todayStr = new Date().toISOString().slice(0,10);
     (state.backgroundTasks || []).forEach(bg => {
         if (bg.date !== todayStr) return;
-
         if (!bg.startTime || !bg.endTime) return;
 
         const [sh, sm] = bg.startTime.split(":").map(Number);
