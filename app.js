@@ -8,14 +8,14 @@ import {
   serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// TODO: THAY CẤU HÌNH NÀY BẰNG CẤU HÌNH CỦA BẠN TRONG FIREBASE CONSOLE
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "API_KEY_CỦA_BẠN",
-  authDomain: "AUTH_DOMAIN_CỦA_BẠN",
-  projectId: "PROJECT_ID_CỦA_BẠN",
-  storageBucket: "STORAGE_BUCKET_CỦA_BẠN",
-  messagingSenderId: "MESSAGING_SENDER_ID_CỦA_BẠN",
-  appId: "APP_ID_CỦA_BẠN"
+  apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
+  authDomain: "dnmstasker.firebaseapp.com",
+  projectId: "dnmstasker",
+  storageBucket: "dnmstasker.firebasestorage.app",
+  messagingSenderId: "98582966566",
+  appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
 };
 
 // KHỞI TẠO FIREBASE
