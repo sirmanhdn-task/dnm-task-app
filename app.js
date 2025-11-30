@@ -35,8 +35,12 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
-// zoom level for timeline
+// zoom level cho timeline
 let zoomLevel = 1; // 1=100%, 2=200%, 4=400%
+
+// Giới hạn scheduler / shading: 14 ngày
+const MAX_FILL_DAYS = 14;
+const MAX_FILL_MINUTES = MAX_FILL_DAYS * 1440;
 
 // ========== STATE ==========
 const state = {
@@ -58,7 +62,7 @@ const state = {
 };
 
 // ========== LOCAL SETTINGS ==========
-const SETTINGS_KEY = "dnmSettingsV5";
+const SETTINGS_KEY = "dnmSettingsV6";
 
 function loadSettingsFromLocalStorage() {
     try {
@@ -119,7 +123,7 @@ onAuthStateChanged(auth, user => {
     listenBackgroundTasks();
 });
 
-// ========== TAB SWITCH ==========
+// ========== TAB ==========
 window.switchTab = function(tab) {
     state.currentTab = tab;
 
@@ -136,8 +140,12 @@ window.switchTab = function(tab) {
         renderTasks();
         renderTimeline();
     }
-    if (tab === "background") renderBackgroundTasks();
-    if (tab === "settings") renderSettings();
+    if (tab === "background") {
+        renderBackgroundTasks();
+    }
+    if (tab === "settings") {
+        renderSettings();
+    }
 };
 
 // ========== TIME HELPERS ==========
@@ -736,10 +744,9 @@ function renderBackgroundTasks() {
     });
 }
 
-// ========== V6.0: BUILD SLOTS (resolution = 10 phút) ==========
+// ========== V6.0: BUILD SLOTS (resolution = 10 phút, giới hạn 14 ngày) ==========
 function buildSlots() {
-    // Độ phân giải: 10 phút / slot
-    const RES = 10;
+    const RES = 10; // phút
 
     const todayStart = state.timeline.todayStart;
     const totalMinutes = state.timeline.totalMinutes;
@@ -752,7 +759,7 @@ function buildSlots() {
     const slots = [];
     const bg = state.backgroundTasks || [];
 
-    // Tập khoảng thời gian bị chặn (unavailable) từ background non-parallel
+    // Danh sách khoảng unavailable do background non-parallel
     const unavailable = [];
 
     bg.forEach(b => {
@@ -763,23 +770,27 @@ function buildSlots() {
         if (isNaN(baseDate.getTime())) return;
 
         const dayIndex = Math.floor((baseDate - todayStart) / (24 * 60 * 60000));
-        // nếu background trước hôm nay thì bỏ qua
-        if (dayIndex < 0) return;
+        if (dayIndex < 0) return; // trước hôm nay thì bỏ
 
         const [sh, sm] = b.startTime.split(":").map(Number);
         const [eh, em] = b.endTime.split(":").map(Number);
-
         if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return;
 
-        const startMin = dayIndex * 1440 + (sh * 60 + sm);
-        const endMin   = dayIndex * 1440 + (eh * 60 + em);
-
+        let startMin = dayIndex * 1440 + (sh * 60 + sm);
+        let endMin   = dayIndex * 1440 + (eh * 60 + em);
         if (endMin <= startMin) return;
+
+        // cắt trong phạm vi [0, totalMinutes]
+        if (endMin <= 0) return;
+        if (startMin >= totalMinutes) return;
+
+        if (startMin < 0) startMin = 0;
+        if (endMin > totalMinutes) endMin = totalMinutes;
 
         unavailable.push({ start: startMin, end: endMin });
     });
 
-    // Chia timeline thành các slot dài RES phút
+    // Chia slot
     for (let m = 0; m < totalMinutes; m += RES) {
         let slotStart = m;
         let slotEnd   = m + RES;
@@ -787,9 +798,7 @@ function buildSlots() {
 
         let status = "available";
 
-        // Nếu slot giao bất kỳ khoảng unavailable nào thì slot = unavailable
         for (const un of unavailable) {
-            // Nếu có giao (không tách rời)
             if (!(slotEnd <= un.start || slotStart >= un.end)) {
                 status = "unavailable";
                 break;
@@ -806,16 +815,15 @@ function buildSlots() {
     return slots;
 }
 
-// ========== V6.0: DEBUG SLOT ==========
+// ========== V6.0: DEBUG SLOTS ==========
 window.debugSlots = function () {
     const s = buildSlots();
-    console.log("=== DEBUG SLOTS (V6.0, RES=10 phút) ===");
+    console.log("=== DEBUG SLOTS (V6.x, RES=10 phút, max 14 ngày) ===");
     console.log(s);
     console.log("Tổng số slot:", s.length);
 };
 
 // ========== TIMELINE RENDERING ==========
-
 function renderTimeline() {
     const container = document.getElementById("timelineContainer");
     if (!container) return;
@@ -839,9 +847,9 @@ function renderTimeline() {
     const todayStart = getTodayStart();
     state.timeline.todayStart = todayStart;
 
+    // Xác định maxEnd dựa trên task & background
     let maxEnd = new Date(todayStart.getTime() + 24*60*60000);
 
-    // mở rộng timeline theo task
     tasks.forEach(t => {
         if (!t.deadline) return;
         const dl = new Date(t.deadline);
@@ -851,7 +859,6 @@ function renderTimeline() {
         }
     });
 
-    // mở rộng timeline theo background task (theo endTime, ưu tiên ngày xa nhất)
     bgTasks.forEach(bg => {
         if (!bg.date || !bg.endTime) return;
         const [eh, em] = bg.endTime.split(":").map(Number);
@@ -864,9 +871,11 @@ function renderTimeline() {
         }
     });
 
-    let totalMinutes = Math.max(1440, Math.ceil((maxEnd - todayStart)/60000));
-    const totalDays = Math.max(1, Math.ceil(totalMinutes / 1440));
-    totalMinutes = totalDays * 1440;
+    // Tính tổng phút, giới hạn 14 ngày
+    let rawMinutes = Math.max(1440, Math.ceil((maxEnd - todayStart)/60000));
+    rawMinutes = Math.min(rawMinutes, MAX_FILL_MINUTES);
+    const totalDays = Math.max(1, Math.ceil(rawMinutes / 1440));
+    const totalMinutes = totalDays * 1440;
     state.timeline.totalMinutes = totalMinutes;
 
     const pxPerMinute = zoomLevel;
@@ -913,48 +922,43 @@ function renderTimeline() {
         header.appendChild(label);
     }
 
-    // ========== Availability shading (ưu tiên non-parallel) ==========
-    // mặc định: toàn timeline = available (background xanh nhạt)
-    // thêm các block đỏ cho non-parallel bg
+    // ========== Availability shading dựa trên slots ==========
     if (availContainer) {
-        const msPerDay = 24*60*60000;
-
-        bgTasks.forEach(bg => {
-            if (!bg.date || !bg.startTime || !bg.endTime) return;
-            if (bg.parallel) return; // chỉ non-parallel mới tạo unavailable
-            const baseDate = new Date(bg.date + "T00:00:00");
-            const dayDelta = baseDate.getTime() - todayStart.getTime();
-            const dayIndex = Math.floor(dayDelta / msPerDay);
-            if (dayIndex < 0) return; // trước hôm nay, bỏ qua
-
-            const [sh, sm] = bg.startTime.split(":").map(Number);
-            const [eh, em] = bg.endTime.split(":").map(Number);
-            if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return;
-
-            let startMinDay = sh*60 + sm;
-            let endMinDay   = eh*60 + em;
-            if (endMinDay <= startMinDay) return;
-
-            let startGlobal = dayIndex*1440 + startMinDay;
-            let endGlobal   = dayIndex*1440 + endMinDay;
-
-            if (endGlobal <= 0) return;
-            if (startGlobal >= totalMinutes) return;
-
-            if (startGlobal < 0) startGlobal = 0;
-            if (endGlobal > totalMinutes) endGlobal = totalMinutes;
-
+        const slots = buildSlots();
+        // Gộp các slot unavailable liền nhau thành 1 block
+        let current = null;
+        slots.forEach(s => {
+            if (s.status === "unavailable") {
+                if (!current) {
+                    current = { start: s.start, end: s.end };
+                } else {
+                    current.end = s.end;
+                }
+            } else {
+                if (current) {
+                    const block = document.createElement("div");
+                    block.className = "availability-block-unavailable";
+                    const leftPx = current.start * pxPerMinute;
+                    const widthPx = (current.end - current.start) * pxPerMinute;
+                    block.style.left = leftPx + "px";
+                    block.style.width = Math.max(1, widthPx) + "px";
+                    availContainer.appendChild(block);
+                    current = null;
+                }
+            }
+        });
+        if (current) {
             const block = document.createElement("div");
             block.className = "availability-block-unavailable";
-            const leftPx = startGlobal * pxPerMinute;
-            const widthPx = (endGlobal - startGlobal) * pxPerMinute;
+            const leftPx = current.start * pxPerMinute;
+            const widthPx = (current.end - current.start) * pxPerMinute;
             block.style.left = leftPx + "px";
             block.style.width = Math.max(1, widthPx) + "px";
             availContainer.appendChild(block);
-        });
+        }
     }
 
-    // ========== Normal & Pending tasks ==========
+    // ========== Normal & Pending tasks (vẫn dựa trên deadline) ==========
     tasks.forEach(t => {
         const type = getTaskType(t);
         if (!t.deadline) return;
@@ -966,14 +970,13 @@ function renderTimeline() {
 
         let endMin = (dl - todayStart)/60000;
         if (endMin < 0) return;
+        if (endMin > totalMinutes) endMin = totalMinutes;
 
         let startMin = endMin - estimated;
         if (startMin < 0) {
             startMin = 0;
-            endMin = estimated;
         }
 
-        if (endMin > totalMinutes) endMin = totalMinutes;
         if (startMin > totalMinutes) return;
 
         const lane = (type === "pending")
@@ -996,7 +999,7 @@ function renderTimeline() {
         lane.appendChild(block);
     });
 
-    // ========== Background lane: vẽ tất cả background theo ngày ==========
+    // ========== Background lane ==========
     const msPerDay = 24*60*60000;
     bgTasks.forEach(bg => {
         if (!bg.date || !bg.startTime || !bg.endTime) return;
@@ -1019,6 +1022,7 @@ function renderTimeline() {
 
         if (startGlobal > totalMinutes) return;
         if (endGlobal > totalMinutes) endGlobal = totalMinutes;
+        if (endGlobal <= 0) return;
 
         const block = document.createElement("div");
         block.classList.add("timeline-block", "timeline-block-background");
@@ -1064,7 +1068,6 @@ setInterval(() => {
 }, 60000);
 
 // ========== ZOOM & JUMP TO NOW ==========
-
 window.zoomIn = function () {
     const scrollBox = document.querySelector(".timeline-scroll");
     if (!scrollBox) return;
@@ -1119,13 +1122,9 @@ window.jumpToNow = function () {
 
 // ========== SCROLL HORIZONTAL WHEN WHEEL ==========
 const scrollArea = document.querySelector(".timeline-scroll");
-
 if (scrollArea) {
     scrollArea.addEventListener("wheel", (ev) => {
-        // Chặn scroll dọc trang
         ev.preventDefault();
-
-        // Dùng deltaY để điều khiển scroll ngang
-        scrollArea.scrollLeft += ev.deltaY * 1; // scale = 1 là tự nhiên
+        scrollArea.scrollLeft += ev.deltaY * 1;
     }, { passive: false });
 }
