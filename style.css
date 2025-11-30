@@ -1,263 +1,38 @@
-/* ===========================
-   BASE
-=========================== */
-
 body {
-    font-family: Arial, sans-serif;
-    background: #f5f5f5;
-    margin: 0;
-    padding: 0;
+  font-family: Arial, sans-serif;
+  margin: 40px;
+  max-width: 800px;
 }
 
-.container {
-    width: 95%;
-    max-width: 900px;
-    margin: 10px auto 40px auto;
+h1 {
+  margin-bottom: 20px;
 }
 
-/* ... các phần base, tabs, card, form, list, background, settings giữ nguyên ... */
-
-/* ===========================
-   TIMELINE
-=========================== */
-
-.timeline-topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
+#taskForm input,
+#taskForm textarea {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px;
+  box-sizing: border-box;
 }
 
-.jump-now-btn {
-    background: #1976d2;
-    color: #fff;
-    border: none;
-    padding: 6px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
+#taskForm button {
+  padding: 10px 20px;
+  cursor: pointer;
 }
 
-.zoom-controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+.task-item {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 4px;
 }
 
-.zoom-controls button {
-    padding: 3px 8px;
-    font-size: 12px;
+.task-item h3 {
+  margin: 0 0 5px 0;
 }
 
-#zoomDisplay {
-    min-width: 40px;
-    text-align: center;
-    font-size: 12px;
+.task-item p {
+  margin: 2px 0;
 }
-
-/* NEW: Day header trên timeline */
-.timeline-day-header {
-    position: relative;
-    overflow: hidden;
-    background: #fafafa;
-    border: 1px solid #ddd;
-    border-radius: 8px 8px 0 0;
-    border-bottom: none;
-    height: 26px;
-    margin-bottom: 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: #333;
-    white-space: nowrap;
-}
-
-.timeline-day-label {
-    position: absolute;
-    top: 3px;
-    height: 20px;
-    padding: 0 6px;
-    box-sizing: border-box;
-    border-right: 1px solid #eee;
-    display: flex;
-    align-items: center;
-}
-
-/* Timeline scroll + container */
-
-.timeline-scroll {
-    overflow-x: auto;
-    padding-bottom: 6px;
-}
-
-.timeline-container {
-    position: relative;
-    min-height: 40px + 40px + 30px;
-    border: 1px solid #ddd;
-    border-radius: 0 0 8px 8px;
-    background: #fafafa;
-    overflow: hidden;
-}
-
-/* Day strips background */
-
-.timeline-days {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 0;
-}
-
-.timeline-day-strip {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-}
-
-/* Availability shading */
-
-.timeline-availability {
-    position: absolute;
-    top: 20px;
-    bottom: 0;
-    left: 0;
-    z-index: 1;
-}
-
-.timeline-availability-slot {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    opacity: 0.12;
-}
-
-.timeline-availability-available {
-    background: #4caf50;
-}
-
-.timeline-availability-unavailable {
-    background: #f44336;
-}
-
-/* Header time labels */
-
-.timeline-header {
-    position: relative;
-    height: 20px;
-    border-bottom: 1px solid #eee;
-    font-size: 10px;
-    color: #555;
-    z-index: 2;
-}
-
-.timeline-header-label {
-    position: absolute;
-    top: 2px;
-    transform: translateX(-50%);
-    white-space: nowrap;
-}
-
-/* lanes */
-
-.timeline-lane {
-    position: relative;
-    border-top: 1px solid #eee;
-    border-bottom: 1px solid #eee;
-    height: 40px;
-}
-
-.timeline-lane-normal {
-    background: #e3f2fd;
-}
-
-.timeline-lane-background {
-    background: #fff3e0;
-}
-
-.timeline-lane-pending {
-    background: #f3e5f5;
-    height: 30px;
-}
-
-/* blocks */
-
-.timeline-block {
-    position: absolute;
-    top: 8px;
-    height: 24px;
-    border-radius: 4px;
-    font-size: 11px;
-    color: #fff;
-    padding: 2px 4px;
-    box-sizing: border-box;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.timeline-block-normal {
-    background: #42a5f5;
-}
-
-.timeline-block-background {
-    background: #ffa726;
-}
-
-.timeline-block-pending {
-    background: #ab47bc;
-}
-
-/* current time line */
-
-#timelineCurrentLine {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: #e53935;
-    pointer-events: none;
-    z-index: 3;
-}
-
-/* legend */
-
-.timeline-legend {
-    margin-top: 6px;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.legend-box {
-    display: inline-block;
-    width: 14px;
-    height: 8px;
-    border-radius: 3px;
-}
-
-.legend-normal {
-    background: #64b5f6;
-}
-
-.legend-background {
-    background: #ffb74d;
-}
-
-.legend-pending {
-    background: #ba68c8;
-}
-
-.legend-available {
-    background: #4caf50;
-}
-
-.legend-unavailable {
-    background: #f44336;
-}
-
-/* ===========================
-   SETTINGS, POPUP, UTIL
-=========================== */
-
-/* ... các phần cuối giữ nguyên như V6.1 (settings form, popup edit, .hidden, v.v.) ... */
