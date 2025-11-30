@@ -4,8 +4,8 @@ DATE: 2025-01-15
 CHANGES:
 - Thêm buildSlots() với độ phân giải 10 phút, giới hạn timeline 14 ngày
 - Shading Available/Unavailable dựa trên slots (ưu tiên non-parallel background)
+- Thêm Day Header hiển thị ngày chạy theo timeline
 - Giữ nguyên giao diện: Timeline + List + Background + Settings, zoom, JumpToNow
-- Thêm nhãn ngày trên timeline (Day labels) trong header
 -->
 
 <!DOCTYPE html>
@@ -18,9 +18,9 @@ CHANGES:
 <body>
 <div class="container">
 
-    <h1>DNM Task Scheduler</h1>
+    <h1>DNM Task Scheduler V6.2</h1>
 
-    <!-- Auth -->
+    <!-- AUTH BAR -->
     <div id="authBar" class="auth-bar">
         <div id="userInfo" class="user-info hidden">
             <span id="userName"></span>
@@ -31,20 +31,21 @@ CHANGES:
         </div>
     </div>
 
-    <div id="notLoggedInMessage">
-        <p>Đăng nhập để sử dụng và đồng bộ dữ liệu.</p>
+    <div id="notLoggedInMessage" class="not-logged-in-msg">
+        Vui lòng đăng nhập bằng Google để sử dụng ứng dụng.
     </div>
 
-    <div id="appContent" class="hidden">
+    <div id="appContent" class="app-content hidden">
 
-        <!-- TAB NAV -->
-        <div class="tab-nav">
-            <button id="tab-btn-timeline" class="tab-btn tab-active" onclick="switchTab('timeline')">Timeline</button>
-            <button id="tab-btn-background" class="tab-btn" onclick="switchTab('background')">Background</button>
-            <button id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
+        <!-- TABS -->
+        <div class="tabs">
+            <button class="tab-btn tab-btn-active" id="tab-timeline-btn" onclick="switchTab('timeline')">Timeline</button>
+            <button class="tab-btn" id="tab-list-btn" onclick="switchTab('list')">List</button>
+            <button class="tab-btn" id="tab-background-btn" onclick="switchTab('background')">Background</button>
+            <button class="tab-btn" id="tab-settings-btn" onclick="switchTab('settings')">Settings</button>
         </div>
 
-        <!-- TAB: TIMELINE (bao gồm Timeline + List) -->
+        <!-- TIMELINE TAB -->
         <div id="tab-timeline">
             <!-- CARD: TIMELINE -->
             <div class="card">
@@ -61,6 +62,7 @@ CHANGES:
                 </div>
 
                 <div class="timeline-scroll">
+                    <div id="timelineDayHeader" class="timeline-day-header"></div>
                     <div id="timelineContainer" class="timeline-container">
                         <div id="timelineDays" class="timeline-days"></div>
 
@@ -73,267 +75,263 @@ CHANGES:
                         <div class="timeline-lane timeline-lane-background" id="lane-background"></div>
                         <div class="timeline-lane timeline-lane-pending" id="lane-pending"></div>
 
-                        <div id="timelineCurrentLine" class="timeline-current-line"></div>
+                        <div id="timelineCurrentLine"></div>
                     </div>
                 </div>
 
+                <!-- LEGEND -->
                 <div class="timeline-legend">
-                    <span class="legend-box legend-normal"></span> Normal
-                    <span class="legend-box legend-background"></span> Background
-                    <span class="legend-box legend-pending"></span> Pending
-                </div>
-                <div class="timeline-legend">
-                    <span style="display:inline-block;width:20px;height:10px;background:rgba(0,200,0,0.05);border:1px solid #a5d6a7;"></span>
-                    Available
-                    <span style="display:inline-block;width:20px;height:10px;background:rgba(255,0,0,0.08);border:1px solid #ef9a9a;margin-left:10px;"></span>
-                    Unavailable (non-parallel BG)
+                    <span><span class="legend-box legend-normal"></span> Normal tasks</span>
+                    <span><span class="legend-box legend-background"></span> Background tasks</span>
+                    <span><span class="legend-box legend-pending"></span> Pending tasks</span>
+                    <span><span class="legend-box legend-available"></span> Available slot</span>
+                    <span><span class="legend-box legend-unavailable"></span> Unavailable slot</span>
                 </div>
             </div>
+        </div>
 
-            <!-- FORM + LIST dưới Timeline -->
+        <!-- LIST TAB -->
+        <div id="tab-list" class="hidden">
+
             <div class="form-section">
                 <h2>Thêm công việc</h2>
 
-                <input id="name" type="text" placeholder="Tên công việc" />
-                <textarea id="description" placeholder="Mô tả"></textarea>
+                <div class="form-row">
+                    <label>Tên công việc</label>
+                    <input type="text" id="taskNameInput" placeholder="Tên" />
+                </div>
 
-                <label>Thời gian cần (phút):</label>
-                <input id="estimated" type="number" min="1" value="10"/>
+                <div class="form-row">
+                    <label>Mô tả (optional)</label>
+                    <textarea id="taskDescInput" rows="2"></textarea>
+                </div>
 
-                <label>Deadline:</label>
-                <input id="deadline" type="datetime-local" />
+                <div class="form-row">
+                    <label>Thời gian cần (phút)</label>
+                    <input type="number" id="taskEstimatedInput" min="1" value="30" />
+                </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">Loại task</div>
-                    <div class="pill-row">
-                        <label class="mode-label">
-                            <input type="radio" name="typeAdd" value="normal" checked />
-                            Normal
-                        </label>
-                        <label class="mode-label">
-                            <input type="radio" name="typeAdd" value="pending" />
-                            Pending
-                        </label>
+                <div class="form-row">
+                    <label>Deadline</label>
+                    <input type="datetime-local" id="taskDeadlineInput" />
+                </div>
+
+                <div class="form-row">
+                    <label>Strictness</label>
+                    <div class="pill-group">
+                        <label><input type="radio" name="strictness" value="NONE" checked /> Không ràng buộc</label>
+                        <label><input type="radio" name="strictness" value="PREFER" /> Ưu tiên</label>
+                        <label><input type="radio" name="strictness" value="STRICT" /> Chỉ</label>
                     </div>
                 </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">Chế độ thời gian</div>
-                    <div class="pill-row">
-                        <label class="mode-label">
-                            <input type="radio" name="modeAdd" value="STRICT" />
-                            CHỈ
-                        </label>
-                        <label class="mode-label">
-                            <input type="radio" name="modeAdd" value="PREFER" checked />
-                            ƯU TIÊN
-                        </label>
+                <div class="form-row">
+                    <label>Chọn thứ (nếu cần)</label>
+                    <div class="weekday-pills" id="weekdayPills">
+                        <label><input type="checkbox" value="MON" /> T2</label>
+                        <label><input type="checkbox" value="TUE" /> T3</label>
+                        <label><input type="checkbox" value="WED" /> T4</label>
+                        <label><input type="checkbox" value="THU" /> T5</label>
+                        <label><input type="checkbox" value="FRI" /> T6</label>
+                        <label><input type="checkbox" value="SAT" /> T7</label>
+                        <label><input type="checkbox" value="SUN" /> CN</label>
                     </div>
                 </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">Thứ (bỏ trống = bất kỳ)</div>
-                    <div class="pill-row">
-                        <button type="button" class="pill weekday-pill-add" data-value="MON" onclick="togglePill(this)">T2</button>
-                        <button type="button" class="pill weekday-pill-add" data-value="TUE" onclick="togglePill(this)">T3</button>
-                        <button type="button" class="pill weekday-pill-add" data-value="WED" onclick="togglePill(this)">T4</button>
-                        <button type="button" class="pill weekday-pill-add" data-value="THU" onclick="togglePill(this)">T5</button>
-                        <button type="button" class="pill weekday-pill-add" data-value="FRI" onclick="togglePill(this)">T6</button>
-                        <button type="button" class="pill weekday-pill-add" data-value="SAT" onclick="togglePill(this)">T7</button>
-                        <button type="button" class="pill weekday-pill-add" data-value="SUN" onclick="togglePill(this)">CN</button>
+                <div class="form-row">
+                    <label>Chọn buổi (nếu cần)</label>
+                    <div class="session-pills" id="sessionPills">
+                        <label><input type="checkbox" value="DAWN" /> Sáng sớm (4:00–6:00)</label>
+                        <label><input type="checkbox" value="MORNING" /> Sáng (6:00–11:00)</label>
+                        <label><input type="checkbox" value="NOON" /> Trưa (11:00–13:00)</label>
+                        <label><input type="checkbox" value="AFTERNOON" /> Chiều (13:00–17:00)</label>
+                        <label><input type="checkbox" value="EVENING" /> Tối (17:00–23:00)</label>
+                        <label><input type="checkbox" value="NIGHT" /> Đêm (23:00–4:00)</label>
                     </div>
                 </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">Buổi (bỏ trống = bất kỳ)</div>
-                    <div class="pill-row">
-                        <button type="button" class="pill session-pill-add" data-value="DAWN" onclick="togglePill(this)">Sáng sớm</button>
-                        <button type="button" class="pill session-pill-add" data-value="MORNING" onclick="togglePill(this)">Sáng</button>
-                        <button type="button" class="pill session-pill-add" data-value="NOON" onclick="togglePill(this)">Trưa</button>
-                        <button type="button" class="pill session-pill-add" data-value="AFTERNOON" onclick="togglePill(this)">Chiều</button>
-                        <button type="button" class="pill session-pill-add" data-value="EVENING" onclick="togglePill(this)">Tối</button>
-                        <button type="button" class="pill session-pill-add" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
-                    </div>
+                <div class="form-row">
+                    <label>
+                        <input type="checkbox" id="taskPendingInput" />
+                        Pending task (chỉ ghi nhớ, chưa tính trọng số)
+                    </label>
                 </div>
 
-                <div class="pill-group">
-                    <label style="font-size:13px;">
-                        <input type="checkbox" id="addCanParallel" />
+                <div class="form-row">
+                    <label>
+                        <input type="checkbox" id="taskParallelInput" />
                         Có thể làm song song (Parallel OK)
                     </label>
                 </div>
 
-                <button onclick="addTask()">Thêm</button>
+                <div class="form-row">
+                    <button id="addTaskBtn" onclick="addTask()">Thêm task</button>
+                </div>
             </div>
 
-            <h2>Danh sách công việc</h2>
-            <div id="taskList"></div>
+            <div class="list-section">
+                <h2>Danh sách công việc</h2>
+                <div class="list-controls">
+                    <label>
+                        <input type="checkbox" id="hideDoneCheckbox" onchange="toggleHideDone()" />
+                        Ẩn task đã DONE
+                    </label>
+                </div>
+                <div id="taskList"></div>
+            </div>
         </div>
 
-        <!-- TAB: BACKGROUND -->
+        <!-- BACKGROUND TAB -->
         <div id="tab-background" class="hidden">
-            <h2>Background tasks</h2>
-
             <div class="card">
-                <h3>Tạo background task</h3>
+                <h2>Background tasks</h2>
+
                 <div class="form-row">
-                    <label>Tên:</label>
-                    <input type="text" id="bgName" placeholder="VD: Ngủ, Làm ở công ty" />
+                    <label>Ngày</label>
+                    <input type="date" id="bgDateInput" />
                 </div>
+
                 <div class="form-row">
-                    <label>Mô tả:</label>
-                    <textarea id="bgDescription" rows="2" placeholder="Ghi chú thêm (tuỳ chọn)"></textarea>
+                    <label>Giờ bắt đầu</label>
+                    <input type="time" id="bgStartInput" />
                 </div>
+
                 <div class="form-row">
-                    <label>Ngày:</label>
-                    <input type="date" id="bgDate" />
+                    <label>Giờ kết thúc</label>
+                    <input type="time" id="bgEndInput" />
                 </div>
-                <div class="form-row">
-                    <label>Bắt đầu:</label>
-                    <input type="time" id="bgStartTime" />
-                </div>
-                <div class="form-row">
-                    <label>Kết thúc:</label>
-                    <input type="time" id="bgEndTime" />
-                </div>
+
                 <div class="form-row">
                     <label>
-                        <input type="checkbox" id="bgParallel" />
-                        Cho phép làm task thường song song (parallel)
+                        <input type="checkbox" id="bgParallelInput" />
+                        Cho phép parallel (slot vẫn Available)
                     </label>
                 </div>
-                <button onclick="addBackgroundTask()">Thêm background task</button>
-            </div>
 
-            <div class="card">
-                <h3>Danh sách background tasks</h3>
-                <div id="bgTaskList"></div>
+                <div class="form-row">
+                    <button onclick="addBackgroundTask()">Thêm background task</button>
+                </div>
+
+                <div class="bg-list" id="backgroundList"></div>
             </div>
         </div>
 
-        <!-- TAB: SETTINGS -->
+        <!-- SETTINGS TAB -->
         <div id="tab-settings" class="hidden">
             <div class="card">
-                <h2>Settings – Chấm điểm</h2>
+                <h2>Settings</h2>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">QuickBoost (task ≤ 5 phút)</div>
-                    <input id="settingQuickBoost"
-                           type="number"
-                           step="1"
-                           onchange="updateNumericSetting('quickBoost', this.value)" />
+                <div class="form-row">
+                    <label>Quick task boost (phút ≤ 5):</label>
+                    <input type="number" id="settingQuickBoost" min="0" max="1000" />
                 </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">TimeMatchMultiplier</div>
-                    <input id="settingTimeMatchMultiplier"
-                           type="number"
-                           step="0.1"
-                           onchange="updateNumericSetting('timeMatchMultiplier', this.value)" />
+                <div class="form-row">
+                    <label>Time match multiplier (khi đúng buổi/ngày ưu tiên):</label>
+                    <input type="number" id="settingTimeMatchMultiplier" min="0" max="10" step="0.1" />
                 </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">DeadlinePenaltyFactor</div>
-                    <input id="settingDeadlinePenalty"
-                           type="number"
-                           step="0.1"
-                           onchange="updateNumericSetting('deadlinePenaltyFactor', this.value)" />
+                <div class="form-row">
+                    <label>Deadline penalty factor:</label>
+                    <input type="number" id="settingDeadlinePenaltyFactor" min="0" max="10" step="0.1" />
                 </div>
 
-                <div class="pill-group">
-                    <div class="pill-group-title">EstimatedTimeWeight</div>
-                    <input id="settingEstimatedWeight"
-                           type="number"
-                           step="0.1"
-                           onchange="updateNumericSetting('estimatedWeight', this.value)" />
+                <div class="form-row">
+                    <label>Estimated weight (ảnh hưởng của t):</label>
+                    <input type="number" id="settingEstimatedWeight" min="0" max="10" step="0.1" />
                 </div>
 
-                <div class="pill-group">
-                    <label style="font-size:13px;">
-                        <input id="settingHideDone"
-                               type="checkbox"
-                               onchange="updateBoolSetting('hideDone', this.checked)" />
-                        Ẩn task đã Done khỏi List
-                    </label>
+                <div class="form-row">
+                    <button onclick="saveSettings()">Lưu settings</button>
+                    <button onclick="resetSettings()">Reset mặc định</button>
                 </div>
 
-                <div id="settingsNowInfo" style="font-size:13px;margin-top:8px;color:#555;"></div>
+                <div class="settings-note">
+                    Settings được lưu localStorage (theo thiết bị).
+                </div>
             </div>
         </div>
 
-    </div>
-</div>
+    </div><!-- /appContent -->
+</div><!-- /container -->
 
-<!-- Popup edit -->
-<div id="editPopup" class="popup hidden">
-    <div class="popup-content">
-        <h2>Sửa Task</h2>
+<!-- POPUP EDIT TASK -->
+<div id="editPopupOverlay" class="popup-overlay hidden">
+    <div class="popup">
+        <h3>Chỉnh sửa task</h3>
 
-        <input id="editName" type="text"/>
-        <textarea id="editDescription"></textarea>
-        <label>Thời gian (phút):</label>
-        <input id="editEstimated" type="number" min="1"/>
-        <label>Deadline:</label>
-        <input id="editDeadline" type="datetime-local"/>
+        <input type="hidden" id="editTaskId" />
 
-        <div class="pill-group">
-            <div class="pill-group-title">Loại task</div>
-            <div class="pill-row">
-                <label class="mode-label">
-                    <input type="radio" name="typeEdit" value="normal" />
-                    Normal
+        <div class="form-row">
+            <label>Tên công việc</label>
+            <input type="text" id="editTaskName" />
+        </div>
+
+        <div class="form-row">
+            <label>Mô tả</label>
+            <textarea id="editTaskDesc" rows="2"></textarea>
+        </div>
+
+        <div class="form-row">
+            <label>Thời gian cần (phút)</label>
+            <input type="number" id="editTaskEstimated" min="1" />
+        </div>
+
+        <div class="form-row">
+            <label>Deadline</label>
+            <input type="datetime-local" id="editTaskDeadline" />
+        </div>
+
+        <div class="form-row">
+            <label>Strictness</label>
+            <div class="pill-group" id="editStrictnessPills">
+                <label><input type="radio" name="editStrict" value="NONE" /> Không ràng buộc</label>
+                <label><input type="radio" name="editStrict" value="PREFER" /> Ưu tiên</label>
+                <label><input type="radio" name="editStrict" value="STRICT" /> Chỉ</label>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Thứ ưu tiên / chỉ</label>
+            <div class="weekday-pills" id="editWeekdayPills">
+                <label><input type="checkbox" value="MON" /> T2</label>
+                <label><input type="checkbox" value="TUE" /> T3</label>
+                <label><input type="checkbox" value="WED" /> T4</label>
+                <label><input type="checkbox" value="THU" /> T5</label>
+                <label><input type="checkbox" value="FRI" /> T6</label>
+                <label><input type="checkbox" value="SAT" /> T7</label>
+                <label><input type="checkbox" value="SUN" /> CN</label>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Buổi ưu tiên / chỉ</label>
+            <div class="session-pills" id="editSessionPills">
+                <label><input type="checkbox" value="DAWN" /> Sáng sớm</label>
+                <label><input type="checkbox" value="MORNING" /> Sáng</label>
+                <label><input type="checkbox" value="NOON" /> Trưa</label>
+                <label><input type="checkbox" value="AFTERNOON" /> Chiều</label>
+                <label><input type="checkbox" value="EVENING" /> Tối</label>
+                <label><input type="checkbox" value="NIGHT" /> Đêm</label>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="pill-group">
+                <label style="font-size:13px;">
+                    <input type="checkbox" id="editPending" />
+                    Pending task
                 </label>
-                <label class="mode-label">
-                    <input type="radio" name="typeEdit" value="pending" />
-                    Pending
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="pill-group">
+                <label style="font-size:13px;">
+                    <input type="checkbox" id="editCanParallel" />
+                    Có thể làm song song (Parallel OK)
                 </label>
             </div>
-        </div>
-
-        <div class="pill-group">
-            <div class="pill-group-title">Chế độ thời gian</div>
-            <div class="pill-row">
-                <label class="mode-label">
-                    <input type="radio" name="modeEdit" value="STRICT" />
-                    CHỈ
-                </label>
-                <label class="mode-label">
-                    <input type="radio" name="modeEdit" value="PREFER" />
-                    ƯU TIÊN
-                </label>
-            </div>
-        </div>
-
-        <div class="pill-group">
-            <div class="pill-group-title">Thứ</div>
-            <div class="pill-row">
-                <button type="button" class="pill weekday-pill-edit" data-value="MON" onclick="togglePill(this)">T2</button>
-                <button type="button" class="pill weekday-pill-edit" data-value="TUE" onclick="togglePill(this)">T3</button>
-                <button type="button" class="pill weekday-pill-edit" data-value="WED" onclick="togglePill(this)">T4</button>
-                <button type="button" class="pill weekday-pill-edit" data-value="THU" onclick="togglePill(this)">T5</button>
-                <button type="button" class="pill weekday-pill-edit" data-value="FRI" onclick="togglePill(this)">T6</button>
-                <button type="button" class="pill weekday-pill-edit" data-value="SAT" onclick="togglePill(this)">T7</button>
-                <button type="button" class="pill weekday-pill-edit" data-value="SUN" onclick="togglePill(this)">CN</button>
-            </div>
-        </div>
-
-        <div class="pill-group">
-            <div class="pill-group-title">Buổi</div>
-            <div class="pill-row">
-                <button type="button" class="pill session-pill-edit" data-value="DAWN" onclick="togglePill(this)">Sáng sớm</button>
-                <button type="button" class="pill session-pill-edit" data-value="MORNING" onclick="togglePill(this)">Sáng</button>
-                <button type="button" class="pill session-pill-edit" data-value="NOON" onclick="togglePill(this)">Trưa</button>
-                <button type="button" class="pill session-pill-edit" data-value="AFTERNOON" onclick="togglePill(this)">Chiều</button>
-                <button type="button" class="pill session-pill-edit" data-value="EVENING" onclick="togglePill(this)">Tối</button>
-                <button type="button" class="pill session-pill-edit" data-value="NIGHT" onclick="togglePill(this)">Đêm</button>
-            </div>
-        </div>
-
-        <div class="pill-group">
-            <label style="font-size:13px;">
-                <input type="checkbox" id="editCanParallel" />
-                Có thể làm song song (Parallel OK)
-            </label>
         </div>
 
         <button onclick="saveEdit()">Lưu</button>
