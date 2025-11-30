@@ -2,26 +2,91 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Task Manager Eisenhower</title>
+  <title>Tasker v1.0</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <h1>Task Manager</h1>
+  <h1>Tasker v1.0</h1>
 
-  <form id="taskForm">
-    <input type="text" id="title" placeholder="Tên công việc" required>
-    <textarea id="description" placeholder="Nội dung công việc"></textarea>
-    <input type="number" id="q" placeholder="Độ quan trọng (1-5)" required>
-    <input type="number" id="t" placeholder="Thời gian dự kiến (phút)" required>
-    <input type="number" id="d" placeholder="Deadline còn lại (phút)" required>
-    <button type="submit">Thêm task</button>
-  </form>
+  <!-- TAB HEADER -->
+  <div class="tabs">
+    <button class="tab-button active" data-tab-target="tab-timeline">Timeline</button>
+    <button class="tab-button" data-tab-target="tab-background">Background tasks</button>
+    <button class="tab-button" data-tab-target="tab-settings">Settings</button>
+  </div>
 
-  <h2>Danh sách công việc (sắp xếp theo ưu tiên)</h2>
-  <div id="taskList"></div>
+  <!-- TAB: TIMELINE -->
+  <div class="tab-panel active" id="tab-timeline">
+    <h2>Timeline</h2>
 
-  <!-- Script chính -->
+    <div class="lanes">
+      <div class="lane">
+        <h3>Lane 1: Main tasks</h3>
+        <div id="laneMainTasks"></div>
+      </div>
+      <div class="lane">
+        <h3>Lane 2: Background tasks</h3>
+        <div id="laneBackgroundTasks"></div>
+      </div>
+      <div class="lane">
+        <h3>Lane 3: Pending tasks</h3>
+        <div id="lanePendingTasks"></div>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>Thêm main task</h2>
+    <form id="mainTaskForm">
+      <input type="text" id="mainTitle" placeholder="Tên main task" required>
+      <textarea id="mainDescription" placeholder="Mô tả"></textarea>
+      <input type="number" id="mainImportance" placeholder="Độ quan trọng (1-5)" min="1" max="5" required>
+      <input type="number" id="mainDuration" placeholder="Thời gian dự kiến (phút)" min="1" required>
+      <input type="number" id="mainDeadline" placeholder="Deadline còn lại (phút)" min="1" required>
+      <label>
+        <input type="checkbox" id="mainIsPending">
+        Đây là pending task (không đưa vào timeline chính)
+      </label>
+      <button type="submit">Thêm main task</button>
+    </form>
+
+    <h2>Danh sách main task (debug / kiểm tra)</h2>
+    <div id="mainTaskList"></div>
+  </div>
+
+  <!-- TAB: BACKGROUND TASKS -->
+  <div class="tab-panel" id="tab-background">
+    <h2>Background tasks</h2>
+
+    <form id="backgroundTaskForm">
+      <input type="text" id="bgTitle" placeholder="Tên background task" required>
+      <textarea id="bgDescription" placeholder="Mô tả"></textarea>
+      <input type="time" id="bgStartTime" required>
+      <input type="time" id="bgEndTime" required>
+      <label>
+        <input type="checkbox" id="bgIsParallel">
+        Cho phép chạy song song với main task
+      </label>
+      <button type="submit">Thêm background task</button>
+    </form>
+
+    <h3>Danh sách background tasks</h3>
+    <div id="backgroundTaskList"></div>
+  </div>
+
+  <!-- TAB: SETTINGS -->
+  <div class="tab-panel" id="tab-settings">
+    <h2>Settings (v1.0)</h2>
+    <p>Hiện tại mới là phiên bản nền tảng. Sau khi mọi thứ ổn định, chúng ta sẽ:</p>
+    <ul>
+      <li>Cho phép chỉnh trọng số (importance / deadline / duration).</li>
+      <li>Cho phép cấu hình khung giờ làm việc mặc định.</li>
+      <li>Thêm export/import dữ liệu.</li>
+    </ul>
+  </div>
+
+  <!-- SCRIPT -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
