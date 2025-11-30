@@ -124,7 +124,6 @@ window.switchTab = function(tab) {
     state.currentTab = tab;
 
     document.getElementById("tab-timeline").classList.add("hidden");
-    document.getElementById("tab-list").classList.add("hidden");
     document.getElementById("tab-background").classList.add("hidden");
     document.getElementById("tab-settings").classList.add("hidden");
 
@@ -133,10 +132,12 @@ window.switchTab = function(tab) {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("tab-active"));
     document.getElementById(`tab-btn-${tab}`).classList.add("tab-active");
 
-    if (tab === "list") renderTasks();
-    if (tab === "settings") renderSettings();
-    if (tab === "timeline") renderTimeline();
+    if (tab === "timeline") {
+        renderTasks();
+        renderTimeline();
+    }
     if (tab === "background") renderBackgroundTasks();
+    if (tab === "settings") renderSettings();
 };
 
 // ========== TIME HELPERS ==========
@@ -251,7 +252,8 @@ function listenTasks() {
         snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
         state.tasks = arr;
 
-        if (state.currentTab === "list") renderTasks();
+        // luôn giữ list mới nhất
+        renderTasks();
         if (state.currentTab === "timeline") renderTimeline();
     });
 }
@@ -630,13 +632,13 @@ window.updateNumericSetting = function(key, value) {
     if (isNaN(v)) return;
     state.settings[key] = v;
     saveSettingsToLocalStorage();
-    if (state.currentTab === "list") renderTasks();
+    renderTasks();
 };
 
 window.updateBoolSetting = function(key, checked) {
     state.settings[key] = !!checked;
     saveSettingsToLocalStorage();
-    if (state.currentTab === "list") renderTasks();
+    renderTasks();
 };
 
 // ========== PILLS ==========
