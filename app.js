@@ -1,4 +1,4 @@
-// FIREBASE SDK
+// Firebase SDK
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
   getFirestore,
@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // ======================
-// FIREBASE CONFIG (THAY BẰNG CỦA BẠN)
+// FIREBASE CONFIG
 // ======================
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -21,300 +21,317 @@ const firebaseConfig = {
   appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
 };
 
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ========================================
-// TAB LOGIC
-// ========================================
-document.querySelectorAll(".tab-button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const id = btn.dataset.tabTarget;
+// ======================
+// TAB SWITCH
+// ======================
+document.querySelectorAll(".tab-button").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const id=btn.dataset.tabTarget;
     document.querySelectorAll(".tab-button").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
+
     document.querySelectorAll(".tab-panel").forEach(panel=>{
-      panel.classList.toggle("active", panel.id===id);
-    })
+      panel.classList.toggle("active",panel.id===id);
+    });
   });
 });
 
-// ========================================
-// TIMELINE CORE
-// ========================================
-const timelineScroll = document.getElementById("timelineScroll");
-const timelineHeader = document.getElementById("timelineHeader");
-const nowMarker = document.getElementById("timelineNowMarker");
+// ======================
+// TIMELINE
+// ======================
+const timelineScroll=document.getElementById("timelineScroll");
+const timelineHeader=document.getElementById("timelineHeader");
+const nowMarker=document.getElementById("timelineNowMarker");
 
-const MS_PER_HOUR = 3600000;
-const MS_PER_DAY = 86400000;
-const DAYS_TOTAL = 14;
-const HOURS_TOTAL = DAYS_TOTAL * 24;
+const MS_HOUR=3600000;
+const MS_DAY=86400000;
+const DAYS=14;
+const HOURS=DAYS*24;
 
-let pixelsPerHour = 60;
-const MIN_PX = 24;
-const MAX_PX = 160;
+let pxPerHour=60;
+const MIN_PX=24;
+const MAX_PX=160;
 
-const startOfToday = (() => {
-  const n = new Date();
+const startOfToday = (()=> {
+  const n=new Date();
   return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 })();
 
-function formatDayLabel(date) {
-  const w = ["CN","T2","T3","T4","T5","T6","T7"];
+function formatDayLabel(date){
+  const w=["CN","T2","T3","T4","T5","T6","T7"];
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
-function renderTimeline() {
-  const totalWidth = HOURS_TOTAL * pixelsPerHour;
-  timelineHeader.innerHTML = "";
-  timelineHeader.style.width = totalWidth + "px";
+function renderTimeline(){
+  const totalW = HOURS * pxPerHour;
+  timelineHeader.innerHTML="";
+  timelineHeader.style.width=totalW+"px";
 
-  for (let d=0; d<DAYS_TOTAL; d++){
-    const date = new Date(startOfToday.getTime() + d*MS_PER_DAY);
-    const dayDiv = document.createElement("div");
-    dayDiv.classList.add("timeline-day");
-    if (d===0) dayDiv.classList.add("today");
-    if (d===1) dayDiv.classList.add("future-1");
-    if (d===2) dayDiv.classList.add("future-2");
-    dayDiv.style.width = (24*pixelsPerHour)+"px";
+  for (let d=0;d<DAYS;d++){
+    const dayDate=new Date(startOfToday.getTime()+d*MS_DAY);
+    const day=document.createElement("div");
+    day.className="timeline-day";
+    if(d===0) day.classList.add("today");
+    if(d===1) day.classList.add("future-1");
+    if(d===2) day.classList.add("future-2");
 
-    const label = document.createElement("div");
+    day.style.width=(24*pxPerHour)+"px";
+
+    const label=document.createElement("div");
     label.className="timeline-day-label";
-    label.textContent = formatDayLabel(date);
+    label.textContent=formatDayLabel(dayDate);
 
-    const hoursDiv = document.createElement("div");
-    hoursDiv.className="timeline-day-hours";
-    for (let h=0;h<24;h++){
-      const hour = document.createElement("div");
-      hour.className="timeline-hour";
-      hour.style.width = pixelsPerHour+"px";
-      hour.textContent = h%2===0 ? `${h}:00` : "";
-      hoursDiv.appendChild(hour);
+    const hours=document.createElement("div");
+    hours.className="timeline-day-hours";
+    for(let h=0;h<24;h++){
+      const hd=document.createElement("div");
+      hd.className="timeline-hour";
+      hd.style.width=pxPerHour+"px";
+      hd.textContent = (h%2===0)? `${h}:00` : "";
+      hours.appendChild(hd);
     }
 
-    dayDiv.appendChild(label);
-    dayDiv.appendChild(hoursDiv);
-    timelineHeader.appendChild(dayDiv);
+    day.appendChild(label);
+    day.appendChild(hours);
+    timelineHeader.appendChild(day);
   }
 
   ["laneMainContent","laneBackgroundContent","lanePendingContent"].forEach(id=>{
-    const lane = document.getElementById(id);
-    lane.style.width = totalWidth + "px";
+    document.getElementById(id).style.width=totalW+"px";
   });
 
   updateNowMarker();
 }
 
 function updateNowMarker(){
-  const now = new Date();
-  const diff = now - startOfToday;
-  if (diff<0 || diff > DAYS_TOTAL*MS_PER_DAY){
+  const now=new Date();
+  const diff=now-startOfToday;
+  if(diff<0 || diff>DAYS*MS_DAY){
     nowMarker.style.display="none";
     return;
   }
   nowMarker.style.display="block";
-  const hours = diff/MS_PER_HOUR;
-  nowMarker.style.left = (hours*pixelsPerHour)+"px";
+  const hours=diff/MS_HOUR;
+  nowMarker.style.left=(hours*pxPerHour)+"px";
 }
 
-function zoom(factor){
-  const centerTime =
-    (timelineScroll.scrollLeft + timelineScroll.clientWidth/2) / pixelsPerHour;
-
-  pixelsPerHour = Math.max(MIN_PX, Math.min(MAX_PX, pixelsPerHour * factor));
+function zoom(f){
+  const center = (timelineScroll.scrollLeft + timelineScroll.clientWidth/2)/pxPerHour;
+  pxPerHour = Math.max(MIN_PX, Math.min(MAX_PX, pxPerHour*f));
   renderTimeline();
-
-  timelineScroll.scrollLeft = centerTime*pixelsPerHour - timelineScroll.clientWidth/2;
-}
-
-function scrollToTime(hours){
-  timelineScroll.scrollLeft = hours*pixelsPerHour - timelineScroll.clientWidth/2;
-}
-
-function jumpNow(){
-  const now = new Date();
-  const diff = now-startOfToday;
-  const hours = diff/MS_PER_HOUR;
-  scrollToTime(hours);
+  timelineScroll.scrollLeft=center*pxPerHour - timelineScroll.clientWidth/2;
 }
 
 document.getElementById("zoomInBtn").addEventListener("click",()=>zoom(1.2));
 document.getElementById("zoomOutBtn").addEventListener("click",()=>zoom(1/1.2));
-document.getElementById("jumpNowBtn").addEventListener("click",jumpNow);
 
-// ========================================
-// CUSTOM JUMP-TO-DATE MODAL
-// ========================================
-const jumpDateButton = document.getElementById("jumpDateButton");
-const jumpDateModal = document.getElementById("jumpDateModal");
-const calendarGrid = document.getElementById("calendarGrid");
-const closeJumpModal = document.getElementById("closeJumpModal");
+function scrollToHours(h){ timelineScroll.scrollLeft = h*pxPerHour - timelineScroll.clientWidth/2; }
 
-function handleJumpDateChosen(iso){
-  const chosen = new Date(iso+"T00:00:00");
-  const diff = chosen - startOfToday;
-  const dayIndex = diff/MS_PER_DAY;
-  const hours = dayIndex*24 + 8;
-  scrollToTime(hours);
+document.getElementById("jumpNowBtn").addEventListener("click",()=>{
+  const diff=new Date()-startOfToday;
+  const h=diff/MS_HOUR;
+  scrollToHours(h);
+});
+
+// ======================
+// JUMP-TO-DATE MODAL
+// ======================
+const jumpDateButton=document.getElementById("jumpDateButton");
+const jumpDateModal=document.getElementById("jumpDateModal");
+const calendarGrid=document.getElementById("calendarGrid");
+const closeJumpModal=document.getElementById("closeJumpModal");
+
+function openJumpModal(){
+  renderCalendar();
+  jumpDateModal.classList.add("active");
 }
+
+jumpDateButton.addEventListener("mouseenter",openJumpModal);
+jumpDateButton.addEventListener("click",(e)=>{
+  e.preventDefault();
+  openJumpModal();
+});
+
+closeJumpModal.addEventListener("click",()=>jumpDateModal.classList.remove("active"));
+
+jumpDateModal.addEventListener("click",(e)=>{
+  if(e.target===jumpDateModal) jumpDateModal.classList.remove("active");
+});
 
 function renderCalendar(){
   calendarGrid.innerHTML="";
-  for (let i=0;i<DAYS_TOTAL;i++){
-    const d = new Date(startOfToday.getTime() + i*MS_PER_DAY);
-    const div = document.createElement("div");
+  for(let i=0;i<DAYS;i++){
+    const d=new Date(startOfToday.getTime()+i*MS_DAY);
+    const div=document.createElement("div");
     div.className="calendar-day";
-    if (i===0) div.classList.add("today");
-    div.textContent = d.getDate();
+    if(i===0) div.classList.add("today");
+
+    div.textContent=d.getDate();
     div.addEventListener("click",()=>{
       jumpDateModal.classList.remove("active");
-      handleJumpDateChosen(d.toISOString().slice(0,10));
+      const dayIndex=i;
+      const hours = dayIndex*24 + 8;
+      scrollToHours(hours);
     });
+
     calendarGrid.appendChild(div);
   }
 }
 
-jumpDateButton.addEventListener("mouseenter",()=>{
-  renderCalendar();
-  jumpDateModal.classList.add("active");
+// ======================
+// PILL UI LOGIC
+// ======================
+const pillMainPending=document.getElementById("pillMainPending");
+const pillMainParallel=document.getElementById("pillMainParallel");
+const cbMainPending=document.getElementById("mainIsPending");
+const cbMainParallel=document.getElementById("mainIsParallel");
+
+pillMainPending.addEventListener("click",()=>{
+  pillMainPending.classList.toggle("active");
+  cbMainPending.checked=pillMainPending.classList.contains("active");
 });
-jumpDateButton.addEventListener("click",(e)=>{
-  e.preventDefault();
-  renderCalendar();
-  jumpDateModal.classList.add("active");
+pillMainParallel.addEventListener("click",()=>{
+  pillMainParallel.classList.toggle("active");
+  cbMainParallel.checked=pillMainParallel.classList.contains("active");
 });
 
-closeJumpModal.addEventListener("click",()=>{
-  jumpDateModal.classList.remove("active");
+const pillBgParallel=document.getElementById("pillBgParallel");
+const cbBgParallel=document.getElementById("bgIsParallel");
+
+pillBgParallel.addEventListener("click",()=>{
+  pillBgParallel.classList.toggle("active");
+  cbBgParallel.checked=pillBgParallel.classList.contains("active");
 });
 
-jumpDateModal.addEventListener("click",(e)=>{
-  if (e.target===jumpDateModal){
-    jumpDateModal.classList.remove("active");
-  }
-});
-
-// ========================================
-// MAIN TASKS
-// ========================================
+// ======================
+// MAIN TASK CRUD
+// ======================
 function computeScore(q,t,d){
   const t_norm=1/(t+1);
   const d_norm=1/(d+1);
-  return {
-    t_norm,
-    d_norm,
-    score: 0.6*q + 0.3*d_norm + 0.1*t_norm
-  };
+  return 0.6*q + 0.3*d_norm + 0.1*t_norm;
 }
 
-document.getElementById("mainTaskForm").addEventListener("submit", async(e)=>{
+document.getElementById("mainTaskForm").addEventListener("submit",async(e)=>{
   e.preventDefault();
+
   const title=document.getElementById("mainTitle").value;
-  const description=document.getElementById("mainDescription").value;
+  const desc=document.getElementById("mainDescription").value;
   const importance=Number(document.getElementById("mainImportance").value);
   const duration=Number(document.getElementById("mainDuration").value);
-  const deadlineStr=document.getElementById("mainDeadline").value;
-  const isPending=document.getElementById("mainIsPending").checked;
-  const isParallel=document.getElementById("mainIsParallel").checked;
 
+  const deadlineStr=document.getElementById("mainDeadline").value;
   let deadlineMinutes=60;
   let deadlineAt=null;
-
-  if (deadlineStr){
-    const deadline=new Date(deadlineStr);
-    deadlineAt=deadline.toISOString();
-    const diff = deadline.getTime() - Date.now();
-    deadlineMinutes = Math.max(1, Math.round(diff/60000));
+  if(deadlineStr){
+    const d=new Date(deadlineStr);
+    deadlineAt=d.toISOString();
+    const diff=d - new Date();
+    deadlineMinutes=Math.max(1, Math.round(diff/60000));
   }
 
-  const {t_norm,d_norm,score}=computeScore(importance,duration,deadlineMinutes);
+  const isPending=cbMainPending.checked;
+  const isParallel=cbMainParallel.checked;
+
+  const score=computeScore(importance,duration,deadlineMinutes);
 
   await addDoc(collection(db,"mainTasks"),{
-    title,description,
-    importance,duration,
+    title, description:desc,
+    importance, duration,
     deadline:deadlineMinutes,
     deadlineAt,
-    isPending,isParallel,
-    t_norm,d_norm,score,
+    isPending, isParallel,
+    score,
     createdAt:serverTimestamp()
   });
 
   e.target.reset();
-  loadAllData();
+  pillMainPending.classList.remove("active");
+  pillMainParallel.classList.remove("active");
+
+  loadAll();
 });
 
-async function loadMainTasks(){
+async function loadMain(){
   const snap=await getDocs(collection(db,"mainTasks"));
   const items=[];
-  snap.forEach(doc=>items.push({id:doc.id,...doc.data()}));
+  snap.forEach(doc=>items.push({...doc.data(), id:doc.id}));
 
   items.sort((a,b)=>b.score-a.score);
 
-  const list=document.getElementById("mainTaskList");
-  list.innerHTML="";
-
-  items.forEach(task=>{
+  const root=document.getElementById("mainTaskList");
+  root.innerHTML="";
+  items.forEach(t=>{
     const div=document.createElement("div");
     div.className="task-item task-item-main";
-    const dt = task.deadlineAt ? new Date(task.deadlineAt).toLocaleString() : "N/A";
+    const deadlineTxt=t.deadlineAt? new Date(t.deadlineAt).toLocaleString() : "N/A";
     div.innerHTML=`
-      <h4>${task.title}</h4>
-      <p>${task.description||""}</p>
-      <p class="task-meta">Importance: ${task.importance} · Duration: ${task.duration} phút</p>
-      <p class="task-meta">Deadline: ${dt} · Còn: ${task.deadline} phút</p>
-      <p class="task-meta">Parallel: ${task.isParallel?"Có":"Không"} · Pending: ${task.isPending?"Có":"Không"} · Score: ${task.score.toFixed(3)}</p>
+      <h4>${t.title}</h4>
+      <p>${t.description||""}</p>
+      <p class="task-meta">Importance: ${t.importance} · Duration: ${t.duration} phút</p>
+      <p class="task-meta">Deadline: ${deadlineTxt} · Còn ${t.deadline} phút</p>
+      <p class="task-meta">Pending: ${t.isPending?"Có":"Không"} · Parallel: ${t.isParallel?"Có":"Không"} · Score: ${t.score.toFixed(3)}</p>
     `;
-    list.appendChild(div);
+    root.appendChild(div);
   });
 }
 
-// ========================================
-// BACKGROUND TASKS
-// ========================================
-document.getElementById("backgroundTaskForm").addEventListener("submit", async(e)=>{
+// ======================
+// BACKGROUND TASK CRUD
+// ======================
+document.getElementById("backgroundTaskForm").addEventListener("submit",async(e)=>{
   e.preventDefault();
+
   const title=document.getElementById("bgTitle").value;
-  const description=document.getElementById("bgDescription").value;
-  const startTime=document.getElementById("bgStartTime").value;
-  const endTime=document.getElementById("bgEndTime").value;
-  const isParallel=document.getElementById("bgIsParallel").checked;
+  const desc=document.getElementById("bgDescription").value;
+  const start=document.getElementById("bgStartTime").value;
+  const end=document.getElementById("bgEndTime").value;
+  const isParallel=cbBgParallel.checked;
 
   await addDoc(collection(db,"backgroundTasks"),{
-    title,description,startTime,endTime,isParallel,
+    title, description:desc, startTime:start, endTime:end,
+    isParallel,
     createdAt:serverTimestamp()
   });
 
   e.target.reset();
-  loadAllData();
+  pillBgParallel.classList.remove("active");
+
+  loadAll();
 });
 
-async function loadBackgroundTasks(){
+async function loadBackground(){
   const snap=await getDocs(collection(db,"backgroundTasks"));
   const items=[];
-  snap.forEach(doc=>items.push({id:doc.id,...doc.data()}));
-  items.sort((a,b)=> (a.startTime||"").localeCompare(b.startTime||""));
+  snap.forEach(doc=>items.push({...doc.data(), id:doc.id}));
+  items.sort((a,b)=>(a.startTime||"").localeCompare(b.startTime||""));
 
-  const list=document.getElementById("backgroundTaskList");
-  list.innerHTML="";
-  items.forEach(task=>{
+  const root=document.getElementById("backgroundTaskList");
+  root.innerHTML="";
+  items.forEach(t=>{
     const div=document.createElement("div");
     div.className="task-item task-item-bg";
     div.innerHTML=`
-      <h4>${task.title}</h4>
-      <p>${task.description||""}</p>
-      <p class="task-meta">${task.startTime} – ${task.endTime} · Parallel: ${task.isParallel?"Có":"Không"}</p>
+      <h4>${t.title}</h4>
+      <p>${t.description||""}</p>
+      <p class="task-meta">${t.startTime} – ${t.endTime} · Parallel: ${t.isParallel?"Có":"Không"}</p>
     `;
-    list.appendChild(div);
+    root.appendChild(div);
   });
 }
 
-// ========================================
+// ======================
 // INIT
-// ========================================
-async function loadAllData(){
-  await Promise.all([loadMainTasks(),loadBackgroundTasks()]);
+// ======================
+async function loadAll(){
+  await Promise.all([loadMain(), loadBackground()]);
 }
 
 renderTimeline();
-jumpNow();
-loadAllData();
+loadAll();
+updateNowMarker();
+setInterval(updateNowMarker,60000);
