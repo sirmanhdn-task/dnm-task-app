@@ -2,15 +2,28 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.4</title>
+  <title>DNM's Tasker v1.1.5</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <header class="app-header">
-    <h1 class="app-title">DNM's Tasker</h1>
-    <span class="app-subtitle">Focus on what matters</span>
+    <div class="header-left">
+      <h1 class="app-title">DNM's Tasker</h1>
+      <span class="app-subtitle">Focus on what matters</span>
+    </div>
+    <div class="header-right">
+      <button id="loginBtn" class="secondary-btn">Login with Google</button>
+
+      <div id="userInfo" class="user-info" style="display:none">
+        <img id="userAvatar" class="user-avatar" alt="avatar">
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutBtn" class="secondary-btn secondary-btn-small">
+          Logout
+        </button>
+      </div>
+    </div>
   </header>
 
   <!-- TAB HEADER -->
@@ -159,15 +172,15 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.4
-- Thêm ID số thứ tự cho main/background task (tự tăng, không reset khi xóa).
-- Thay đổi công thức priority:
-  priority = duration / minutesUntilDeadline.
-- Ngoại lệ: task có duration ≤ 10 phút và deadline trong 48 giờ
-  được đẩy lên đầu list.
-- Sort main tasks theo:
-  1) isShortBoost (ngoại lệ) trước,
-  2) priority giảm dần.
+v1.1.5
+- Thêm Firebase Authentication (Google login).
+- Mỗi user có dữ liệu riêng:
+  users/{uid}/mainTasks
+  users/{uid}/backgroundTasks
+  users/{uid}/metadata/counters
+- Nếu chưa login thì không cho ghi/đọc task (chỉ xem UI).
+- Giữ nguyên thuật toán v1.1.4
+  (ID tăng dần, priority = duration/deadline, short-boost).
 ===========================================
 -->
 
