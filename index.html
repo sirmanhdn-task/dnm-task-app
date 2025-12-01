@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.3a</title>
+  <title>DNM's Tasker v1.1.4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -159,12 +159,15 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.3a
-- Thay checkbox bằng pill toggle (Pending / Parallel)
-- Modal lịch đứng giữa màn hình, click ngoài để đóng
-- Hover + click mở modal lịch
-- Deadline datetime-local
-- UI iOS style
+v1.1.4
+- Thêm ID số thứ tự cho main/background task (tự tăng, không reset khi xóa).
+- Thay đổi công thức priority:
+  priority = duration / minutesUntilDeadline.
+- Ngoại lệ: task có duration ≤ 10 phút và deadline trong 48 giờ
+  được đẩy lên đầu list.
+- Sort main tasks theo:
+  1) isShortBoost (ngoại lệ) trước,
+  2) priority giảm dần.
 ===========================================
 -->
 
