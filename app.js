@@ -25,11 +25,10 @@ const firebaseConfig = {
   apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
   authDomain: "dnmstasker.firebaseapp.com",
   projectId: "dnmstasker",
-  storageBucket: "dnmstasker.firebasestorage.app",
+  storageBucket: "dnmstasker.appspot.com",
   messagingSenderId: "98582966566",
   appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
 };
-
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
