@@ -1,4 +1,4 @@
-// Import Firebase SDK
+// FIREBASE SDK
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
   getFirestore,
@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // ======================
-// 1. FIREBASE CONFIG
+// FIREBASE CONFIG (THAY BẰNG CỦA BẠN)
 // ======================
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -24,401 +24,297 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ======================
-// 2. TAB LOGIC
-// ======================
-
-const tabButtons = document.querySelectorAll(".tab-button");
-const tabPanels = document.querySelectorAll(".tab-panel");
-
-tabButtons.forEach((btn) => {
+// ========================================
+// TAB LOGIC
+// ========================================
+document.querySelectorAll(".tab-button").forEach((btn) => {
   btn.addEventListener("click", () => {
-    const targetId = btn.getAttribute("data-tab-target");
-    tabButtons.forEach((b) => b.classList.remove("active"));
+    const id = btn.dataset.tabTarget;
+    document.querySelectorAll(".tab-button").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
-
-    tabPanels.forEach((panel) => {
-      panel.classList.toggle("active", panel.id === targetId);
-    });
+    document.querySelectorAll(".tab-panel").forEach(panel=>{
+      panel.classList.toggle("active", panel.id===id);
+    })
   });
 });
 
-// ======================
-// 3. TIMELINE CORE (2 TUẦN, GIỜ, ZOOM, JUMP)
-// ======================
-
+// ========================================
+// TIMELINE CORE
+// ========================================
 const timelineScroll = document.getElementById("timelineScroll");
 const timelineHeader = document.getElementById("timelineHeader");
 const nowMarker = document.getElementById("timelineNowMarker");
 
-const MS_PER_HOUR = 60 * 60 * 1000;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
+const MS_PER_HOUR = 3600000;
+const MS_PER_DAY = 86400000;
 const DAYS_TOTAL = 14;
-const HOURS_TOTAL = 24 * DAYS_TOTAL;
+const HOURS_TOTAL = DAYS_TOTAL * 24;
 
-let pixelsPerHour = 60; // zoom mặc định
-const MIN_PIXELS_PER_HOUR = 24;
-const MAX_PIXELS_PER_HOUR = 160;
+let pixelsPerHour = 60;
+const MIN_PX = 24;
+const MAX_PX = 160;
 
 const startOfToday = (() => {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 })();
 
 function formatDayLabel(date) {
-  const weekdays = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-  return `${weekdays[date.getDay()]} ${date.getDate()}`;
+  const w = ["CN","T2","T3","T4","T5","T6","T7"];
+  return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
 function renderTimeline() {
   const totalWidth = HOURS_TOTAL * pixelsPerHour;
-
-  // Header days + hour ticks
   timelineHeader.innerHTML = "";
-  timelineHeader.style.width = `${totalWidth}px`;
+  timelineHeader.style.width = totalWidth + "px";
 
-  for (let d = 0; d < DAYS_TOTAL; d++) {
-    const dayDate = new Date(startOfToday.getTime() + d * MS_PER_DAY);
+  for (let d=0; d<DAYS_TOTAL; d++){
+    const date = new Date(startOfToday.getTime() + d*MS_PER_DAY);
     const dayDiv = document.createElement("div");
     dayDiv.classList.add("timeline-day");
+    if (d===0) dayDiv.classList.add("today");
+    if (d===1) dayDiv.classList.add("future-1");
+    if (d===2) dayDiv.classList.add("future-2");
+    dayDiv.style.width = (24*pixelsPerHour)+"px";
 
-    if (d === 0) {
-      dayDiv.classList.add("today");
-    } else if (d === 1) {
-      dayDiv.classList.add("future-1");
-    } else if (d === 2) {
-      dayDiv.classList.add("future-2");
-    }
-
-    dayDiv.style.width = `${24 * pixelsPerHour}px`;
-
-    const labelDiv = document.createElement("div");
-    labelDiv.className = "timeline-day-label";
-    labelDiv.textContent = formatDayLabel(dayDate);
+    const label = document.createElement("div");
+    label.className="timeline-day-label";
+    label.textContent = formatDayLabel(date);
 
     const hoursDiv = document.createElement("div");
-    hoursDiv.className = "timeline-day-hours";
-
-    for (let h = 0; h < 24; h++) {
-      const hourDiv = document.createElement("div");
-      hourDiv.className = "timeline-hour";
-      hourDiv.style.width = `${pixelsPerHour}px`;
-      hourDiv.textContent = h % 2 === 0 ? `${h}:00` : "";
-      hoursDiv.appendChild(hourDiv);
+    hoursDiv.className="timeline-day-hours";
+    for (let h=0;h<24;h++){
+      const hour = document.createElement("div");
+      hour.className="timeline-hour";
+      hour.style.width = pixelsPerHour+"px";
+      hour.textContent = h%2===0 ? `${h}:00` : "";
+      hoursDiv.appendChild(hour);
     }
 
-    dayDiv.appendChild(labelDiv);
+    dayDiv.appendChild(label);
     dayDiv.appendChild(hoursDiv);
     timelineHeader.appendChild(dayDiv);
   }
 
-  // Set width cho lane-content giống header
-  const laneMain = document.getElementById("laneMainContent");
-  const laneBg = document.getElementById("laneBackgroundContent");
-  const lanePending = document.getElementById("lanePendingContent");
-  [laneMain, laneBg, lanePending].forEach((lane) => {
-    lane.style.width = `${totalWidth}px`;
+  ["laneMainContent","laneBackgroundContent","lanePendingContent"].forEach(id=>{
+    const lane = document.getElementById(id);
+    lane.style.width = totalWidth + "px";
   });
 
   updateNowMarker();
 }
 
-function updateNowMarker() {
+function updateNowMarker(){
   const now = new Date();
-  const diffMs = now.getTime() - startOfToday.getTime();
-  if (diffMs < 0 || diffMs > DAYS_TOTAL * MS_PER_DAY) {
-    nowMarker.style.display = "none";
+  const diff = now - startOfToday;
+  if (diff<0 || diff > DAYS_TOTAL*MS_PER_DAY){
+    nowMarker.style.display="none";
     return;
   }
-  const hoursFromStart = diffMs / MS_PER_HOUR;
-  const x = hoursFromStart * pixelsPerHour;
-  nowMarker.style.display = "block";
-  nowMarker.style.left = `${x}px`;
+  nowMarker.style.display="block";
+  const hours = diff/MS_PER_HOUR;
+  nowMarker.style.left = (hours*pixelsPerHour)+"px";
 }
 
-// zoom giữ nguyên tâm viewport theo "thời gian"
-function zoom(factor) {
+function zoom(factor){
   const centerTime =
-    (timelineScroll.scrollLeft + timelineScroll.clientWidth / 2) /
-    pixelsPerHour;
+    (timelineScroll.scrollLeft + timelineScroll.clientWidth/2) / pixelsPerHour;
 
-  pixelsPerHour = Math.max(
-    MIN_PIXELS_PER_HOUR,
-    Math.min(MAX_PIXELS_PER_HOUR, pixelsPerHour * factor)
-  );
-
+  pixelsPerHour = Math.max(MIN_PX, Math.min(MAX_PX, pixelsPerHour * factor));
   renderTimeline();
 
-  const newScrollLeft =
-    centerTime * pixelsPerHour - timelineScroll.clientWidth / 2;
-  timelineScroll.scrollLeft = Math.max(0, newScrollLeft);
+  timelineScroll.scrollLeft = centerTime*pixelsPerHour - timelineScroll.clientWidth/2;
 }
 
-// scroll đến một mốc thời gian (tính bằng giờ từ startOfToday)
-function scrollToTime(hoursFromStart) {
-  const targetPx = hoursFromStart * pixelsPerHour;
-  const newScrollLeft = targetPx - timelineScroll.clientWidth / 2;
-  timelineScroll.scrollLeft = Math.max(0, newScrollLeft);
+function scrollToTime(hours){
+  timelineScroll.scrollLeft = hours*pixelsPerHour - timelineScroll.clientWidth/2;
 }
 
-// Jump to now (nếu nằm trong 14 ngày)
-function handleJumpNow() {
+function jumpNow(){
   const now = new Date();
-  const diffMs = now.getTime() - startOfToday.getTime();
-  if (diffMs < 0) {
-    scrollToTime(0);
-    return;
-  }
-  if (diffMs > DAYS_TOTAL * MS_PER_DAY) {
-    scrollToTime(HOURS_TOTAL);
-    return;
-  }
-  const hoursFromStart = diffMs / MS_PER_HOUR;
-  scrollToTime(hoursFromStart);
+  const diff = now-startOfToday;
+  const hours = diff/MS_PER_HOUR;
+  scrollToTime(hours);
 }
 
-// Jump to date (ngày chọn, trong 14 ngày)
-function handleJumpDateChosen(value) {
-  if (!value) return;
-  const chosen = new Date(value + "T00:00:00");
-  const diffMs = chosen.getTime() - startOfToday.getTime();
-  if (diffMs < 0 || diffMs > (DAYS_TOTAL - 1) * MS_PER_DAY) {
-    return;
-  }
-  const dayIndex = diffMs / MS_PER_DAY;
-  const hoursFromStart = dayIndex * 24 + 8; // đưa khoảng 8h sáng vào giữa
-  scrollToTime(hoursFromStart);
-}
+document.getElementById("zoomInBtn").addEventListener("click",()=>zoom(1.2));
+document.getElementById("zoomOutBtn").addEventListener("click",()=>zoom(1/1.2));
+document.getElementById("jumpNowBtn").addEventListener("click",jumpNow);
 
-// init date input min/max
-(function initJumpDateInput() {
-  const input = document.getElementById("jumpDateInput");
-  const toISO = (d) => d.toISOString().slice(0, 10);
-  const minDate = startOfToday;
-  const maxDate = new Date(
-    startOfToday.getTime() + (DAYS_TOTAL - 1) * MS_PER_DAY
-  );
-  input.min = toISO(minDate);
-  input.max = toISO(maxDate);
-  input.value = toISO(minDate);
-})();
-
-// gán event cho zoom / jump buttons
-document.getElementById("zoomInBtn").addEventListener("click", () => zoom(1.2));
-document
-  .getElementById("zoomOutBtn")
-  .addEventListener("click", () => zoom(1 / 1.2));
-document.getElementById("jumpNowBtn").addEventListener("click", handleJumpNow);
-
-// Jump to date button -> mở date picker
+// ========================================
+// CUSTOM JUMP-TO-DATE MODAL
+// ========================================
 const jumpDateButton = document.getElementById("jumpDateButton");
-const jumpDateInput = document.getElementById("jumpDateInput");
+const jumpDateModal = document.getElementById("jumpDateModal");
+const calendarGrid = document.getElementById("calendarGrid");
+const closeJumpModal = document.getElementById("closeJumpModal");
 
-function openDatePicker() {
-  if (jumpDateInput.showPicker) {
-    jumpDateInput.showPicker();
-  } else {
-    jumpDateInput.focus();
-  }
+function handleJumpDateChosen(iso){
+  const chosen = new Date(iso+"T00:00:00");
+  const diff = chosen - startOfToday;
+  const dayIndex = diff/MS_PER_DAY;
+  const hours = dayIndex*24 + 8;
+  scrollToTime(hours);
 }
 
-// hover (PC) + click (PC/Mobile)
-jumpDateButton.addEventListener("mouseenter", (e) => {
-  openDatePicker();
-});
-jumpDateButton.addEventListener("click", (e) => {
-  e.preventDefault();
-  openDatePicker();
-});
-
-// khi chọn ngày -> nhảy luôn
-jumpDateInput.addEventListener("change", () => {
-  handleJumpDateChosen(jumpDateInput.value);
-});
-
-// cập nhật now marker mỗi phút
-setInterval(updateNowMarker, 60000);
-
-// ======================
-// 4. MAIN TASKS (LIST + LƯU FIREBASE)
-// ======================
-
-function computeScore(importance, durationMinutes, deadlineMinutes) {
-  const q = importance;
-  const t = durationMinutes;
-  const d = deadlineMinutes;
-
-  const t_norm = 1 / (t + 1);
-  const d_norm = 1 / (d + 1);
-
-  const w_q = 0.6;
-  const w_d = 0.3;
-  const w_t = 0.1;
-
-  const score = w_q * q + w_d * d_norm + w_t * t_norm;
-  return { t_norm, d_norm, score };
-}
-
-const mainTaskForm = document.getElementById("mainTaskForm");
-
-mainTaskForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const title = document.getElementById("mainTitle").value;
-  const description = document.getElementById("mainDescription").value;
-  const importance = Number(document.getElementById("mainImportance").value);
-  const duration = Number(document.getElementById("mainDuration").value);
-  const deadlineStr = document.getElementById("mainDeadline").value;
-  const isPending = document.getElementById("mainIsPending").checked;
-  const isParallel = document.getElementById("mainIsParallel").checked;
-
-  let deadlineMinutes = 60;
-  let deadlineAt = null;
-
-  if (deadlineStr) {
-    const deadlineDate = new Date(deadlineStr);
-    deadlineAt = deadlineDate.toISOString();
-    const diffMs = deadlineDate.getTime() - Date.now();
-    deadlineMinutes = Math.max(1, Math.round(diffMs / 60000));
-  }
-
-  const { t_norm, d_norm, score } = computeScore(
-    importance,
-    duration,
-    deadlineMinutes
-  );
-
-  try {
-    await addDoc(collection(db, "mainTasks"), {
-      title,
-      description,
-      importance,
-      duration,
-      deadline: deadlineMinutes,
-      deadlineAt,
-      isPending,
-      isParallel,
-      t_norm,
-      d_norm,
-      score,
-      createdAt: serverTimestamp()
-    });
-
-    mainTaskForm.reset();
-    await loadAllData();
-  } catch (err) {
-    console.error("Lỗi khi thêm main task:", err);
-    alert("Có lỗi khi lưu main task. Kiểm tra console.");
-  }
-});
-
-async function loadMainTasks() {
-  const snap = await getDocs(collection(db, "mainTasks"));
-  const items = [];
-  snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
-
-  items.sort((a, b) => (b.score || 0) - (a.score || 0));
-
-  const list = document.getElementById("mainTaskList");
-  list.innerHTML = "";
-
-  items.forEach((task) => {
+function renderCalendar(){
+  calendarGrid.innerHTML="";
+  for (let i=0;i<DAYS_TOTAL;i++){
+    const d = new Date(startOfToday.getTime() + i*MS_PER_DAY);
     const div = document.createElement("div");
-    div.className = "task-item task-item-main";
+    div.className="calendar-day";
+    if (i===0) div.classList.add("today");
+    div.textContent = d.getDate();
+    div.addEventListener("click",()=>{
+      jumpDateModal.classList.remove("active");
+      handleJumpDateChosen(d.toISOString().slice(0,10));
+    });
+    calendarGrid.appendChild(div);
+  }
+}
 
-    const deadlineText = task.deadlineAt
-      ? new Date(task.deadlineAt).toLocaleString()
-      : "N/A";
+jumpDateButton.addEventListener("mouseenter",()=>{
+  renderCalendar();
+  jumpDateModal.classList.add("active");
+});
+jumpDateButton.addEventListener("click",(e)=>{
+  e.preventDefault();
+  renderCalendar();
+  jumpDateModal.classList.add("active");
+});
 
-    div.innerHTML = `
+closeJumpModal.addEventListener("click",()=>{
+  jumpDateModal.classList.remove("active");
+});
+
+jumpDateModal.addEventListener("click",(e)=>{
+  if (e.target===jumpDateModal){
+    jumpDateModal.classList.remove("active");
+  }
+});
+
+// ========================================
+// MAIN TASKS
+// ========================================
+function computeScore(q,t,d){
+  const t_norm=1/(t+1);
+  const d_norm=1/(d+1);
+  return {
+    t_norm,
+    d_norm,
+    score: 0.6*q + 0.3*d_norm + 0.1*t_norm
+  };
+}
+
+document.getElementById("mainTaskForm").addEventListener("submit", async(e)=>{
+  e.preventDefault();
+  const title=document.getElementById("mainTitle").value;
+  const description=document.getElementById("mainDescription").value;
+  const importance=Number(document.getElementById("mainImportance").value);
+  const duration=Number(document.getElementById("mainDuration").value);
+  const deadlineStr=document.getElementById("mainDeadline").value;
+  const isPending=document.getElementById("mainIsPending").checked;
+  const isParallel=document.getElementById("mainIsParallel").checked;
+
+  let deadlineMinutes=60;
+  let deadlineAt=null;
+
+  if (deadlineStr){
+    const deadline=new Date(deadlineStr);
+    deadlineAt=deadline.toISOString();
+    const diff = deadline.getTime() - Date.now();
+    deadlineMinutes = Math.max(1, Math.round(diff/60000));
+  }
+
+  const {t_norm,d_norm,score}=computeScore(importance,duration,deadlineMinutes);
+
+  await addDoc(collection(db,"mainTasks"),{
+    title,description,
+    importance,duration,
+    deadline:deadlineMinutes,
+    deadlineAt,
+    isPending,isParallel,
+    t_norm,d_norm,score,
+    createdAt:serverTimestamp()
+  });
+
+  e.target.reset();
+  loadAllData();
+});
+
+async function loadMainTasks(){
+  const snap=await getDocs(collection(db,"mainTasks"));
+  const items=[];
+  snap.forEach(doc=>items.push({id:doc.id,...doc.data()}));
+
+  items.sort((a,b)=>b.score-a.score);
+
+  const list=document.getElementById("mainTaskList");
+  list.innerHTML="";
+
+  items.forEach(task=>{
+    const div=document.createElement("div");
+    div.className="task-item task-item-main";
+    const dt = task.deadlineAt ? new Date(task.deadlineAt).toLocaleString() : "N/A";
+    div.innerHTML=`
       <h4>${task.title}</h4>
-      <p>${task.description || ""}</p>
-      <p class="task-meta">
-        Importance: ${task.importance} · Duration: ${task.duration} phút
-      </p>
-      <p class="task-meta">
-        Deadline: ${deadlineText} · Còn khoảng: ${
-          task.deadline ? task.deadline + " phút" : "N/A"
-        }
-      </p>
-      <p class="task-meta">
-        Score: ${task.score ? task.score.toFixed(3) : "N/A"} ·
-        Pending: ${task.isPending ? "Có" : "Không"} ·
-        Parallel: ${task.isParallel ? "Có" : "Không"}
-      </p>
+      <p>${task.description||""}</p>
+      <p class="task-meta">Importance: ${task.importance} · Duration: ${task.duration} phút</p>
+      <p class="task-meta">Deadline: ${dt} · Còn: ${task.deadline} phút</p>
+      <p class="task-meta">Parallel: ${task.isParallel?"Có":"Không"} · Pending: ${task.isPending?"Có":"Không"} · Score: ${task.score.toFixed(3)}</p>
     `;
     list.appendChild(div);
   });
 }
 
-// ======================
-// 5. BACKGROUND TASKS
-// ======================
-
-const backgroundTaskForm = document.getElementById("backgroundTaskForm");
-
-backgroundTaskForm.addEventListener("submit", async (e) => {
+// ========================================
+// BACKGROUND TASKS
+// ========================================
+document.getElementById("backgroundTaskForm").addEventListener("submit", async(e)=>{
   e.preventDefault();
+  const title=document.getElementById("bgTitle").value;
+  const description=document.getElementById("bgDescription").value;
+  const startTime=document.getElementById("bgStartTime").value;
+  const endTime=document.getElementById("bgEndTime").value;
+  const isParallel=document.getElementById("bgIsParallel").checked;
 
-  const title = document.getElementById("bgTitle").value;
-  const description = document.getElementById("bgDescription").value;
-  const startTime = document.getElementById("bgStartTime").value; // HH:MM
-  const endTime = document.getElementById("bgEndTime").value;
-  const isParallel = document.getElementById("bgIsParallel").checked;
+  await addDoc(collection(db,"backgroundTasks"),{
+    title,description,startTime,endTime,isParallel,
+    createdAt:serverTimestamp()
+  });
 
-  try {
-    await addDoc(collection(db, "backgroundTasks"), {
-      title,
-      description,
-      startTime,
-      endTime,
-      isParallel,
-      createdAt: serverTimestamp()
-    });
-
-    backgroundTaskForm.reset();
-    await loadAllData();
-  } catch (err) {
-    console.error("Lỗi khi thêm background task:", err);
-    alert("Có lỗi khi lưu background task. Kiểm tra console.");
-  }
+  e.target.reset();
+  loadAllData();
 });
 
-async function loadBackgroundTasks() {
-  const snap = await getDocs(collection(db, "backgroundTasks"));
-  const items = [];
-  snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+async function loadBackgroundTasks(){
+  const snap=await getDocs(collection(db,"backgroundTasks"));
+  const items=[];
+  snap.forEach(doc=>items.push({id:doc.id,...doc.data()}));
+  items.sort((a,b)=> (a.startTime||"").localeCompare(b.startTime||""));
 
-  // sort theo startTime
-  items.sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
-
-  const list = document.getElementById("backgroundTaskList");
-  list.innerHTML = "";
-
-  items.forEach((task) => {
-    const div = document.createElement("div");
-    div.className = "task-item task-item-bg";
-    div.innerHTML = `
+  const list=document.getElementById("backgroundTaskList");
+  list.innerHTML="";
+  items.forEach(task=>{
+    const div=document.createElement("div");
+    div.className="task-item task-item-bg";
+    div.innerHTML=`
       <h4>${task.title}</h4>
-      <p>${task.description || ""}</p>
-      <p class="task-meta">
-        ${task.startTime} – ${task.endTime} ·
-        Parallel: ${task.isParallel ? "Có" : "Không"}
-      </p>
+      <p>${task.description||""}</p>
+      <p class="task-meta">${task.startTime} – ${task.endTime} · Parallel: ${task.isParallel?"Có":"Không"}</p>
     `;
     list.appendChild(div);
   });
 }
 
-// ======================
-// 6. LOAD TẤT CẢ & INIT
-// ======================
-
-async function loadAllData() {
-  await Promise.all([loadMainTasks(), loadBackgroundTasks()]);
+// ========================================
+// INIT
+// ========================================
+async function loadAllData(){
+  await Promise.all([loadMainTasks(),loadBackgroundTasks()]);
 }
 
-// Khởi tạo
 renderTimeline();
-handleJumpNow(); // mở lên là focus hôm nay
+jumpNow();
 loadAllData();
