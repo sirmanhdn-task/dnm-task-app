@@ -10,15 +10,17 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// *** NHỚ THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
+// THAY BẰNG CẤU HÌNH FIREBASE CỦA BẠN
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
+  authDomain: "dnmstasker.firebaseapp.com",
+  projectId: "dnmstasker",
+  storageBucket: "dnmstasker.firebasestorage.app",
+  messagingSenderId: "98582966566",
+  appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
 };
+
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -30,12 +32,12 @@ document.querySelectorAll(".tab-button").forEach((btn) => {
   btn.addEventListener("click", () => {
     const id = btn.dataset.tabTarget;
 
-    document.querySelectorAll(".tab-button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-button")
+      .forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
 
-    document.querySelectorAll(".tab-panel").forEach(panel => {
-      panel.classList.toggle("active", panel.id === id);
-    });
+    document.querySelectorAll(".tab-panel")
+      .forEach(panel => panel.classList.toggle("active", panel.id === id));
   });
 });
 
@@ -55,20 +57,18 @@ let pixelsPerHour = 60;
 const MIN_PX = 24;
 const MAX_PX = 160;
 
-// Start of today
 const startOfToday = (() => {
   const n = new Date();
   return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 })();
 
-// Format header labels
 function formatDayLabel(date) {
-  const w = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const w = ["CN","T2","T3","T4","T5","T6","T7"];
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
 // ===================================================
-// RENDER TIMELINE HEADER
+// RENDER TIMELINE
 // ===================================================
 function renderTimeline() {
   const totalWidth = HOURS_TOTAL * pixelsPerHour;
@@ -77,7 +77,6 @@ function renderTimeline() {
 
   for (let d = 0; d < DAYS_TOTAL; d++) {
     const date = new Date(startOfToday.getTime() + d * MS_PER_DAY);
-
     const dayDiv = document.createElement("div");
     dayDiv.classList.add("timeline-day");
     if (d === 0) dayDiv.classList.add("today");
@@ -114,9 +113,6 @@ function renderTimeline() {
   updateNowMarker();
 }
 
-// ===================================================
-// NOW MARKER (VẠCH ĐỎ HIỆN TẠI)
-// ===================================================
 function updateNowMarker() {
   const now = new Date();
   const diff = now - startOfToday;
@@ -126,14 +122,11 @@ function updateNowMarker() {
     return;
   }
 
-  nowMarker.style.display = "block";
   const hours = diff / MS_PER_HOUR;
+  nowMarker.style.display = "block";
   nowMarker.style.left = (hours * pixelsPerHour) + "px";
 }
 
-// ===================================================
-// ZOOM & JUMP
-// ===================================================
 function zoom(factor) {
   const centerTime =
     (timelineScroll.scrollLeft + timelineScroll.clientWidth / 2) / pixelsPerHour;
@@ -162,7 +155,7 @@ document.getElementById("zoomOutBtn").addEventListener("click", () => zoom(1 / 1
 document.getElementById("jumpNowBtn").addEventListener("click", jumpNow);
 
 // ===================================================
-// CALENDAR MODAL
+// CALENDAR MODAL (CLICK ONLY)
 // ===================================================
 const jumpDateButton = document.getElementById("jumpDateButton");
 const jumpDateModal = document.getElementById("jumpDateModal");
@@ -182,11 +175,9 @@ function renderCalendar() {
 
   for (let i = 0; i < DAYS_TOTAL; i++) {
     const d = new Date(startOfToday.getTime() + i * MS_PER_DAY);
-
     const div = document.createElement("div");
     div.className = "calendar-day";
     if (i === 0) div.classList.add("today");
-
     div.textContent = d.getDate();
 
     div.addEventListener("click", () => {
@@ -198,27 +189,21 @@ function renderCalendar() {
   }
 }
 
-// mở modal
-jumpDateButton.addEventListener("mouseenter", () => {
-  renderCalendar();
-  jumpDateModal.classList.add("active");
-});
 jumpDateButton.addEventListener("click", () => {
   renderCalendar();
   jumpDateModal.classList.add("active");
 });
 
-// đóng modal
-closeJumpModal.addEventListener("click", () =>
-  jumpDateModal.classList.remove("active")
-);
+closeJumpModal.addEventListener("click", () => {
+  jumpDateModal.classList.remove("active");
+});
 
 jumpDateModal.addEventListener("click", (e) => {
   if (e.target === jumpDateModal) jumpDateModal.classList.remove("active");
 });
 
 // ===================================================
-// PILL TOGGLE LOGIC
+// PILL TOGGLES
 // ===================================================
 const pillMainPending = document.getElementById("pillMainPending");
 const pillMainParallel = document.getElementById("pillMainParallel");
@@ -244,16 +229,18 @@ pillBgParallel.addEventListener("click", () => {
 });
 
 // ===================================================
-// SCORING
+// SCORING: duration / deadlineMinutes + ưu tiên task ngắn
 // ===================================================
-function computeScore(q, t, d) {
-  const t_norm = 1 / (t + 1);
-  const d_norm = 1 / (d + 1);
+function computeScore(durationMinutes, deadlineMinutes) {
+  const safeDeadline = Math.max(1, deadlineMinutes);
+  const ratio = durationMinutes / safeDeadline;
+  const isShortPriority =
+    durationMinutes <= 10 && deadlineMinutes <= 48 * 60; // 48 giờ
 
   return {
-    t_norm,
-    d_norm,
-    score: 0.6 * q + 0.3 * d_norm + 0.1 * t_norm
+    ratio,
+    isShortPriority,
+    score: ratio
   };
 }
 
@@ -265,7 +252,6 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
 
   const title = document.getElementById("mainTitle").value;
   const description = document.getElementById("mainDescription").value;
-  const importance = Number(document.getElementById("mainImportance").value);
   const duration = Number(document.getElementById("mainDuration").value);
   const deadlineStr = document.getElementById("mainDeadline").value;
 
@@ -278,24 +264,23 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
   if (deadlineStr) {
     const deadline = new Date(deadlineStr);
     deadlineAt = deadline.toISOString();
-    const diff = deadline.getTime() - Date.now();
-    deadlineMinutes = Math.max(1, Math.round(diff / 60000));
+    const diffMs = deadline.getTime() - Date.now();
+    deadlineMinutes = Math.max(1, Math.round(diffMs / 60000));
   }
 
-  const { t_norm, d_norm, score } =
-    computeScore(importance, duration, deadlineMinutes);
+  const { ratio, isShortPriority, score } =
+    computeScore(duration, deadlineMinutes);
 
   await addDoc(collection(db, "mainTasks"), {
     title,
     description,
-    importance,
     duration,
     deadline: deadlineMinutes,
     deadlineAt,
     isPending,
     isParallel,
-    t_norm,
-    d_norm,
+    ratio,
+    isShortPriority,
     score,
     createdAt: serverTimestamp()
   });
@@ -310,14 +295,22 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
 });
 
 // ===================================================
-// RENDER MAIN TASK LIST
+// LOAD MAIN TASKS (SORT THEO ƯU TIÊN MỚI)
 // ===================================================
 async function loadMainTasks() {
   const snap = await getDocs(collection(db, "mainTasks"));
   const items = [];
-
   snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
-  items.sort((a, b) => b.score - a.score);
+
+  items.sort((a, b) => {
+    const aShort = !!a.isShortPriority;
+    const bShort = !!b.isShortPriority;
+    if (aShort !== bShort) return aShort ? -1 : 1;
+
+    const aScore = typeof a.score === "number" ? a.score : 0;
+    const bScore = typeof b.score === "number" ? b.score : 0;
+    return bScore - aScore;
+  });
 
   const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
@@ -330,15 +323,18 @@ async function loadMainTasks() {
       ? new Date(task.deadlineAt).toLocaleString()
       : "N/A";
 
+    const shortLabel = task.isShortPriority ? "Có (≤10 phút & ≤48h)" : "Không";
+
     div.innerHTML = `
       <h4>${task.title}</h4>
       <p>${task.description || ""}</p>
-      <p class="task-meta">Importance: ${task.importance} · Duration: ${task.duration} phút</p>
+      <p class="task-meta">Duration: ${task.duration} phút</p>
       <p class="task-meta">Deadline: ${dt} · Còn: ${task.deadline} phút</p>
       <p class="task-meta">
-        Parallel: ${task.isParallel ? "Có" : "Không"}
+        Ưu tiên ngắn: ${shortLabel}
+        · Parallel: ${task.isParallel ? "Có" : "Không"}
         · Pending: ${task.isPending ? "Có" : "Không"}
-        · Score: ${task.score.toFixed(3)}
+        · Tỉ số (t/d): ${typeof task.score === "number" ? task.score.toFixed(3) : "N/A"}
       </p>
     `;
 
@@ -347,72 +343,11 @@ async function loadMainTasks() {
 }
 
 // ===================================================
-// BACKGROUND TASK FORM
+// BACKGROUND TASKS
 // ===================================================
 document.getElementById("backgroundTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const title = document.getElementById("bgTitle").value;
   const description = document.getElementById("bgDescription").value;
-  const startTime = document.getElementById("bgStartTime").value;
-  const endTime = document.getElementById("bgEndTime").value;
-  const isParallel = cbBgParallel.checked;
-
-  await addDoc(collection(db, "backgroundTasks"), {
-    title,
-    description,
-    startTime,
-    endTime,
-    isParallel,
-    createdAt: serverTimestamp()
-  });
-
-  e.target.reset();
-  pillBgParallel.classList.remove("active");
-  cbBgParallel.checked = false;
-
-  loadAllData();
-});
-
-// ===================================================
-// RENDER BACKGROUND TASK LIST
-// ===================================================
-async function loadBackgroundTasks() {
-  const snap = await getDocs(collection(db, "backgroundTasks"));
-  const items = [];
-
-  snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
-  items.sort((a, b) =>
-    (a.startTime || "").localeCompare(b.startTime || "")
-  );
-
-  const list = document.getElementById("backgroundTaskList");
-  list.innerHTML = "";
-
-  items.forEach(task => {
-    const div = document.createElement("div");
-    div.className = "task-item task-item-bg";
-
-    div.innerHTML = `
-      <h4>${task.title}</h4>
-      <p>${task.description || ""}</p>
-      <p class="task-meta">
-        ${task.startTime} – ${task.endTime}
-        · Parallel: ${task.isParallel ? "Có" : "Không"}
-      </p>
-    `;
-
-    list.appendChild(div);
-  });
-}
-
-// ===================================================
-// LOAD ALL
-// ===================================================
-async function loadAllData() {
-  await Promise.all([loadMainTasks(), loadBackgroundTasks()]);
-}
-
-renderTimeline();
-jumpNow();
-loadAllData();
+  const start
