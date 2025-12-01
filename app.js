@@ -7,10 +7,12 @@ import {
   collection,
   addDoc,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  doc,
+  getDoc,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// *** NHỚ THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
@@ -57,20 +59,18 @@ let pixelsPerHour = 60;
 const MIN_PX = 24;
 const MAX_PX = 160;
 
-// Start of today
 const startOfToday = (() => {
   const n = new Date();
   return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 })();
 
-// Format header labels
 function formatDayLabel(date) {
   const w = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
 // ===================================================
-// RENDER TIMELINE HEADER
+// RENDER TIMELINE
 // ===================================================
 function renderTimeline() {
   const totalWidth = HOURS_TOTAL * pixelsPerHour;
@@ -116,9 +116,6 @@ function renderTimeline() {
   updateNowMarker();
 }
 
-// ===================================================
-// NOW MARKER (VẠCH ĐỎ HIỆN TẠI)
-// ===================================================
 function updateNowMarker() {
   const now = new Date();
   const diff = now - startOfToday;
@@ -164,7 +161,7 @@ document.getElementById("zoomOutBtn").addEventListener("click", () => zoom(1 / 1
 document.getElementById("jumpNowBtn").addEventListener("click", jumpNow);
 
 // ===================================================
-// CALENDAR MODAL
+// CALENDAR MODAL – CLICK ONLY
 // ===================================================
 const jumpDateButton = document.getElementById("jumpDateButton");
 const jumpDateModal = document.getElementById("jumpDateModal");
@@ -200,13 +197,11 @@ function renderCalendar() {
   }
 }
 
-// mở modal
 jumpDateButton.addEventListener("click", () => {
   renderCalendar();
   jumpDateModal.classList.add("active");
 });
 
-// đóng modal
 closeJumpModal.addEventListener("click", () =>
   jumpDateModal.classList.remove("active")
 );
@@ -242,21 +237,30 @@ pillBgParallel.addEventListener("click", () => {
 });
 
 // ===================================================
-// SCORING
+// COUNTER HELPER – GÁN ID TỰ TĂNG
 // ===================================================
-function computeScore(q, t, d) {
-  const t_norm = 1 / (t + 1);
-  const d_norm = 1 / (d + 1);
+async function getNextCounter(fieldName) {
+  const countersRef = doc(db, "metadata", "counters");
+  const snap = await getDoc(countersRef);
 
-  return {
-    t_norm,
-    d_norm,
-    score: 0.6 * q + 0.3 * d_norm + 0.1 * t_norm
-  };
+  let data;
+  if (!snap.exists()) {
+    data = { mainTaskCount: 0, backgroundTaskCount: 0 };
+  } else {
+    data = snap.data();
+    if (data.mainTaskCount == null) data.mainTaskCount = 0;
+    if (data.backgroundTaskCount == null) data.backgroundTaskCount = 0;
+  }
+
+  const newCount = (data[fieldName] || 0) + 1;
+  data[fieldName] = newCount;
+
+  await setDoc(countersRef, data);
+  return newCount;
 }
 
 // ===================================================
-// MAIN TASK FORM
+// MAIN TASKS – SUBMIT
 // ===================================================
 document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -270,52 +274,89 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
   const isPending = cbMainPending.checked;
   const isParallel = cbMainParallel.checked;
 
-  let deadlineMinutes = 60;
   let deadlineAt = null;
-
   if (deadlineStr) {
-    const deadline = new Date(deadlineStr);
-    deadlineAt = deadline.toISOString();
-    const diff = deadline.getTime() - Date.now();
-    deadlineMinutes = Math.max(1, Math.round(diff / 60000));
+    const d = new Date(deadlineStr);
+    deadlineAt = d.toISOString();
   }
 
-  const { t_norm, d_norm, score } =
-    computeScore(importance, duration, deadlineMinutes);
+  try {
+    const taskId = await getNextCounter("mainTaskCount");
 
-  await addDoc(collection(db, "mainTasks"), {
-    title,
-    description,
-    importance,
-    duration,
-    deadline: deadlineMinutes,
-    deadlineAt,
-    isPending,
-    isParallel,
-    t_norm,
-    d_norm,
-    score,
-    createdAt: serverTimestamp()
-  });
+    await addDoc(collection(db, "mainTasks"), {
+      taskId,
+      title,
+      description,
+      importance,
+      duration,
+      deadlineAt,
+      isPending,
+      isParallel,
+      createdAt: serverTimestamp()
+    });
 
-  e.target.reset();
-  pillMainPending.classList.remove("active");
-  pillMainParallel.classList.remove("active");
-  cbMainPending.checked = false;
-  cbMainParallel.checked = false;
+    e.target.reset();
+    pillMainPending.classList.remove("active");
+    pillMainParallel.classList.remove("active");
+    cbMainPending.checked = false;
+    cbMainParallel.checked = false;
 
-  loadAllData();
+    loadAllData();
+  } catch (err) {
+    console.error("Error adding main task:", err);
+    alert("Lỗi khi lưu main task. Kiểm tra console.");
+  }
 });
 
 // ===================================================
-// RENDER MAIN TASK LIST
+// MAIN TASKS – LOAD & SORT (PRIORITY MỚI)
 // ===================================================
 async function loadMainTasks() {
   const snap = await getDocs(collection(db, "mainTasks"));
   const items = [];
+  snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
 
-  snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
-  items.sort((a, b) => b.score - a.score);
+  const now = Date.now();
+  const FORTY_EIGHT_HOURS_MIN = 48 * 60;
+
+  items.forEach(task => {
+    // minutesUntilDeadline
+    let minutesLeft;
+    if (task.deadlineAt) {
+      const d = new Date(task.deadlineAt);
+      const diffMs = d.getTime() - now;
+      minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
+    } else if (typeof task.deadline === "number") {
+      // fallback cho dữ liệu cũ
+      minutesLeft = Math.max(1, task.deadline);
+    } else {
+      minutesLeft = Infinity;
+    }
+
+    const duration = Number(task.duration) || 0;
+    const priority = (minutesLeft === Infinity || minutesLeft <= 0)
+      ? 0
+      : duration / minutesLeft;
+
+    const isShortBoost =
+      duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
+
+    task._minutesLeft = minutesLeft;
+    task._priority = priority;
+    task._isShortBoost = isShortBoost;
+  });
+
+  // Sort:
+  // 1. isShortBoost = true trước
+  // 2. priority giảm dần
+  items.sort((a, b) => {
+    if (a._isShortBoost && !b._isShortBoost) return -1;
+    if (!a._isShortBoost && b._isShortBoost) return 1;
+
+    const pa = a._priority || 0;
+    const pb = b._priority || 0;
+    return pb - pa;
+  });
 
   const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
@@ -324,19 +365,31 @@ async function loadMainTasks() {
     const div = document.createElement("div");
     div.className = "task-item task-item-main";
 
-    const dt = task.deadlineAt
+    const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+    const deadlineText = task.deadlineAt
       ? new Date(task.deadlineAt).toLocaleString()
       : "N/A";
 
+    const minutesText =
+      task._minutesLeft === Infinity ? "N/A" : `${task._minutesLeft} phút`;
+    const priorityText = isFinite(task._priority)
+      ? task._priority.toFixed(3)
+      : "N/A";
+
     div.innerHTML = `
-      <h4>${task.title}</h4>
+      <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
-      <p class="task-meta">Importance: ${task.importance} · Duration: ${task.duration} phút</p>
-      <p class="task-meta">Deadline: ${dt} · Còn: ${task.deadline} phút</p>
       <p class="task-meta">
-        Parallel: ${task.isParallel ? "Có" : "Không"}
-        · Pending: ${task.isPending ? "Có" : "Không"}
-        · Score: ${task.score.toFixed(3)}
+        Importance: ${task.importance} · Duration: ${task.duration} phút
+      </p>
+      <p class="task-meta">
+        Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
+      </p>
+      <p class="task-meta">
+        Short-boost: ${task._isShortBoost ? "Có" : "Không"} ·
+        Priority: ${priorityText} ·
+        Parallel: ${task.isParallel ? "Có" : "Không"} ·
+        Pending: ${task.isPending ? "Có" : "Không"}
       </p>
     `;
 
@@ -345,7 +398,7 @@ async function loadMainTasks() {
 }
 
 // ===================================================
-// BACKGROUND TASK FORM
+// BACKGROUND TASKS – SUBMIT
 // ===================================================
 document.getElementById("backgroundTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -356,30 +409,38 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
   const endTime = document.getElementById("bgEndTime").value;
   const isParallel = cbBgParallel.checked;
 
-  await addDoc(collection(db, "backgroundTasks"), {
-    title,
-    description,
-    startTime,
-    endTime,
-    isParallel,
-    createdAt: serverTimestamp()
-  });
+  try {
+    const taskId = await getNextCounter("backgroundTaskCount");
 
-  e.target.reset();
-  pillBgParallel.classList.remove("active");
-  cbBgParallel.checked = false;
+    await addDoc(collection(db, "backgroundTasks"), {
+      taskId,
+      title,
+      description,
+      startTime,
+      endTime,
+      isParallel,
+      createdAt: serverTimestamp()
+    });
 
-  loadAllData();
+    e.target.reset();
+    pillBgParallel.classList.remove("active");
+    cbBgParallel.checked = false;
+
+    loadAllData();
+  } catch (err) {
+    console.error("Error adding background task:", err);
+    alert("Lỗi khi lưu background task. Kiểm tra console.");
+  }
 });
 
 // ===================================================
-// RENDER BACKGROUND TASK LIST
+// BACKGROUND TASKS – LOAD
 // ===================================================
 async function loadBackgroundTasks() {
   const snap = await getDocs(collection(db, "backgroundTasks"));
   const items = [];
+  snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
 
-  snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
   items.sort((a, b) =>
     (a.startTime || "").localeCompare(b.startTime || "")
   );
@@ -391,12 +452,14 @@ async function loadBackgroundTasks() {
     const div = document.createElement("div");
     div.className = "task-item task-item-bg";
 
+    const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+
     div.innerHTML = `
-      <h4>${task.title}</h4>
+      <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
-        ${task.startTime} – ${task.endTime}
-        · Parallel: ${task.isParallel ? "Có" : "Không"}
+        ${task.startTime} – ${task.endTime} ·
+        Parallel: ${task.isParallel ? "Có" : "Không"}
       </p>
     `;
 
@@ -405,7 +468,7 @@ async function loadBackgroundTasks() {
 }
 
 // ===================================================
-// LOAD ALL
+// LOAD ALL & INIT
 // ===================================================
 async function loadAllData() {
   await Promise.all([loadMainTasks(), loadBackgroundTasks()]);
