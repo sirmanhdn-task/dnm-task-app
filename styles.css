@@ -19,7 +19,8 @@ body {
   color: var(--text-main);
 }
 
-/* HEADER */
+/* HEADER ---------------------------------------------- */
+
 .app-header {
   padding: 12px 4px 8px;
   display: flex;
@@ -28,8 +29,10 @@ body {
 }
 
 .app-title {
+  font-family: "SF Pro Display";
   font-size: 22px;
   font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .app-subtitle {
@@ -37,14 +40,15 @@ body {
   color: var(--text-muted);
 }
 
-/* TABS */
+/* TABS ------------------------------------------------ */
+
 .tabs {
   display: flex;
   background: rgba(255,255,255,0.9);
-  padding: 4px;
   border-radius: 999px;
-  border: 1px solid var(--border-subtle);
+  padding: 4px;
   backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
   position: sticky;
   top: 0;
   z-index: 40;
@@ -52,8 +56,8 @@ body {
 
 .tab-button {
   flex: 1;
-  border: none;
   background: transparent;
+  border: none;
   padding: 8px 4px;
   border-radius: 999px;
   color: var(--text-muted);
@@ -68,32 +72,39 @@ body {
 .tab-panel { display: none; }
 .tab-panel.active { display: block; margin-top: 12px; }
 
-/* CARD, FORMS */
+/* FORMS + CARDS --------------------------------------- */
+
 .card {
   background: #fff;
   border-radius: 18px;
   padding: 12px;
-  border: 1px solid rgba(148,163,184,0.25);
+  border: 1px solid rgba(148,163,184,0.2);
   box-shadow: 0 10px 30px rgba(15,23,42,0.06);
 }
 
 .list-card { max-height: 320px; overflow-y: auto; }
 
-form input, form textarea {
+form input,
+form textarea {
   width: 100%;
   padding: 8px 10px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
   background: #f9fafb;
   margin-bottom: 8px;
+  font-size: 14px;
 }
 
-form input:focus, form textarea:focus {
+form input:focus,
+form textarea:focus {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
 }
 
-.form-row { display: flex; gap: 8px; }
+.form-row {
+  display: flex;
+  gap: 8px;
+}
 
 .inline-label {
   display: flex;
@@ -102,7 +113,14 @@ form input:focus, form textarea:focus {
   color: var(--text-muted);
 }
 
-/* BUTTONS */
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* BUTTONS --------------------------------------------- */
+
 .primary-btn,
 .secondary-btn,
 .icon-btn {
@@ -115,12 +133,13 @@ form input:focus, form textarea:focus {
   background: var(--accent);
   color: #fff;
   padding: 8px 16px;
+  font-size: 13px;
 }
 
 .secondary-btn {
   background: #e5e7eb;
-  color: #111;
   padding: 8px 16px;
+  font-size: 13px;
 }
 
 .icon-btn {
@@ -131,7 +150,8 @@ form input:focus, form textarea:focus {
 
 .full-width { width: 100%; }
 
-/* PILL TOGGLE */
+/* PILL TOGGLE ----------------------------------------- */
+
 .pill-row {
   display: flex;
   gap: 8px;
@@ -140,13 +160,14 @@ form input:focus, form textarea:focus {
 
 .pill-toggle {
   padding: 6px 14px;
-  background: #e5e7eb;
   border-radius: 999px;
+  background: #e5e7eb;
   border: 1px solid #d1d5db;
   color: #111;
-  font-size: 13px;
   cursor: pointer;
-  transition: .15s;
+  font-size: 13px;
+  user-select: none;
+  transition: 0.15s;
 }
 
 .pill-toggle.active {
@@ -156,11 +177,13 @@ form input:focus, form textarea:focus {
   box-shadow: 0 2px 6px rgba(0,122,255,0.25);
 }
 
-/* TIMELINE */
+/* TIMELINE -------------------------------------------- */
+
 .timeline-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .timeline-wrapper {
@@ -206,33 +229,26 @@ form input:focus, form textarea:focus {
   padding-top: 2px;
 }
 
-/* LANE SEPARATOR – phiên bản 1.1.3b */
 .timeline-lane {
-  position: relative;
   min-height: 40px;
+  border-bottom: 1px solid rgba(148,163,184,0.2);
 }
 
-.timeline-lane::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(to right, #e5e7eb, #cbd5e1);
-  opacity: 0.9;
-}
+.lane-content { position: relative; }
 
-/* NOW MARKER */
+/* NOW MARKER ------------------------------------------ */
+
 .timeline-now-marker {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
   background: var(--danger);
+  pointer-events: none;
 }
 
-/* LIST ITEMS */
+/* LIST TASK ITEMS ------------------------------------- */
+
 .task-item {
   padding: 8px;
   margin-bottom: 6px;
@@ -250,7 +266,8 @@ form input:focus, form textarea:focus {
   border-color: #d1d5db;
 }
 
-/* MODAL */
+/* MODAL ----------------------------------------------- */
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -264,12 +281,11 @@ form input:focus, form textarea:focus {
 
 .modal-overlay.active {
   display: flex;
-  animation: fadeIn .15s;
+  animation: fadeIn 0.15s;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {opacity: 0;} to {opacity: 1;}
 }
 
 .modal-content {
@@ -278,13 +294,13 @@ form input:focus, form textarea:focus {
   border-radius: 16px;
   width: 92%;
   max-width: 360px;
-  animation: fadeUp .2s ease;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  animation: fadeUp 0.2s ease;
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {opacity:0; transform:translateY(20px);}
+  to   {opacity:1; transform:translateY(0);}
 }
 
 .calendar-grid {
@@ -295,12 +311,13 @@ form input:focus, form textarea:focus {
 }
 
 .calendar-day {
-  padding: 10px 6px;
-  border-radius: 10px;
   background: #f3f4f6;
+  border-radius: 10px;
+  padding: 10px 6px;
   text-align: center;
-  border: 1px solid #e5e7eb;
   cursor: pointer;
+  user-select: none;
+  border: 1px solid #e5e7eb;
 }
 
 .calendar-day.today {
@@ -318,4 +335,5 @@ form input:focus, form textarea:focus {
 @media (max-width: 768px) {
   body { padding: 0 10px 16px; }
   .form-row { flex-direction: column; }
+  .app-title { font-size: 20px; }
 }
