@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.4</title>
+  <title>DNM's Tasker v1.1.3b</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -54,7 +54,6 @@
         </div>
 
         <div class="timeline-now-marker" id="timelineNowMarker"></div>
-
       </div>
     </section>
 
@@ -67,6 +66,7 @@
         <textarea id="mainDescription" placeholder="Mô tả"></textarea>
 
         <div class="form-row">
+          <input type="number" id="mainImportance" placeholder="Importance (1–5)" min="1" max="5" required>
           <input type="number" id="mainDuration" placeholder="Duration (phút)" min="1" required>
         </div>
 
@@ -75,13 +75,12 @@
           <input type="datetime-local" id="mainDeadline" required>
         </label>
 
-        <!-- PILL TOGGLES -->
+        <!-- PILLS -->
         <div class="pill-row">
           <div class="pill-toggle" id="pillMainPending">Pending</div>
           <div class="pill-toggle" id="pillMainParallel">Parallel</div>
         </div>
 
-        <!-- Hidden checkboxes -->
         <input type="checkbox" id="mainIsPending" hidden>
         <input type="checkbox" id="mainIsParallel" hidden>
 
@@ -158,14 +157,9 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.4
-- Timeline lanes có đường phân cách + hiệu ứng độ sâu (3D nhẹ).
-- Jump to date chỉ mở modal khi click, không còn hover.
-- Bỏ importance; công thức trọng số mới:
-    + score = duration / deadlineMinutes (deadline tính từ hiện tại).
-    + các task duration ≤ 10 phút và deadline ≤ 48h được nhóm ưu tiên,
-      luôn đứng trước các task khác.
-- Danh sách main task hiển thị duration, deadline, score, cờ ưu tiên ngắn.
+v1.1.3b
+- Lane timeline phân rõ bằng gradient border 3px
+- Jump To Date chỉ mở bằng CLICK, bỏ hover
 ===========================================
 -->
 
