@@ -20,7 +20,6 @@ body {
 }
 
 /* HEADER */
-
 .app-header {
   padding: 12px 4px 8px;
   display: flex;
@@ -29,10 +28,8 @@ body {
 }
 
 .app-title {
-  font-family: "SF Pro Display";
   font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.3px;
 }
 
 .app-subtitle {
@@ -41,14 +38,13 @@ body {
 }
 
 /* TABS */
-
 .tabs {
   display: flex;
   background: rgba(255,255,255,0.9);
-  border-radius: 999px;
   padding: 4px;
-  backdrop-filter: blur(12px);
+  border-radius: 999px;
   border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 40;
@@ -56,8 +52,8 @@ body {
 
 .tab-button {
   flex: 1;
-  background: transparent;
   border: none;
+  background: transparent;
   padding: 8px 4px;
   border-radius: 999px;
   color: var(--text-muted);
@@ -72,39 +68,32 @@ body {
 .tab-panel { display: none; }
 .tab-panel.active { display: block; margin-top: 12px; }
 
-/* CARD & FORM */
-
+/* CARD, FORMS */
 .card {
   background: #fff;
   border-radius: 18px;
   padding: 12px;
-  border: 1px solid rgba(148,163,184,0.2);
+  border: 1px solid rgba(148,163,184,0.25);
   box-shadow: 0 10px 30px rgba(15,23,42,0.06);
 }
 
 .list-card { max-height: 320px; overflow-y: auto; }
 
-form input,
-form textarea {
+form input, form textarea {
   width: 100%;
   padding: 8px 10px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
   background: #f9fafb;
   margin-bottom: 8px;
-  font-size: 14px;
 }
 
-form input:focus,
-form textarea:focus {
+form input:focus, form textarea:focus {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
 }
 
-.form-row {
-  display: flex;
-  gap: 8px;
-}
+.form-row { display: flex; gap: 8px; }
 
 .inline-label {
   display: flex;
@@ -114,7 +103,6 @@ form textarea:focus {
 }
 
 /* BUTTONS */
-
 .primary-btn,
 .secondary-btn,
 .icon-btn {
@@ -127,13 +115,12 @@ form textarea:focus {
   background: var(--accent);
   color: #fff;
   padding: 8px 16px;
-  font-size: 13px;
 }
 
 .secondary-btn {
   background: #e5e7eb;
+  color: #111;
   padding: 8px 16px;
-  font-size: 13px;
 }
 
 .icon-btn {
@@ -145,7 +132,6 @@ form textarea:focus {
 .full-width { width: 100%; }
 
 /* PILL TOGGLE */
-
 .pill-row {
   display: flex;
   gap: 8px;
@@ -154,14 +140,13 @@ form textarea:focus {
 
 .pill-toggle {
   padding: 6px 14px;
-  border-radius: 999px;
   background: #e5e7eb;
+  border-radius: 999px;
   border: 1px solid #d1d5db;
   color: #111;
-  cursor: pointer;
   font-size: 13px;
-  user-select: none;
-  transition: 0.15s;
+  cursor: pointer;
+  transition: .15s;
 }
 
 .pill-toggle.active {
@@ -171,23 +156,19 @@ form textarea:focus {
   box-shadow: 0 2px 6px rgba(0,122,255,0.25);
 }
 
-/* TIMELINE CORE */
-
+/* TIMELINE */
 .timeline-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
 }
 
 .timeline-wrapper {
-  background: #f3f4f6;
+  background: #fff;
   border-radius: 18px;
   padding: 8px 0;
-  border: 1px solid rgba(148,163,184,0.3);
-  box-shadow:
-    0 18px 40px rgba(15,23,42,0.18),
-    inset 0 1px 0 rgba(255,255,255,0.7);
+  border: 1px solid rgba(148,163,184,0.25);
+  box-shadow: 0 10px 30px rgba(15,23,42,0.06);
   margin-bottom: 12px;
 }
 
@@ -197,17 +178,15 @@ form textarea:focus {
   position: relative;
 }
 
-/* Header ngày + giờ */
-
 .timeline-header {
   display: flex;
   height: 40px;
-  border-bottom: 1px solid rgba(148,163,184,0.45);
-  background: linear-gradient(to bottom, #fdfdfd, #e5e7eb);
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
 }
 
 .timeline-day {
-  border-right: 1px solid rgba(148,163,184,0.35);
+  border-right: 1px solid var(--border-subtle);
 }
 
 .timeline-day-label {
@@ -227,39 +206,33 @@ form textarea:focus {
   padding-top: 2px;
 }
 
-/* LANE với hiệu ứng 3D nhẹ */
-
+/* LANE SEPARATOR – phiên bản 1.1.3b */
 .timeline-lane {
   position: relative;
-  min-height: 42px;
-  background: linear-gradient(to bottom, #f9fafb, #e5e7eb);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.9),
-    inset 0 -1px 0 rgba(148,163,184,0.55);
+  min-height: 40px;
 }
 
-.timeline-lane + .timeline-lane {
-  border-top: 1px solid rgba(148,163,184,0.45);
+.timeline-lane::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(to right, #e5e7eb, #cbd5e1);
+  opacity: 0.9;
 }
 
-.lane-content {
-  position: relative;
-}
-
-/* Vạch NOW */
-
+/* NOW MARKER */
 .timeline-now-marker {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
   background: var(--danger);
-  pointer-events: none;
-  box-shadow: 0 0 4px rgba(255,59,48,0.7);
 }
 
-/* TASK LIST ITEMS */
-
+/* LIST ITEMS */
 .task-item {
   padding: 8px;
   margin-bottom: 6px;
@@ -278,7 +251,6 @@ form textarea:focus {
 }
 
 /* MODAL */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -292,11 +264,12 @@ form textarea:focus {
 
 .modal-overlay.active {
   display: flex;
-  animation: fadeIn 0.15s;
+  animation: fadeIn .15s;
 }
 
 @keyframes fadeIn {
-  from { opacity:0; } to { opacity:1; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .modal-content {
@@ -305,13 +278,13 @@ form textarea:focus {
   border-radius: 16px;
   width: 92%;
   max-width: 360px;
+  animation: fadeUp .2s ease;
   box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-  animation: fadeUp 0.2s ease;
 }
 
 @keyframes fadeUp {
-  from { opacity:0; transform:translateY(20px); }
-  to { opacity:1; transform:translateY(0); }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .calendar-grid {
@@ -322,13 +295,12 @@ form textarea:focus {
 }
 
 .calendar-day {
-  background: #f3f4f6;
-  border-radius: 10px;
   padding: 10px 6px;
+  border-radius: 10px;
+  background: #f3f4f6;
   text-align: center;
-  cursor: pointer;
-  user-select: none;
   border: 1px solid #e5e7eb;
+  cursor: pointer;
 }
 
 .calendar-day.today {
@@ -343,10 +315,7 @@ form textarea:focus {
   color: var(--accent);
 }
 
-/* RESPONSIVE */
-
 @media (max-width: 768px) {
   body { padding: 0 10px 16px; }
   .form-row { flex-direction: column; }
-  .app-title { font-size: 20px; }
 }
