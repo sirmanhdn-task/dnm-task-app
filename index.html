@@ -2,14 +2,14 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Tasker v1.1</title>
+  <title>DNM's Tasker v1.1.1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <header class="app-header">
-    <h1>Tasker</h1>
+    <h1 class="app-title">DNM's Tasker</h1>
     <span class="app-subtitle">Focus on what matters</span>
   </header>
 
@@ -29,11 +29,8 @@
         <button id="jumpNowBtn" class="primary-btn">Jump to now</button>
       </div>
       <div class="right-controls">
-        <label class="jump-date-label">
-          <span>Jump to date</span>
-          <input type="date" id="jumpDateInput">
-        </label>
-        <button id="jumpDateBtn" class="secondary-btn">Go</button>
+        <button id="jumpDateButton" class="secondary-btn">Jump to date</button>
+        <input type="date" id="jumpDateInput" style="display:none">
       </div>
     </section>
 
@@ -43,23 +40,20 @@
         <div class="timeline-header" id="timelineHeader"></div>
 
         <div class="timeline-lane" id="timelineLaneMain">
-          <div class="lane-label">Main tasks</div>
           <div class="lane-content" id="laneMainContent">
-            <!-- v1.1: sẽ để trống, version sau mới fill task -->
+            <!-- v1.1.1: chưa render block task, để version sau -->
           </div>
         </div>
 
         <div class="timeline-lane" id="timelineLaneBackground">
-          <div class="lane-label">Background</div>
           <div class="lane-content" id="laneBackgroundContent">
-            <!-- v1.1: sẽ để trống -->
+            <!-- v1.1.1: chưa render block task, để version sau -->
           </div>
         </div>
 
         <div class="timeline-lane" id="timelineLanePending">
-          <div class="lane-label">Pending</div>
           <div class="lane-content" id="lanePendingContent">
-            <!-- v1.1: sẽ để trống -->
+            <!-- v1.1.1: chưa render block task, để version sau -->
           </div>
         </div>
 
@@ -72,15 +66,27 @@
       <form id="mainTaskForm" class="card">
         <input type="text" id="mainTitle" placeholder="Tên main task" required>
         <textarea id="mainDescription" placeholder="Mô tả"></textarea>
+
         <div class="form-row">
           <input type="number" id="mainImportance" placeholder="Importance (1–5)" min="1" max="5" required>
           <input type="number" id="mainDuration" placeholder="Duration (phút)" min="1" required>
         </div>
-        <input type="number" id="mainDeadline" placeholder="Deadline còn lại (phút)" min="1" required>
+
+        <label class="inline-label">
+          <span>Deadline</span>
+          <input type="datetime-local" id="mainDeadline" required>
+        </label>
+
         <label class="checkbox-line">
           <input type="checkbox" id="mainIsPending">
           <span>Đánh dấu là pending (không đưa vào timeline chính)</span>
         </label>
+
+        <label class="checkbox-line">
+          <input type="checkbox" id="mainIsParallel">
+          <span>Cho phép chạy song song (Parallel)</span>
+        </label>
+
         <button type="submit" class="primary-btn full-width">Thêm main task</button>
       </form>
 
@@ -98,6 +104,7 @@
       <form id="backgroundTaskForm" class="card">
         <input type="text" id="bgTitle" placeholder="Tên background task" required>
         <textarea id="bgDescription" placeholder="Mô tả"></textarea>
+
         <div class="form-row">
           <label class="inline-label">
             <span>Start</span>
@@ -108,10 +115,12 @@
             <input type="time" id="bgEndTime" required>
           </label>
         </div>
+
         <label class="checkbox-line">
           <input type="checkbox" id="bgIsParallel">
-          <span>Cho phép chạy song song với main task</span>
+          <span>Parallel (cho phép main task chạy cùng)</span>
         </label>
+
         <button type="submit" class="primary-btn full-width">Thêm background task</button>
       </form>
 
@@ -127,7 +136,7 @@
     <section class="panel-section">
       <h2>Settings</h2>
       <div class="card">
-        <p>Ở v1.1, Settings mới chỉ là placeholder. Các bước tiếp theo:</p>
+        <p>Ở v1.1.1, Settings mới chỉ là placeholder. Các bước tiếp theo dự kiến:</p>
         <ul>
           <li>Cho phép chỉnh trọng số: importance / deadline / duration.</li>
           <li>Cấu hình khung giờ làm việc mặc định.</li>
@@ -138,5 +147,23 @@
   </main>
 
   <script type="module" src="app.js"></script>
+
+  <!--
+  ===========================================
+  VERSION NOTES
+  ===========================================
+  v1.1.1
+  - Đổi tiêu đề app thành "DNM's Tasker" với font iOS-style.
+  - Deadline cho main task chuyển sang datetime picker (input datetime-local).
+  - Lưu cả deadlineAt (ISO string) và deadlineMinutes (số phút còn lại).
+  - Cải tiến Jump-to-date: dùng button "Jump to date" + date input ẩn;
+    hover/click mở lịch; chọn ngày là nhảy timeline luôn.
+  - Thêm tuỳ chọn Parallel / Non-parallel cho main task (field isParallel).
+  - Thêm tuỳ chọn Parallel / Non-parallel cho background task (field isParallel).
+  - Loại bỏ label text đầu mỗi lane timeline; sau này dùng màu block task
+    để phân biệt loại main/bg/pending.
+  - Chuẩn hoá CSS, chuẩn bị class màu cho block main/bg/pending để dùng ở phiên bản sau.
+  ===========================================
+  -->
 </body>
 </html>
