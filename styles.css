@@ -19,7 +19,7 @@ body {
   color: var(--text-main);
 }
 
-/* HEADER ---------------------------------------------- */
+/* HEADER */
 
 .app-header {
   padding: 12px 4px 8px;
@@ -40,7 +40,7 @@ body {
   color: var(--text-muted);
 }
 
-/* TABS ------------------------------------------------ */
+/* TABS */
 
 .tabs {
   display: flex;
@@ -72,7 +72,7 @@ body {
 .tab-panel { display: none; }
 .tab-panel.active { display: block; margin-top: 12px; }
 
-/* FORMS + CARDS --------------------------------------- */
+/* CARD & FORM */
 
 .card {
   background: #fff;
@@ -113,13 +113,7 @@ form textarea:focus {
   color: var(--text-muted);
 }
 
-.checkbox-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* BUTTONS --------------------------------------------- */
+/* BUTTONS */
 
 .primary-btn,
 .secondary-btn,
@@ -150,7 +144,7 @@ form textarea:focus {
 
 .full-width { width: 100%; }
 
-/* PILL TOGGLE ----------------------------------------- */
+/* PILL TOGGLE */
 
 .pill-row {
   display: flex;
@@ -177,7 +171,7 @@ form textarea:focus {
   box-shadow: 0 2px 6px rgba(0,122,255,0.25);
 }
 
-/* TIMELINE -------------------------------------------- */
+/* TIMELINE CORE */
 
 .timeline-controls {
   display: flex;
@@ -187,11 +181,13 @@ form textarea:focus {
 }
 
 .timeline-wrapper {
-  background: #fff;
+  background: #f3f4f6;
   border-radius: 18px;
   padding: 8px 0;
-  border: 1px solid rgba(148,163,184,0.25);
-  box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+  border: 1px solid rgba(148,163,184,0.3);
+  box-shadow:
+    0 18px 40px rgba(15,23,42,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.7);
   margin-bottom: 12px;
 }
 
@@ -201,15 +197,17 @@ form textarea:focus {
   position: relative;
 }
 
+/* Header ngày + giờ */
+
 .timeline-header {
   display: flex;
   height: 40px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
+  border-bottom: 1px solid rgba(148,163,184,0.45);
+  background: linear-gradient(to bottom, #fdfdfd, #e5e7eb);
 }
 
 .timeline-day {
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid rgba(148,163,184,0.35);
 }
 
 .timeline-day-label {
@@ -229,14 +227,26 @@ form textarea:focus {
   padding-top: 2px;
 }
 
+/* LANE với hiệu ứng 3D nhẹ */
+
 .timeline-lane {
-  min-height: 40px;
-  border-bottom: 1px solid rgba(148,163,184,0.2);
+  position: relative;
+  min-height: 42px;
+  background: linear-gradient(to bottom, #f9fafb, #e5e7eb);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    inset 0 -1px 0 rgba(148,163,184,0.55);
 }
 
-.lane-content { position: relative; }
+.timeline-lane + .timeline-lane {
+  border-top: 1px solid rgba(148,163,184,0.45);
+}
 
-/* NOW MARKER ------------------------------------------ */
+.lane-content {
+  position: relative;
+}
+
+/* Vạch NOW */
 
 .timeline-now-marker {
   position: absolute;
@@ -245,9 +255,10 @@ form textarea:focus {
   width: 2px;
   background: var(--danger);
   pointer-events: none;
+  box-shadow: 0 0 4px rgba(255,59,48,0.7);
 }
 
-/* LIST TASK ITEMS ------------------------------------- */
+/* TASK LIST ITEMS */
 
 .task-item {
   padding: 8px;
@@ -266,7 +277,7 @@ form textarea:focus {
   border-color: #d1d5db;
 }
 
-/* MODAL ----------------------------------------------- */
+/* MODAL */
 
 .modal-overlay {
   position: fixed;
@@ -285,7 +296,7 @@ form textarea:focus {
 }
 
 @keyframes fadeIn {
-  from {opacity: 0;} to {opacity: 1;}
+  from { opacity:0; } to { opacity:1; }
 }
 
 .modal-content {
@@ -299,8 +310,8 @@ form textarea:focus {
 }
 
 @keyframes fadeUp {
-  from {opacity:0; transform:translateY(20px);}
-  to   {opacity:1; transform:translateY(0);}
+  from { opacity:0; transform:translateY(20px); }
+  to { opacity:1; transform:translateY(0); }
 }
 
 .calendar-grid {
@@ -331,6 +342,8 @@ form textarea:focus {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* RESPONSIVE */
 
 @media (max-width: 768px) {
   body { padding: 0 10px 16px; }
