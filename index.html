@@ -2,91 +2,141 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Tasker v1.0</title>
+  <title>Tasker v1.1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <h1>Tasker v1.0</h1>
+  <header class="app-header">
+    <h1>Tasker</h1>
+    <span class="app-subtitle">Focus on what matters</span>
+  </header>
 
   <!-- TAB HEADER -->
-  <div class="tabs">
+  <nav class="tabs">
     <button class="tab-button active" data-tab-target="tab-timeline">Timeline</button>
     <button class="tab-button" data-tab-target="tab-background">Background tasks</button>
     <button class="tab-button" data-tab-target="tab-settings">Settings</button>
-  </div>
+  </nav>
 
   <!-- TAB: TIMELINE -->
-  <div class="tab-panel active" id="tab-timeline">
-    <h2>Timeline</h2>
-
-    <div class="lanes">
-      <div class="lane">
-        <h3>Lane 1: Main tasks</h3>
-        <div id="laneMainTasks"></div>
+  <main class="tab-panel active" id="tab-timeline">
+    <section class="timeline-controls">
+      <div class="left-controls">
+        <button id="zoomOutBtn" class="icon-btn" title="Zoom out">−</button>
+        <button id="zoomInBtn" class="icon-btn" title="Zoom in">+</button>
+        <button id="jumpNowBtn" class="primary-btn">Jump to now</button>
       </div>
-      <div class="lane">
-        <h3>Lane 2: Background tasks</h3>
-        <div id="laneBackgroundTasks"></div>
+      <div class="right-controls">
+        <label class="jump-date-label">
+          <span>Jump to date</span>
+          <input type="date" id="jumpDateInput">
+        </label>
+        <button id="jumpDateBtn" class="secondary-btn">Go</button>
       </div>
-      <div class="lane">
-        <h3>Lane 3: Pending tasks</h3>
-        <div id="lanePendingTasks"></div>
+    </section>
+
+    <!-- TIMELINE HORIZONTAL -->
+    <section class="timeline-wrapper">
+      <div class="timeline-scroll" id="timelineScroll">
+        <div class="timeline-header" id="timelineHeader"></div>
+
+        <div class="timeline-lane" id="timelineLaneMain">
+          <div class="lane-label">Main tasks</div>
+          <div class="lane-content" id="laneMainContent">
+            <!-- v1.1: sẽ để trống, version sau mới fill task -->
+          </div>
+        </div>
+
+        <div class="timeline-lane" id="timelineLaneBackground">
+          <div class="lane-label">Background</div>
+          <div class="lane-content" id="laneBackgroundContent">
+            <!-- v1.1: sẽ để trống -->
+          </div>
+        </div>
+
+        <div class="timeline-lane" id="timelineLanePending">
+          <div class="lane-label">Pending</div>
+          <div class="lane-content" id="lanePendingContent">
+            <!-- v1.1: sẽ để trống -->
+          </div>
+        </div>
+
+        <div class="timeline-now-marker" id="timelineNowMarker"></div>
       </div>
-    </div>
+    </section>
 
-    <hr>
+    <section class="panel-section">
+      <h2>Main tasks</h2>
+      <form id="mainTaskForm" class="card">
+        <input type="text" id="mainTitle" placeholder="Tên main task" required>
+        <textarea id="mainDescription" placeholder="Mô tả"></textarea>
+        <div class="form-row">
+          <input type="number" id="mainImportance" placeholder="Importance (1–5)" min="1" max="5" required>
+          <input type="number" id="mainDuration" placeholder="Duration (phút)" min="1" required>
+        </div>
+        <input type="number" id="mainDeadline" placeholder="Deadline còn lại (phút)" min="1" required>
+        <label class="checkbox-line">
+          <input type="checkbox" id="mainIsPending">
+          <span>Đánh dấu là pending (không đưa vào timeline chính)</span>
+        </label>
+        <button type="submit" class="primary-btn full-width">Thêm main task</button>
+      </form>
 
-    <h2>Thêm main task</h2>
-    <form id="mainTaskForm">
-      <input type="text" id="mainTitle" placeholder="Tên main task" required>
-      <textarea id="mainDescription" placeholder="Mô tả"></textarea>
-      <input type="number" id="mainImportance" placeholder="Độ quan trọng (1-5)" min="1" max="5" required>
-      <input type="number" id="mainDuration" placeholder="Thời gian dự kiến (phút)" min="1" required>
-      <input type="number" id="mainDeadline" placeholder="Deadline còn lại (phút)" min="1" required>
-      <label>
-        <input type="checkbox" id="mainIsPending">
-        Đây là pending task (không đưa vào timeline chính)
-      </label>
-      <button type="submit">Thêm main task</button>
-    </form>
-
-    <h2>Danh sách main task (debug / kiểm tra)</h2>
-    <div id="mainTaskList"></div>
-  </div>
+      <div class="card list-card">
+        <h3>Danh sách main tasks</h3>
+        <div id="mainTaskList"></div>
+      </div>
+    </section>
+  </main>
 
   <!-- TAB: BACKGROUND TASKS -->
-  <div class="tab-panel" id="tab-background">
-    <h2>Background tasks</h2>
+  <main class="tab-panel" id="tab-background">
+    <section class="panel-section">
+      <h2>Background tasks</h2>
+      <form id="backgroundTaskForm" class="card">
+        <input type="text" id="bgTitle" placeholder="Tên background task" required>
+        <textarea id="bgDescription" placeholder="Mô tả"></textarea>
+        <div class="form-row">
+          <label class="inline-label">
+            <span>Start</span>
+            <input type="time" id="bgStartTime" required>
+          </label>
+          <label class="inline-label">
+            <span>End</span>
+            <input type="time" id="bgEndTime" required>
+          </label>
+        </div>
+        <label class="checkbox-line">
+          <input type="checkbox" id="bgIsParallel">
+          <span>Cho phép chạy song song với main task</span>
+        </label>
+        <button type="submit" class="primary-btn full-width">Thêm background task</button>
+      </form>
 
-    <form id="backgroundTaskForm">
-      <input type="text" id="bgTitle" placeholder="Tên background task" required>
-      <textarea id="bgDescription" placeholder="Mô tả"></textarea>
-      <input type="time" id="bgStartTime" required>
-      <input type="time" id="bgEndTime" required>
-      <label>
-        <input type="checkbox" id="bgIsParallel">
-        Cho phép chạy song song với main task
-      </label>
-      <button type="submit">Thêm background task</button>
-    </form>
-
-    <h3>Danh sách background tasks</h3>
-    <div id="backgroundTaskList"></div>
-  </div>
+      <div class="card list-card">
+        <h3>Danh sách background tasks</h3>
+        <div id="backgroundTaskList"></div>
+      </div>
+    </section>
+  </main>
 
   <!-- TAB: SETTINGS -->
-  <div class="tab-panel" id="tab-settings">
-    <h2>Settings (v1.0)</h2>
-    <p>Hiện tại mới là phiên bản nền tảng. Sau khi mọi thứ ổn định, chúng ta sẽ:</p>
-    <ul>
-      <li>Cho phép chỉnh trọng số (importance / deadline / duration).</li>
-      <li>Cho phép cấu hình khung giờ làm việc mặc định.</li>
-      <li>Thêm export/import dữ liệu.</li>
-    </ul>
-  </div>
+  <main class="tab-panel" id="tab-settings">
+    <section class="panel-section">
+      <h2>Settings</h2>
+      <div class="card">
+        <p>Ở v1.1, Settings mới chỉ là placeholder. Các bước tiếp theo:</p>
+        <ul>
+          <li>Cho phép chỉnh trọng số: importance / deadline / duration.</li>
+          <li>Cấu hình khung giờ làm việc mặc định.</li>
+          <li>Tuỳ chọn độ dài timeline (1 tuần, 2 tuần, 1 tháng).</li>
+        </ul>
+      </div>
+    </section>
+  </main>
 
-  <!-- SCRIPT -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
