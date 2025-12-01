@@ -13,6 +13,13 @@ import {
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
@@ -26,6 +33,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+// ===================================================
+// GLOBAL STATE
+// ===================================================
+let currentUid = null;
 
 // ===================================================
 // TAB HANDLING
@@ -237,10 +251,92 @@ pillBgParallel.addEventListener("click", () => {
 });
 
 // ===================================================
-// COUNTER HELPER – GÁN ID TỰ TĂNG
+// AUTH UI
 // ===================================================
-async function getNextCounter(fieldName) {
-  const countersRef = doc(db, "metadata", "counters");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const userInfo = document.getElementById("userInfo");
+const userAvatar = document.getElementById("userAvatar");
+const userEmail = document.getElementById("userEmail");
+
+function setLoggedOutUI() {
+  currentUid = null;
+  loginBtn.style.display = "inline-flex";
+  userInfo.style.display = "none";
+
+  // clear lists
+  const mainList = document.getElementById("mainTaskList");
+  const bgList = document.getElementById("backgroundTaskList");
+  if (mainList) mainList.innerHTML = "<p class=\"task-meta\">Hãy login để xem task.</p>";
+  if (bgList) bgList.innerHTML = "<p class=\"task-meta\">Hãy login để xem background task.</p>";
+}
+
+function setLoggedInUI(user) {
+  currentUid = user.uid;
+  loginBtn.style.display = "none";
+  userInfo.style.display = "flex";
+
+  userEmail.textContent = user.email || "";
+  if (user.photoURL) {
+    userAvatar.src = user.photoURL;
+  } else {
+    userAvatar.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.email || "U");
+  }
+}
+
+async function ensureUserInitialized(uid) {
+  const userRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      createdAt: serverTimestamp()
+    });
+  }
+
+  const countersRef = doc(db, "users", uid, "metadata", "counters");
+  const countersSnap = await getDoc(countersRef);
+  if (!countersSnap.exists()) {
+    await setDoc(countersRef, {
+      mainTaskCount: 0,
+      backgroundTaskCount: 0
+    });
+  }
+}
+
+loginBtn.addEventListener("click", async () => {
+  try {
+    await signInWithPopup(auth, provider);
+    // onAuthStateChanged sẽ xử lý UI và load data
+  } catch (err) {
+    console.error("Login error:", err);
+    alert("Không login được với Google. Kiểm tra console.");
+  }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.error("Logout error:", err);
+    alert("Không logout được. Kiểm tra console.");
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    setLoggedInUI(user);
+    await ensureUserInitialized(user.uid);
+    await loadAllData();
+  } else {
+    setLoggedOutUI();
+  }
+});
+
+// ===================================================
+// COUNTER HELPER – GÁN ID TỰ TĂNG (PER USER)
+// ===================================================
+async function getNextCounter(fieldName, uid) {
+  const countersRef = doc(db, "users", uid, "metadata", "counters");
   const snap = await getDoc(countersRef);
 
   let data;
@@ -264,6 +360,10 @@ async function getNextCounter(fieldName) {
 // ===================================================
 document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!currentUid) {
+    alert("Vui lòng login trước khi thêm task.");
+    return;
+  }
 
   const title = document.getElementById("mainTitle").value;
   const description = document.getElementById("mainDescription").value;
@@ -281,9 +381,9 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
   }
 
   try {
-    const taskId = await getNextCounter("mainTaskCount");
+    const taskId = await getNextCounter("mainTaskCount", currentUid);
 
-    await addDoc(collection(db, "mainTasks"), {
+    await addDoc(collection(db, "users", currentUid, "mainTasks"), {
       taskId,
       title,
       description,
@@ -301,7 +401,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     cbMainPending.checked = false;
     cbMainParallel.checked = false;
 
-    loadAllData();
+    await loadAllData();
   } catch (err) {
     console.error("Error adding main task:", err);
     alert("Lỗi khi lưu main task. Kiểm tra console.");
@@ -309,10 +409,18 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
 });
 
 // ===================================================
-// MAIN TASKS – LOAD & SORT (PRIORITY MỚI)
+// MAIN TASKS – LOAD & SORT (priority v1.1.4)
 // ===================================================
 async function loadMainTasks() {
-  const snap = await getDocs(collection(db, "mainTasks"));
+  const list = document.getElementById("mainTaskList");
+  if (!currentUid) {
+    if (list) {
+      list.innerHTML = "<p class=\"task-meta\">Hãy login để xem task.</p>";
+    }
+    return;
+  }
+
+  const snap = await getDocs(collection(db, "users", currentUid, "mainTasks"));
   const items = [];
   snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
 
@@ -320,23 +428,23 @@ async function loadMainTasks() {
   const FORTY_EIGHT_HOURS_MIN = 48 * 60;
 
   items.forEach(task => {
-    // minutesUntilDeadline
     let minutesLeft;
     if (task.deadlineAt) {
       const d = new Date(task.deadlineAt);
       const diffMs = d.getTime() - now;
       minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
     } else if (typeof task.deadline === "number") {
-      // fallback cho dữ liệu cũ
+      // fallback nếu có dữ liệu cũ
       minutesLeft = Math.max(1, task.deadline);
     } else {
       minutesLeft = Infinity;
     }
 
     const duration = Number(task.duration) || 0;
-    const priority = (minutesLeft === Infinity || minutesLeft <= 0)
-      ? 0
-      : duration / minutesLeft;
+    const priority =
+      (minutesLeft === Infinity || minutesLeft <= 0)
+        ? 0
+        : duration / minutesLeft;
 
     const isShortBoost =
       duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
@@ -346,9 +454,6 @@ async function loadMainTasks() {
     task._isShortBoost = isShortBoost;
   });
 
-  // Sort:
-  // 1. isShortBoost = true trước
-  // 2. priority giảm dần
   items.sort((a, b) => {
     if (a._isShortBoost && !b._isShortBoost) return -1;
     if (!a._isShortBoost && b._isShortBoost) return 1;
@@ -358,7 +463,6 @@ async function loadMainTasks() {
     return pb - pa;
   });
 
-  const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
 
   items.forEach(task => {
@@ -402,6 +506,10 @@ async function loadMainTasks() {
 // ===================================================
 document.getElementById("backgroundTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!currentUid) {
+    alert("Vui lòng login trước khi thêm background task.");
+    return;
+  }
 
   const title = document.getElementById("bgTitle").value;
   const description = document.getElementById("bgDescription").value;
@@ -410,9 +518,9 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
   const isParallel = cbBgParallel.checked;
 
   try {
-    const taskId = await getNextCounter("backgroundTaskCount");
+    const taskId = await getNextCounter("backgroundTaskCount", currentUid);
 
-    await addDoc(collection(db, "backgroundTasks"), {
+    await addDoc(collection(db, "users", currentUid, "backgroundTasks"), {
       taskId,
       title,
       description,
@@ -426,7 +534,7 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
     pillBgParallel.classList.remove("active");
     cbBgParallel.checked = false;
 
-    loadAllData();
+    await loadAllData();
   } catch (err) {
     console.error("Error adding background task:", err);
     alert("Lỗi khi lưu background task. Kiểm tra console.");
@@ -437,7 +545,15 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
 // BACKGROUND TASKS – LOAD
 // ===================================================
 async function loadBackgroundTasks() {
-  const snap = await getDocs(collection(db, "backgroundTasks"));
+  const list = document.getElementById("backgroundTaskList");
+  if (!currentUid) {
+    if (list) {
+      list.innerHTML = "<p class=\"task-meta\">Hãy login để xem background task.</p>";
+    }
+    return;
+  }
+
+  const snap = await getDocs(collection(db, "users", currentUid, "backgroundTasks"));
   const items = [];
   snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
 
@@ -445,7 +561,6 @@ async function loadBackgroundTasks() {
     (a.startTime || "").localeCompare(b.startTime || "")
   );
 
-  const list = document.getElementById("backgroundTaskList");
   list.innerHTML = "";
 
   items.forEach(task => {
@@ -471,9 +586,14 @@ async function loadBackgroundTasks() {
 // LOAD ALL & INIT
 // ===================================================
 async function loadAllData() {
+  if (!currentUid) {
+    setLoggedOutUI();
+    return;
+  }
   await Promise.all([loadMainTasks(), loadBackgroundTasks()]);
 }
 
+// Init
 renderTimeline();
 jumpNow();
-loadAllData();
+setLoggedOutUI();
