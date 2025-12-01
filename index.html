@@ -58,4 +58,115 @@
     </section>
 
     <!-- MAIN TASK FORM -->
-    <section class="panel-section"
+    <section class="panel-section">
+      <h2>Main tasks</h2>
+
+      <form id="mainTaskForm" class="card">
+        <input type="text" id="mainTitle" placeholder="Tên main task" required>
+        <textarea id="mainDescription" placeholder="Mô tả"></textarea>
+
+        <div class="form-row">
+          <input type="number" id="mainImportance" placeholder="Importance (1–5)" min="1" max="5" required>
+          <input type="number" id="mainDuration" placeholder="Duration (phút)" min="1" required>
+        </div>
+
+        <label class="inline-label">
+          <span>Deadline</span>
+          <input type="datetime-local" id="mainDeadline" required>
+        </label>
+
+        <!-- Pills -->
+        <div class="pill-row">
+          <div class="pill-toggle" id="pillMainPending">Pending</div>
+          <div class="pill-toggle" id="pillMainParallel">Parallel</div>
+        </div>
+
+        <!-- Hidden checkboxes -->
+        <input type="checkbox" id="mainIsPending" hidden>
+        <input type="checkbox" id="mainIsParallel" hidden>
+
+        <button type="submit" class="primary-btn full-width">Thêm main task</button>
+      </form>
+
+      <div class="card list-card">
+        <h3>Danh sách main tasks</h3>
+        <div id="mainTaskList"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- BACKGROUND TASK TAB -->
+  <main class="tab-panel" id="tab-background">
+
+    <section class="panel-section">
+      <h2>Background tasks</h2>
+
+      <form id="backgroundTaskForm" class="card">
+        <input type="text" id="bgTitle" placeholder="Tên background task" required>
+        <textarea id="bgDescription" placeholder="Mô tả"></textarea>
+
+        <div class="form-row">
+          <label class="inline-label">
+            <span>Start</span>
+            <input type="time" id="bgStartTime" required>
+          </label>
+          <label class="inline-label">
+            <span>End</span>
+            <input type="time" id="bgEndTime" required>
+          </label>
+        </div>
+
+        <div class="pill-row">
+          <div class="pill-toggle" id="pillBgParallel">Parallel</div>
+        </div>
+
+        <input type="checkbox" id="bgIsParallel" hidden>
+
+        <button type="submit" class="primary-btn full-width">Thêm background task</button>
+      </form>
+
+      <div class="card list-card">
+        <h3>Danh sách background tasks</h3>
+        <div id="backgroundTaskList"></div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- SETTINGS TAB -->
+  <main class="tab-panel" id="tab-settings">
+    <section class="panel-section">
+      <h2>Settings</h2>
+      <div class="card">
+        <p>Settings sẽ cập nhật ở version 2.x</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- DATE PICKER MODAL -->
+  <div id="jumpDateModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>Chọn ngày (14 ngày tới)</h3>
+      <div id="calendarGrid" class="calendar-grid"></div>
+      <button id="closeJumpModal" class="secondary-btn full-width" style="margin-top:12px;">
+        Đóng
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+
+<!-- VERSION NOTES -->
+<!--
+===========================================
+VERSION NOTES – v1.1.3
+===========================================
+- Thay checkbox Pending/Parallel bằng pill toggle iOS-style.
+- Giữ hidden checkbox để logic backend không đổi.
+- Hoàn thiện modal Jump-to-date: click outside để đóng.
+- UI cải thiện, spacing tốt hơn, code clean.
+- Đồng bộ với timeline 1.1.2.
+===========================================
+-->
+</body>
+</html>
