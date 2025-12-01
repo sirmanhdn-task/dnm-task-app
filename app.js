@@ -11,14 +11,14 @@ import {
 // ======================
 // 1. FIREBASE CONFIG
 // ======================
-// Your web app's Firebase configuration
+// THAY BẰNG CẤU HÌNH CỦA BẠN
 const firebaseConfig = {
-  apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
-  authDomain: "dnmstasker.firebaseapp.com",
-  projectId: "dnmstasker",
-  storageBucket: "dnmstasker.firebasestorage.app",
-  messagingSenderId: "98582966566",
-  appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
+  apiKey: "API_KEY_CỦA_BẠN",
+  authDomain: "AUTH_DOMAIN_CỦA_BẠN",
+  projectId: "PROJECT_ID_CỦA_BẠN",
+  storageBucket: "STORAGE_BUCKET_CỦA_BẠN",
+  messagingSenderId: "MESSAGING_SENDER_ID_CỦA_BẠN",
+  appId: "APP_ID_CỦA_BẠN"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -103,7 +103,6 @@ function renderTimeline() {
       const hourDiv = document.createElement("div");
       hourDiv.className = "timeline-hour";
       hourDiv.style.width = `${pixelsPerHour}px`;
-      // chỉ hiển thị label mỗi 2 giờ cho đỡ rối
       hourDiv.textContent = h % 2 === 0 ? `${h}:00` : "";
       hoursDiv.appendChild(hourDiv);
     }
@@ -134,7 +133,7 @@ function updateNowMarker() {
   const hoursFromStart = diffMs / MS_PER_HOUR;
   const x = hoursFromStart * pixelsPerHour;
   nowMarker.style.display = "block";
-  nowMarker.style.left = `${x + 60}px`; // +60 để bù padding-left
+  nowMarker.style.left = `${x}px`;
 }
 
 // zoom giữ nguyên tâm viewport theo "thời gian"
@@ -150,7 +149,8 @@ function zoom(factor) {
 
   renderTimeline();
 
-  const newScrollLeft = centerTime * pixelsPerHour - timelineScroll.clientWidth / 2;
+  const newScrollLeft =
+    centerTime * pixelsPerHour - timelineScroll.clientWidth / 2;
   timelineScroll.scrollLeft = Math.max(0, newScrollLeft);
 }
 
@@ -178,10 +178,9 @@ function handleJumpNow() {
 }
 
 // Jump to date (ngày chọn, trong 14 ngày)
-function handleJumpDate() {
-  const input = document.getElementById("jumpDateInput");
-  if (!input.value) return;
-  const chosen = new Date(input.value + "T00:00:00");
+function handleJumpDateChosen(value) {
+  if (!value) return;
+  const chosen = new Date(value + "T00:00:00");
   const diffMs = chosen.getTime() - startOfToday.getTime();
   if (diffMs < 0 || diffMs > (DAYS_TOTAL - 1) * MS_PER_DAY) {
     return;
@@ -191,22 +190,51 @@ function handleJumpDate() {
   scrollToTime(hoursFromStart);
 }
 
-// set min/max cho date input: hôm nay → 14 ngày tới
+// init date input min/max
 (function initJumpDateInput() {
   const input = document.getElementById("jumpDateInput");
   const toISO = (d) => d.toISOString().slice(0, 10);
   const minDate = startOfToday;
-  const maxDate = new Date(startOfToday.getTime() + (DAYS_TOTAL - 1) * MS_PER_DAY);
+  const maxDate = new Date(
+    startOfToday.getTime() + (DAYS_TOTAL - 1) * MS_PER_DAY
+  );
   input.min = toISO(minDate);
   input.max = toISO(maxDate);
   input.value = toISO(minDate);
 })();
 
-// gán event cho nút
+// gán event cho zoom / jump buttons
 document.getElementById("zoomInBtn").addEventListener("click", () => zoom(1.2));
-document.getElementById("zoomOutBtn").addEventListener("click", () => zoom(1 / 1.2));
+document
+  .getElementById("zoomOutBtn")
+  .addEventListener("click", () => zoom(1 / 1.2));
 document.getElementById("jumpNowBtn").addEventListener("click", handleJumpNow);
-document.getElementById("jumpDateBtn").addEventListener("click", handleJumpDate);
+
+// Jump to date button -> mở date picker
+const jumpDateButton = document.getElementById("jumpDateButton");
+const jumpDateInput = document.getElementById("jumpDateInput");
+
+function openDatePicker() {
+  if (jumpDateInput.showPicker) {
+    jumpDateInput.showPicker();
+  } else {
+    jumpDateInput.focus();
+  }
+}
+
+// hover (PC) + click (PC/Mobile)
+jumpDateButton.addEventListener("mouseenter", (e) => {
+  openDatePicker();
+});
+jumpDateButton.addEventListener("click", (e) => {
+  e.preventDefault();
+  openDatePicker();
+});
+
+// khi chọn ngày -> nhảy luôn
+jumpDateInput.addEventListener("change", () => {
+  handleJumpDateChosen(jumpDateInput.value);
+});
 
 // cập nhật now marker mỗi phút
 setInterval(updateNowMarker, 60000);
@@ -240,10 +268,25 @@ mainTaskForm.addEventListener("submit", async (e) => {
   const description = document.getElementById("mainDescription").value;
   const importance = Number(document.getElementById("mainImportance").value);
   const duration = Number(document.getElementById("mainDuration").value);
-  const deadline = Number(document.getElementById("mainDeadline").value);
+  const deadlineStr = document.getElementById("mainDeadline").value;
   const isPending = document.getElementById("mainIsPending").checked;
+  const isParallel = document.getElementById("mainIsParallel").checked;
 
-  const { t_norm, d_norm, score } = computeScore(importance, duration, deadline);
+  let deadlineMinutes = 60;
+  let deadlineAt = null;
+
+  if (deadlineStr) {
+    const deadlineDate = new Date(deadlineStr);
+    deadlineAt = deadlineDate.toISOString();
+    const diffMs = deadlineDate.getTime() - Date.now();
+    deadlineMinutes = Math.max(1, Math.round(diffMs / 60000));
+  }
+
+  const { t_norm, d_norm, score } = computeScore(
+    importance,
+    duration,
+    deadlineMinutes
+  );
 
   try {
     await addDoc(collection(db, "mainTasks"), {
@@ -251,8 +294,10 @@ mainTaskForm.addEventListener("submit", async (e) => {
       description,
       importance,
       duration,
-      deadline,
+      deadline: deadlineMinutes,
+      deadlineAt,
       isPending,
+      isParallel,
       t_norm,
       d_norm,
       score,
@@ -279,17 +324,27 @@ async function loadMainTasks() {
 
   items.forEach((task) => {
     const div = document.createElement("div");
-    div.className = "task-item";
+    div.className = "task-item task-item-main";
+
+    const deadlineText = task.deadlineAt
+      ? new Date(task.deadlineAt).toLocaleString()
+      : "N/A";
+
     div.innerHTML = `
       <h4>${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
-        Importance: ${task.importance} · Duration: ${task.duration} phút ·
-        Deadline còn lại: ${task.deadline} phút
+        Importance: ${task.importance} · Duration: ${task.duration} phút
+      </p>
+      <p class="task-meta">
+        Deadline: ${deadlineText} · Còn khoảng: ${
+          task.deadline ? task.deadline + " phút" : "N/A"
+        }
       </p>
       <p class="task-meta">
         Score: ${task.score ? task.score.toFixed(3) : "N/A"} ·
-        Pending: ${task.isPending ? "Có" : "Không"}
+        Pending: ${task.isPending ? "Có" : "Không"} ·
+        Parallel: ${task.isParallel ? "Có" : "Không"}
       </p>
     `;
     list.appendChild(div);
@@ -342,13 +397,13 @@ async function loadBackgroundTasks() {
 
   items.forEach((task) => {
     const div = document.createElement("div");
-    div.className = "task-item";
+    div.className = "task-item task-item-bg";
     div.innerHTML = `
       <h4>${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
         ${task.startTime} – ${task.endTime} ·
-        Song song: ${task.isParallel ? "Có" : "Không"}
+        Parallel: ${task.isParallel ? "Có" : "Không"}
       </p>
     `;
     list.appendChild(div);
