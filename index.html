@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.3b</title>
+  <title>DNM's Tasker v1.1.3a</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -54,6 +54,7 @@
         </div>
 
         <div class="timeline-now-marker" id="timelineNowMarker"></div>
+
       </div>
     </section>
 
@@ -75,12 +76,13 @@
           <input type="datetime-local" id="mainDeadline" required>
         </label>
 
-        <!-- PILLS -->
+        <!-- PILL TOGGLES -->
         <div class="pill-row">
           <div class="pill-toggle" id="pillMainPending">Pending</div>
           <div class="pill-toggle" id="pillMainParallel">Parallel</div>
         </div>
 
+        <!-- Hidden checkboxes -->
         <input type="checkbox" id="mainIsPending" hidden>
         <input type="checkbox" id="mainIsParallel" hidden>
 
@@ -157,9 +159,12 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.3b
-- Lane timeline phân rõ bằng gradient border 3px
-- Jump To Date chỉ mở bằng CLICK, bỏ hover
+v1.1.3a
+- Thay checkbox bằng pill toggle (Pending / Parallel)
+- Modal lịch đứng giữa màn hình, click ngoài để đóng
+- Hover + click mở modal lịch
+- Deadline datetime-local
+- UI iOS style
 ===========================================
 -->
 
