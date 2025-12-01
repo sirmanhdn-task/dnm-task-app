@@ -201,10 +201,6 @@ function renderCalendar() {
 }
 
 // mở modal
-jumpDateButton.addEventListener("mouseenter", () => {
-  renderCalendar();
-  jumpDateModal.classList.add("active");
-});
 jumpDateButton.addEventListener("click", () => {
   renderCalendar();
   jumpDateModal.classList.add("active");
