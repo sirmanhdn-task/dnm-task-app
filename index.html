@@ -2,11 +2,10 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.3</title>
+  <title>DNM's Tasker v1.1.3a</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
 
   <header class="app-header">
@@ -14,14 +13,14 @@
     <span class="app-subtitle">Focus on what matters</span>
   </header>
 
-  <!-- NAV TABS -->
+  <!-- TAB HEADER -->
   <nav class="tabs">
     <button class="tab-button active" data-tab-target="tab-timeline">Timeline</button>
     <button class="tab-button" data-tab-target="tab-background">Background tasks</button>
     <button class="tab-button" data-tab-target="tab-settings">Settings</button>
   </nav>
 
-  <!-- TAB 1: TIMELINE -->
+  <!-- TAB: TIMELINE -->
   <main class="tab-panel active" id="tab-timeline">
 
     <section class="timeline-controls">
@@ -39,6 +38,7 @@
     <!-- TIMELINE -->
     <section class="timeline-wrapper">
       <div class="timeline-scroll" id="timelineScroll">
+
         <div class="timeline-header" id="timelineHeader"></div>
 
         <div class="timeline-lane">
@@ -54,10 +54,10 @@
         </div>
 
         <div class="timeline-now-marker" id="timelineNowMarker"></div>
+
       </div>
     </section>
 
-    <!-- MAIN TASK INPUT -->
     <section class="panel-section">
       <h2>Main tasks</h2>
 
@@ -76,7 +76,7 @@
           <input type="datetime-local" id="mainDeadline" required>
         </label>
 
-        <!-- Pill toggles -->
+        <!-- PILL TOGGLES -->
         <div class="pill-row">
           <div class="pill-toggle" id="pillMainPending">Pending</div>
           <div class="pill-toggle" id="pillMainParallel">Parallel</div>
@@ -86,20 +86,19 @@
         <input type="checkbox" id="mainIsPending" hidden>
         <input type="checkbox" id="mainIsParallel" hidden>
 
-        <button class="primary-btn full-width">Thêm main task</button>
+        <button type="submit" class="primary-btn full-width">Thêm main task</button>
       </form>
 
       <div class="card list-card">
         <h3>Danh sách main tasks</h3>
         <div id="mainTaskList"></div>
       </div>
-
     </section>
+
   </main>
 
-  <!-- TAB 2: BACKGROUND TASKS -->
+  <!-- TAB: BACKGROUND TASKS -->
   <main class="tab-panel" id="tab-background">
-
     <section class="panel-section">
       <h2>Background tasks</h2>
 
@@ -113,37 +112,34 @@
             <span>Start</span>
             <input type="time" id="bgStartTime" required>
           </label>
-
           <label class="inline-label">
             <span>End</span>
             <input type="time" id="bgEndTime" required>
           </label>
         </div>
 
-        <!-- Pill toggle -->
         <div class="pill-row">
           <div class="pill-toggle" id="pillBgParallel">Parallel</div>
         </div>
 
         <input type="checkbox" id="bgIsParallel" hidden>
 
-        <button class="primary-btn full-width">Thêm background task</button>
+        <button type="submit" class="primary-btn full-width">Thêm background task</button>
       </form>
 
       <div class="card list-card">
         <h3>Danh sách background tasks</h3>
         <div id="backgroundTaskList"></div>
       </div>
-
     </section>
   </main>
 
-  <!-- TAB 3: SETTINGS -->
+  <!-- SETTINGS -->
   <main class="tab-panel" id="tab-settings">
     <section class="panel-section">
       <h2>Settings</h2>
       <div class="card">
-        <p>Settings sẽ được hoàn thiện ở phiên bản 2.x</p>
+        <p>Settings sẽ phát triển ở phiên bản 2.x</p>
       </div>
     </section>
   </main>
@@ -153,24 +149,24 @@
     <div class="modal-content">
       <h3>Chọn ngày (14 ngày tới)</h3>
       <div id="calendarGrid" class="calendar-grid"></div>
-      <button id="closeJumpModal" class="secondary-btn full-width" style="margin-top:12px;">Đóng</button>
+      <button id="closeJumpModal" class="secondary-btn full-width">Đóng</button>
     </div>
   </div>
 
   <script type="module" src="app.js"></script>
 
 <!--
-======================================================
-VERSION NOTES — v1.1.3
-======================================================
-- Thêm pill toggles cho Pending + Parallel (main + background)
-- Thay thế hoàn toàn checkbox xấu bằng pill UI
-- Calendar modal ở giữa màn hình
-- Hover + click mở modal
-- Click ra ngoài modal để đóng
-- Deadline = datetime-local
-- Parallel flag lưu đúng vào Firestore
-======================================================
+===========================================
+VERSION NOTES
+===========================================
+v1.1.3a
+- Thay checkbox bằng pill toggle (Pending / Parallel)
+- Modal lịch đứng giữa màn hình, click ngoài để đóng
+- Hover + click mở modal lịch
+- Deadline datetime-local
+- UI iOS style
+===========================================
 -->
+
 </body>
 </html>
