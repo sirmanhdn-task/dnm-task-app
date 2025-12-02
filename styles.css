@@ -312,6 +312,13 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   margin-bottom: 6px;
 }
 
+.left-controls,
+.right-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .timeline-wrapper {
   background: var(--bg-surface);
   border-radius: var(--radius-card);
@@ -393,23 +400,35 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   width: 2px;
   background: var(--danger);
   pointer-events: none;
+  opacity: 0.8;
 }
 
-/* Background blocks on timeline ------------------------- */
+/* BACKGROUND BLOCKS (SOFT GHOST) ------------------------ */
 
 .timeline-bg-block {
   position: absolute;
   top: 8px;
   height: 24px;
-  border-radius: 10px;
-  background: #4b5563;
-  color: #f9fafb;
+  border-radius: 8px;
+  background: rgba(55, 65, 81, 0.18); /* soft ghost */
+  color: rgba(249, 250, 251, 0.7);
   font-size: 10px;
-  padding: 2px 8px;
+  padding: 3px 9px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: none; /* remove heavy shadow */
+  transition: background 0.15s ease, transform 0.15s ease,
+    border-color 0.15s ease, color 0.15s ease;
+}
+
+/* Hover: only when user looks closely */
+.timeline-bg-block:hover {
+  background: rgba(55, 65, 81, 0.28);
+  border-color: rgba(15, 23, 42, 0.18);
+  color: rgba(249, 250, 251, 0.92);
+  transform: translateY(-1px);
 }
 
 /* TASK ITEMS (LIST) ------------------------------------- */
@@ -472,6 +491,9 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   background: #e5e7eb;
   padding: 4px 10px;
   font-size: 11px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
 }
 
 .task-btn-primary {
