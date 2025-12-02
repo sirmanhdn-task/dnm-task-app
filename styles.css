@@ -290,6 +290,23 @@ form textarea:focus {
   pointer-events: none;
 }
 
+/* BACKGROUND BLOCKS ON TIMELINE ----------------------- */
+
+.timeline-bg-block {
+  position: absolute;
+  top: 4px;
+  height: 24px;
+  border-radius: 10px;
+  background: rgba(55, 65, 81, 0.9);
+  color: #f9fafb;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 4px rgba(15,23,42,0.4);
+}
+
 /* LIST TASK ITEMS ------------------------------------- */
 
 .task-item {
@@ -463,6 +480,56 @@ form textarea:focus {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* REPEAT GROUP ---------------------------------------- */
+
+.repeat-group {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.repeat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin: 4px 0;
+}
+
+.repeat-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.repeat-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.repeat-option input {
+  margin: 0;
+}
+
+.repeat-extra-row {
+  margin-top: 4px;
+}
+
+.repeat-sub-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.hidden {
+  display: none;
 }
 
 /* RESPONSIVE ------------------------------------------ */
