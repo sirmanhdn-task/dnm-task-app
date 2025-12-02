@@ -22,6 +22,8 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+// *** THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -41,9 +43,10 @@ const provider = new GoogleAuthProvider();
 // GLOBAL STATE
 // ===================================================
 let currentUid = null;
-
-// trạng thái edit
 let currentEditingTaskId = null;
+
+// cache background tasks cho Repeat Engine
+let backgroundTasksCache = [];
 
 // ===================================================
 // TAB HANDLING
@@ -67,6 +70,8 @@ document.querySelectorAll(".tab-button").forEach((btn) => {
 const timelineScroll = document.getElementById("timelineScroll");
 const timelineHeader = document.getElementById("timelineHeader");
 const nowMarker = document.getElementById("timelineNowMarker");
+
+const laneBackgroundContent = document.getElementById("laneBackgroundContent");
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
@@ -130,6 +135,7 @@ function renderTimeline() {
   });
 
   updateNowMarker();
+  renderBackgroundOnTimeline(); // vẽ lại block BG theo zoom
 }
 
 function updateNowMarker() {
@@ -227,7 +233,7 @@ jumpDateModal.addEventListener("click", (e) => {
 });
 
 // ===================================================
-// PILL TOGGLE LOGIC – ADD FORM
+// PILL TOGGLE LOGIC – ADD MAIN
 // ===================================================
 const pillMainPending = document.getElementById("pillMainPending");
 const pillMainParallel = document.getElementById("pillMainParallel");
@@ -252,6 +258,40 @@ pillBgParallel.addEventListener("click", () => {
   cbBgParallel.checked = pillBgParallel.classList.contains("active");
 });
 
+// Weekly pills for background repeat
+const bgWeeklyRow = document.getElementById("bgWeeklyRow");
+const bgMonthlyRow = document.getElementById("bgMonthlyRow");
+const bgSpecificDateRow = document.getElementById("bgSpecificDateRow");
+const bgRepeatRadios = document.querySelectorAll('input[name="bgRepeatType"]');
+const bgWeeklyPillsContainer = document.getElementById("bgWeeklyPills");
+const bgRepeatDateInput = document.getElementById("bgRepeatDate");
+const bgSpecificDateInput = document.getElementById("bgSpecificDate");
+
+bgRepeatRadios.forEach(r => {
+  r.addEventListener("change", () => {
+    const value = r.value;
+    if (!r.checked) return;
+
+    bgSpecificDateRow.classList.add("hidden");
+    bgWeeklyRow.classList.add("hidden");
+    bgMonthlyRow.classList.add("hidden");
+
+    if (value === "none") {
+      bgSpecificDateRow.classList.remove("hidden");
+    } else if (value === "weekly") {
+      bgWeeklyRow.classList.remove("hidden");
+    } else if (value === "monthly") {
+      bgMonthlyRow.classList.remove("hidden");
+    }
+  });
+});
+
+bgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(pill => {
+  pill.addEventListener("click", () => {
+    pill.classList.toggle("active");
+  });
+});
+
 // ===================================================
 // AUTH UI
 // ===================================================
@@ -270,6 +310,8 @@ function setLoggedOutUI() {
   const bgList = document.getElementById("backgroundTaskList");
   if (mainList) mainList.innerHTML = "<p class=\"task-meta\">Hãy login để xem task.</p>";
   if (bgList) bgList.innerHTML = "<p class=\"task-meta\">Hãy login để xem background task.</p>";
+
+  laneBackgroundContent.innerHTML = "";
 }
 
 function setLoggedInUI(user) {
@@ -356,7 +398,7 @@ async function getNextCounter(fieldName, uid) {
 }
 
 // ===================================================
-// EDIT MODAL HANDLING
+// EDIT MODAL HANDLING (MAIN TASK)
 // ===================================================
 const editTaskModal = document.getElementById("editTaskModal");
 const editTaskForm = document.getElementById("editTaskForm");
@@ -440,7 +482,7 @@ editTaskModal.addEventListener("click", (e) => {
   }
 });
 
-// Submit edit – không hỏi confirm, chỉ validate và save
+// Submit edit main task – Save & close
 editTaskForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUid || !currentEditingTaskId) return;
@@ -488,7 +530,6 @@ editTaskForm.addEventListener("submit", async (e) => {
     });
 
     closeEditModal();
-    // Tính lại toàn bộ priority/sort
     await loadMainTasks();
   } catch (err) {
     console.error("Error saving edited task:", err);
@@ -497,7 +538,7 @@ editTaskForm.addEventListener("submit", async (e) => {
 });
 
 // ===================================================
-// TASK ACTIONS MODULE (CHO MAIN TASK) – dùng lại cho tooltip/timeline
+// TASK ACTIONS MODULE (MAIN TASK) – dùng lại cho tooltip/timeline
 // ===================================================
 const TaskActions = {
   async setStatus(task, status) {
@@ -516,7 +557,7 @@ const TaskActions = {
 
     try {
       await updateDoc(docRef, { status, updatedAt: serverTimestamp() });
-      await loadMainTasks(); // tính lại toàn bộ
+      await loadMainTasks();
     } catch (err) {
       console.error("Error updating status:", err);
       alert("Không cập nhật được trạng thái task.");
@@ -534,7 +575,7 @@ const TaskActions = {
 
     try {
       await deleteDoc(docRef);
-      await loadMainTasks(); // tính lại toàn bộ
+      await loadMainTasks();
     } catch (err) {
       console.error("Error deleting task:", err);
       alert("Không xóa được task.");
@@ -544,8 +585,6 @@ const TaskActions = {
   openEdit(task) {
     openEditModal(task);
   }
-
-  // Tương lai: openTooltip(task), openOnTimeline(task)...
 };
 
 // ===================================================
@@ -595,7 +634,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     cbMainPending.checked = false;
     cbMainParallel.checked = false;
 
-    await loadMainTasks(); // tính lại priority
+    await loadMainTasks();
   } catch (err) {
     console.error("Error adding main task:", err);
     alert("Lỗi khi lưu main task. Kiểm tra console.");
@@ -744,6 +783,139 @@ async function loadMainTasks() {
 }
 
 // ===================================================
+// REPEAT ENGINE – BACKGROUND TASKS
+// ===================================================
+function parseTimeToMinutes(t) {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function getDayCode(date) {
+  const idx = date.getDay(); // 0=Sun..6=Sat
+  const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return map[idx];
+}
+
+// Generate segments cho 1 ngày baseDate
+function generateSegmentsForDate(task, baseDate) {
+  const startMinutes = parseTimeToMinutes(task.startTime);
+  const endMinutes = parseTimeToMinutes(task.endTime);
+  if (startMinutes == null || endMinutes == null) return [];
+
+  const dateISO = baseDate.toISOString().slice(0, 10);
+  const segments = [];
+
+  if (endMinutes > startMinutes) {
+    segments.push({
+      date: dateISO,
+      startMinutes,
+      endMinutes,
+      parentId: task.id,
+      title: task.title || "",
+      isOvernight: false
+    });
+  } else if (endMinutes < startMinutes) {
+    // overnight: split thành 2 block
+    segments.push({
+      date: dateISO,
+      startMinutes,
+      endMinutes: 24 * 60,
+      parentId: task.id,
+      title: task.title || "",
+      isOvernight: true
+    });
+
+    const nextDate = new Date(baseDate.getTime() + MS_PER_DAY);
+    const nextISO = nextDate.toISOString().slice(0, 10);
+    segments.push({
+      date: nextISO,
+      startMinutes: 0,
+      endMinutes,
+      parentId: task.id,
+      title: task.title || "",
+      isOvernight: true
+    });
+  } else {
+    // start == end: bỏ qua
+  }
+
+  return segments;
+}
+
+// Generate instances theo repeatType cho 14 ngày
+function generateBackgroundInstances(task, rangeStart, rangeEnd) {
+  const instances = [];
+  const repeatType = task.repeatType || "none";
+
+  if (repeatType === "none") {
+    if (!task.specificDate) return instances;
+    const d = new Date(task.specificDate + "T00:00:00");
+    if (d >= rangeStart && d < rangeEnd) {
+      instances.push(...generateSegmentsForDate(task, d));
+    }
+    return instances;
+  }
+
+  for (let i = 0; i < DAYS_TOTAL; i++) {
+    const d = new Date(rangeStart.getTime() + i * MS_PER_DAY);
+    if (d < rangeStart || d >= rangeEnd) continue;
+
+    if (repeatType === "daily") {
+      instances.push(...generateSegmentsForDate(task, d));
+    } else if (repeatType === "weekly") {
+      const dayCode = getDayCode(d);
+      const repeatDays = task.repeatDays || [];
+      if (repeatDays.includes(dayCode)) {
+        instances.push(...generateSegmentsForDate(task, d));
+      }
+    } else if (repeatType === "monthly") {
+      const rDate = task.repeatDate;
+      if (!rDate) continue;
+      if (d.getDate() === rDate) {
+        instances.push(...generateSegmentsForDate(task, d));
+      }
+    }
+  }
+
+  return instances;
+}
+
+// Vẽ background blocks lên laneBackgroundContent
+function renderBackgroundOnTimeline() {
+  if (!laneBackgroundContent) return;
+  laneBackgroundContent.innerHTML = "";
+
+  if (!backgroundTasksCache || backgroundTasksCache.length === 0) return;
+
+  const rangeStart = startOfToday;
+  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
+
+  backgroundTasksCache.forEach(task => {
+    const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
+    segments.forEach(seg => {
+      const dateObj = new Date(seg.date + "T00:00:00");
+      const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
+      if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
+
+      const totalHoursOffset = diffDays * 24 + (seg.startMinutes / 60);
+      const hoursWidth = (seg.endMinutes - seg.startMinutes) / 60;
+
+      if (hoursWidth <= 0) return;
+
+      const block = document.createElement("div");
+      block.className = "timeline-bg-block";
+      block.style.left = (totalHoursOffset * pixelsPerHour) + "px";
+      block.style.width = (hoursWidth * pixelsPerHour) + "px";
+      block.textContent = seg.title || "(BG)";
+
+      laneBackgroundContent.appendChild(block);
+    });
+  });
+}
+
+// ===================================================
 // BACKGROUND TASKS – SUBMIT
 // ===================================================
 document.getElementById("backgroundTaskForm").addEventListener("submit", async (e) => {
@@ -753,11 +925,48 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
     return;
   }
 
-  const title = document.getElementById("bgTitle").value;
-  const description = document.getElementById("bgDescription").value;
+  const title = document.getElementById("bgTitle").value.trim();
+  const description = document.getElementById("bgDescription").value.trim();
   const startTime = document.getElementById("bgStartTime").value;
   const endTime = document.getElementById("bgEndTime").value;
   const isParallel = cbBgParallel.checked;
+
+  if (!title) {
+    alert("Tên background task không được để trống.");
+    return;
+  }
+  if (!startTime || !endTime) {
+    alert("Start/End time không hợp lệ.");
+    return;
+  }
+
+  const repeatTypeInput = document.querySelector('input[name="bgRepeatType"]:checked');
+  const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
+
+  let repeatDays = [];
+  let repeatDate = null;
+  let specificDate = null;
+
+  if (repeatType === "none") {
+    specificDate = bgSpecificDateInput.value;
+    if (!specificDate) {
+      alert("Vui lòng chọn ngày cho background task (không lặp).");
+      return;
+    }
+  } else if (repeatType === "weekly") {
+    const activePills = Array.from(bgWeeklyPillsContainer.querySelectorAll(".pill-toggle.active"));
+    repeatDays = activePills.map(p => p.getAttribute("data-day"));
+    if (repeatDays.length === 0) {
+      alert("Vui lòng chọn ít nhất một thứ cho background task lặp tuần.");
+      return;
+    }
+  } else if (repeatType === "monthly") {
+    repeatDate = Number(bgRepeatDateInput.value);
+    if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
+      alert("Ngày trong tháng phải từ 1 đến 31.");
+      return;
+    }
+  }
 
   try {
     const taskId = await getNextCounter("backgroundTaskCount", currentUid);
@@ -769,12 +978,26 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
       startTime,
       endTime,
       isParallel,
+      repeatType,
+      repeatDays,
+      repeatDate,
+      specificDate,
       createdAt: serverTimestamp()
     });
 
     e.target.reset();
     pillBgParallel.classList.remove("active");
     cbBgParallel.checked = false;
+    bgRepeatRadios.forEach(r => { r.checked = false; });
+    // default lại "none"
+    const noneRadio = document.querySelector('input[name="bgRepeatType"][value="none"]');
+    if (noneRadio) noneRadio.checked = true;
+    bgSpecificDateRow.classList.remove("hidden");
+    bgWeeklyRow.classList.add("hidden");
+    bgMonthlyRow.classList.add("hidden");
+    bgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+    bgRepeatDateInput.value = "";
+    bgSpecificDateInput.value = "";
 
     await loadBackgroundTasks();
   } catch (err) {
@@ -786,12 +1009,37 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
 // ===================================================
 // BACKGROUND TASKS – LOAD
 // ===================================================
+function formatRepeatSummary(task) {
+  const type = task.repeatType || "none";
+  if (type === "daily") return "Lặp: hằng ngày";
+
+  if (type === "weekly") {
+    const mapLabel = {
+      mon: "T2", tue: "T3", wed: "T4", thu: "T5", fri: "T6", sat: "T7", sun: "CN"
+    };
+    const days = (task.repeatDays || []).map(d => mapLabel[d] || d).join(", ");
+    return "Lặp: hằng tuần (" + (days || "không có") + ")";
+  }
+
+  if (type === "monthly") {
+    return `Lặp: ngày ${task.repeatDate} hằng tháng`;
+  }
+
+  if (task.specificDate) {
+    return "Không lặp – Ngày " + task.specificDate;
+  }
+
+  return "Không lặp";
+}
+
 async function loadBackgroundTasks() {
   const list = document.getElementById("backgroundTaskList");
   if (!currentUid) {
     if (list) {
       list.innerHTML = "<p class=\"task-meta\">Hãy login để xem background task.</p>";
     }
+    backgroundTasksCache = [];
+    renderBackgroundOnTimeline();
     return;
   }
 
@@ -799,9 +1047,13 @@ async function loadBackgroundTasks() {
   const items = [];
   snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
 
+  // sort theo startTime (đơn giản)
   items.sort((a, b) =>
     (a.startTime || "").localeCompare(b.startTime || "")
   );
+
+  backgroundTasksCache = items;
+  renderBackgroundOnTimeline();
 
   list.innerHTML = "";
 
@@ -811,6 +1063,8 @@ async function loadBackgroundTasks() {
 
     const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
 
+    const repeatText = formatRepeatSummary(task);
+
     div.innerHTML = `
       <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
@@ -818,6 +1072,7 @@ async function loadBackgroundTasks() {
         ${task.startTime} – ${task.endTime} ·
         Parallel: ${task.isParallel ? "Có" : "Không"}
       </p>
+      <p class="task-meta">${repeatText}</p>
     `;
 
     list.appendChild(div);
