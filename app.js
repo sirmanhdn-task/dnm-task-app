@@ -10,7 +10,9 @@ import {
   serverTimestamp,
   doc,
   getDoc,
-  setDoc
+  setDoc,
+  updateDoc,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
@@ -20,6 +22,8 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+// *** THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -96,8 +100,6 @@ function renderTimeline() {
     const dayDiv = document.createElement("div");
     dayDiv.classList.add("timeline-day");
     if (d === 0) dayDiv.classList.add("today");
-    if (d === 1) dayDiv.classList.add("future-1");
-    if (d === 2) dayDiv.classList.add("future-2");
 
     dayDiv.style.width = (24 * pixelsPerHour) + "px";
 
@@ -263,7 +265,6 @@ function setLoggedOutUI() {
   loginBtn.style.display = "inline-flex";
   userInfo.style.display = "none";
 
-  // clear lists
   const mainList = document.getElementById("mainTaskList");
   const bgList = document.getElementById("backgroundTaskList");
   if (mainList) mainList.innerHTML = "<p class=\"task-meta\">Hãy login để xem task.</p>";
@@ -305,7 +306,6 @@ async function ensureUserInitialized(uid) {
 loginBtn.addEventListener("click", async () => {
   try {
     await signInWithPopup(auth, provider);
-    // onAuthStateChanged sẽ xử lý UI và load data
   } catch (err) {
     console.error("Login error:", err);
     alert("Không login được với Google. Kiểm tra console.");
@@ -355,6 +355,54 @@ async function getNextCounter(fieldName, uid) {
 }
 
 // ===================================================
+// TASK ACTIONS MODULE (CHO MAIN TASK) – dùng lại cho tooltip/timeline sau này
+// ===================================================
+const TaskActions = {
+  async setStatus(task, status) {
+    if (!currentUid) {
+      alert("Vui lòng login.");
+      return;
+    }
+    const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
+
+    const confirmMsg =
+      status === "done"
+        ? "Đánh dấu task này là DONE?"
+        : "Chuyển task này về trạng thái ACTIVE?";
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      await updateDoc(docRef, { status });
+      await loadMainTasks();
+    } catch (err) {
+      console.error("Error updating status:", err);
+      alert("Không cập nhật được trạng thái task.");
+    }
+  },
+
+  async delete(task) {
+    if (!currentUid) {
+      alert("Vui lòng login.");
+      return;
+    }
+    const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
+
+    if (!confirm("Xóa task này? Không thể hoàn tác.")) return;
+
+    try {
+      await deleteDoc(docRef);
+      await loadMainTasks();
+    } catch (err) {
+      console.error("Error deleting task:", err);
+      alert("Không xóa được task.");
+    }
+  }
+
+  // Tương lai: thêm edit(), openOnTimeline(), openTooltip()...
+};
+
+// ===================================================
 // MAIN TASKS – SUBMIT
 // ===================================================
 document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
@@ -391,6 +439,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
       deadlineAt,
       isPending,
       isParallel,
+      status: "active",
       createdAt: serverTimestamp()
     });
 
@@ -408,7 +457,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
 });
 
 // ===================================================
-// MAIN TASKS – LOAD & SORT (priority v1.1.4)
+// MAIN TASKS – LOAD & SORT (priority + status)
 // ===================================================
 async function loadMainTasks() {
   const list = document.getElementById("mainTaskList");
@@ -433,7 +482,6 @@ async function loadMainTasks() {
       const diffMs = d.getTime() - now;
       minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
     } else if (typeof task.deadline === "number") {
-      // fallback nếu có dữ liệu cũ
       minutesLeft = Math.max(1, task.deadline);
     } else {
       minutesLeft = Infinity;
@@ -451,9 +499,17 @@ async function loadMainTasks() {
     task._minutesLeft = minutesLeft;
     task._priority = priority;
     task._isShortBoost = isShortBoost;
+    task.status = task.status || "active";
   });
 
+  // Sort:
+  // 1. active trước, done sau
+  // 2. trong mỗi nhóm: shortBoost trước
+  // 3. priority giảm dần
   items.sort((a, b) => {
+    if (a.status === "active" && b.status !== "active") return -1;
+    if (a.status !== "active" && b.status === "active") return 1;
+
     if (a._isShortBoost && !b._isShortBoost) return -1;
     if (!a._isShortBoost && b._isShortBoost) return 1;
 
@@ -467,6 +523,9 @@ async function loadMainTasks() {
   items.forEach(task => {
     const div = document.createElement("div");
     div.className = "task-item task-item-main";
+    if (task.status === "done") {
+      div.classList.add("task-item-done");
+    }
 
     const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
     const deadlineText = task.deadlineAt
@@ -479,7 +538,9 @@ async function loadMainTasks() {
       ? task._priority.toFixed(3)
       : "N/A";
 
-    div.innerHTML = `
+    const statusLabel = task.status === "done" ? "DONE" : "ACTIVE";
+
+    const headerHtml = `
       <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
@@ -489,6 +550,7 @@ async function loadMainTasks() {
         Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
       </p>
       <p class="task-meta">
+        Status: ${statusLabel} ·
         Short-boost: ${task._isShortBoost ? "Có" : "Không"} ·
         Priority: ${priorityText} ·
         Parallel: ${task.isParallel ? "Có" : "Không"} ·
@@ -496,6 +558,32 @@ async function loadMainTasks() {
       </p>
     `;
 
+    div.innerHTML = headerHtml;
+
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+
+    const doneBtn = document.createElement("button");
+    doneBtn.className = "task-btn task-btn-primary";
+    doneBtn.textContent = task.status === "done" ? "Undone" : "Done";
+    doneBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const newStatus = task.status === "done" ? "active" : "done";
+      TaskActions.setStatus(task, newStatus);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "task-btn task-btn-danger";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      TaskActions.delete(task);
+    });
+
+    actionsDiv.appendChild(doneBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    div.appendChild(actionsDiv);
     list.appendChild(div);
   });
 }
@@ -592,7 +680,6 @@ async function loadAllData() {
   await Promise.all([loadMainTasks(), loadBackgroundTasks()]);
 }
 
-// Init
 renderTimeline();
 jumpNow();
 setLoggedOutUI();
