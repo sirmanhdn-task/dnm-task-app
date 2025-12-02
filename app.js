@@ -45,20 +45,21 @@ let currentEditingTaskId = null;
 let currentEditingBgTaskId = null;
 let currentDuplicateTask = null;
 
-// cache background tasks cho Repeat Engine
 let backgroundTasksCache = [];
 
 // ===================================================
-// TAB HANDLING
+// TABS
 // ===================================================
 document.querySelectorAll(".tab-button").forEach((btn) => {
   btn.addEventListener("click", () => {
     const id = btn.dataset.tabTarget;
 
-    document.querySelectorAll(".tab-button").forEach(b => b.classList.remove("active"));
+    document
+      .querySelectorAll(".tab-button")
+      .forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
 
-    document.querySelectorAll(".tab-panel").forEach(panel => {
+    document.querySelectorAll(".tab-panel").forEach((panel) => {
       panel.classList.toggle("active", panel.id === id);
     });
   });
@@ -88,17 +89,17 @@ const startOfToday = (() => {
 })();
 
 function formatDayLabel(date) {
-  const w = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const w = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
-// Helper format createdAtLocal -> "HH:mm · dd/MM/yyyy"
+// Format local timestamp for display
 function formatLocalDateTime(isoString) {
   if (!isoString) return "N/A";
   const d = new Date(isoString);
   if (isNaN(d)) return "N/A";
-  const datePart = d.toLocaleDateString("vi-VN");
-  const timePart = d.toLocaleTimeString("vi-VN", {
+  const datePart = d.toLocaleDateString("en-GB");
+  const timePart = d.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit"
   });
@@ -120,7 +121,7 @@ function renderTimeline() {
     dayDiv.classList.add("timeline-day");
     if (d === 0) dayDiv.classList.add("today");
 
-    dayDiv.style.width = (24 * pixelsPerHour) + "px";
+    dayDiv.style.width = 24 * pixelsPerHour + "px";
 
     const label = document.createElement("div");
     label.className = "timeline-day-label";
@@ -142,13 +143,15 @@ function renderTimeline() {
     timelineHeader.appendChild(dayDiv);
   }
 
-  ["laneMainContent", "laneBackgroundContent", "lanePendingContent"].forEach(id => {
-    const lane = document.getElementById(id);
-    lane.style.width = totalWidth + "px";
-  });
+  ["laneMainContent", "laneBackgroundContent", "lanePendingContent"].forEach(
+    (id) => {
+      const lane = document.getElementById(id);
+      lane.style.width = totalWidth + "px";
+    }
+  );
 
   updateNowMarker();
-  renderBackgroundOnTimeline(); // vẽ lại block BG theo zoom
+  renderBackgroundOnTimeline();
 }
 
 function updateNowMarker() {
@@ -162,7 +165,7 @@ function updateNowMarker() {
 
   nowMarker.style.display = "block";
   const hours = diff / MS_PER_HOUR;
-  nowMarker.style.left = (hours * pixelsPerHour) + "px";
+  nowMarker.style.left = hours * pixelsPerHour + "px";
 }
 
 // ===================================================
@@ -170,9 +173,13 @@ function updateNowMarker() {
 // ===================================================
 function zoom(factor) {
   const centerTime =
-    (timelineScroll.scrollLeft + timelineScroll.clientWidth / 2) / pixelsPerHour;
+    (timelineScroll.scrollLeft + timelineScroll.clientWidth / 2) /
+    pixelsPerHour;
 
-  pixelsPerHour = Math.max(MIN_PX, Math.min(MAX_PX, pixelsPerHour * factor));
+  pixelsPerHour = Math.max(
+    MIN_PX,
+    Math.min(MAX_PX, pixelsPerHour * factor)
+  );
   renderTimeline();
 
   timelineScroll.scrollLeft =
@@ -191,8 +198,12 @@ function jumpNow() {
   scrollToTime(hours);
 }
 
-document.getElementById("zoomInBtn").addEventListener("click", () => zoom(1.2));
-document.getElementById("zoomOutBtn").addEventListener("click", () => zoom(1 / 1.2));
+document.getElementById("zoomInBtn").addEventListener("click", () =>
+  zoom(1.2)
+);
+document.getElementById("zoomOutBtn").addEventListener("click", () =>
+  zoom(1 / 1.2)
+);
 document.getElementById("jumpNowBtn").addEventListener("click", jumpNow);
 
 // ===================================================
@@ -207,7 +218,7 @@ function handleJumpDateChosen(iso) {
   const chosen = new Date(iso + "T00:00:00");
   const diff = chosen - startOfToday;
   const dayIndex = diff / MS_PER_DAY;
-  const hours = dayIndex * 24 + 8;
+  const hours = dayIndex * 24 + 8; // center around 8 AM
   scrollToTime(hours);
 }
 
@@ -263,7 +274,7 @@ pillMainParallel.addEventListener("click", () => {
   cbMainParallel.checked = pillMainParallel.classList.contains("active");
 });
 
-// BACKGROUND PILL PARALLEL
+// BACKGROUND PARALLEL PILL
 const pillBgParallel = document.getElementById("pillBgParallel");
 const cbBgParallel = document.getElementById("bgIsParallel");
 
@@ -272,16 +283,18 @@ pillBgParallel.addEventListener("click", () => {
   cbBgParallel.checked = pillBgParallel.classList.contains("active");
 });
 
-// Weekly pills for background repeat (create form)
+// Background repeat UI (create form)
 const bgWeeklyRow = document.getElementById("bgWeeklyRow");
 const bgMonthlyRow = document.getElementById("bgMonthlyRow");
 const bgSpecificDateRow = document.getElementById("bgSpecificDateRow");
-const bgRepeatRadios = document.querySelectorAll('input[name="bgRepeatType"]');
+const bgRepeatRadios = document.querySelectorAll(
+  'input[name="bgRepeatType"]'
+);
 const bgWeeklyPillsContainer = document.getElementById("bgWeeklyPills");
 const bgRepeatDateInput = document.getElementById("bgRepeatDate");
 const bgSpecificDateInput = document.getElementById("bgSpecificDate");
 
-bgRepeatRadios.forEach(r => {
+bgRepeatRadios.forEach((r) => {
   r.addEventListener("change", () => {
     const value = r.value;
     if (!r.checked) return;
@@ -300,11 +313,13 @@ bgRepeatRadios.forEach(r => {
   });
 });
 
-bgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(pill => {
-  pill.addEventListener("click", () => {
-    pill.classList.toggle("active");
+bgWeeklyPillsContainer
+  .querySelectorAll(".pill-toggle")
+  .forEach((pill) => {
+    pill.addEventListener("click", () => {
+      pill.classList.toggle("active");
+    });
   });
-});
 
 // ===================================================
 // AUTH UI
@@ -322,8 +337,14 @@ function setLoggedOutUI() {
 
   const mainList = document.getElementById("mainTaskList");
   const bgList = document.getElementById("backgroundTaskList");
-  if (mainList) mainList.innerHTML = "<p class=\"task-meta\">Hãy login để xem task.</p>";
-  if (bgList) bgList.innerHTML = "<p class=\"task-meta\">Hãy login để xem background task.</p>";
+  if (mainList) {
+    mainList.innerHTML =
+      '<p class="task-meta">Sign in to see your main tasks.</p>';
+  }
+  if (bgList) {
+    bgList.innerHTML =
+      '<p class="task-meta">Sign in to see your background tasks.</p>';
+  }
 
   laneBackgroundContent.innerHTML = "";
 }
@@ -337,7 +358,9 @@ function setLoggedInUI(user) {
   if (user.photoURL) {
     userAvatar.src = user.photoURL;
   } else {
-    userAvatar.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.email || "U");
+    userAvatar.src =
+      "https://ui-avatars.com/api/?name=" +
+      encodeURIComponent(user.email || "User");
   }
 }
 
@@ -365,7 +388,7 @@ loginBtn.addEventListener("click", async () => {
     await signInWithPopup(auth, provider);
   } catch (err) {
     console.error("Login error:", err);
-    alert("Không login được với Google. Kiểm tra console.");
+    alert("Unable to sign in with Google. Please check the console.");
   }
 });
 
@@ -374,7 +397,7 @@ logoutBtn.addEventListener("click", async () => {
     await signOut(auth);
   } catch (err) {
     console.error("Logout error:", err);
-    alert("Không logout được. Kiểm tra console.");
+    alert("Unable to sign out. Please check the console.");
   }
 });
 
@@ -389,7 +412,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ===================================================
-// COUNTER HELPER – GÁN ID TỰ TĂNG (PER USER)
+// COUNTER HELPER – PER USER
 // ===================================================
 async function getNextCounter(fieldName, uid) {
   const countersRef = doc(db, "users", uid, "metadata", "counters");
@@ -432,7 +455,7 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 
 function openEditModal(task) {
   if (!currentUid) {
-    alert("Vui lòng login.");
+    alert("Please sign in first.");
     return;
   }
 
@@ -445,7 +468,9 @@ function openEditModal(task) {
 
   if (task.deadlineAt) {
     const d = new Date(task.deadlineAt);
-    const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    const isoLocal = new Date(
+      d.getTime() - d.getTimezoneOffset() * 60000
+    )
       .toISOString()
       .slice(0, 16);
     editDeadlineInput.value = isoLocal;
@@ -475,7 +500,6 @@ function closeEditModal() {
   cbEditParallel.checked = false;
 }
 
-// PILL EDIT TOGGLES
 pillEditPending.addEventListener("click", () => {
   pillEditPending.classList.toggle("active");
   cbEditPending.checked = pillEditPending.classList.contains("active");
@@ -496,7 +520,6 @@ editTaskModal.addEventListener("click", (e) => {
   }
 });
 
-// Submit edit main task – Save & close
 editTaskForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUid || !currentEditingTaskId) return;
@@ -508,15 +531,15 @@ editTaskForm.addEventListener("submit", async (e) => {
   const deadlineStr = editDeadlineInput.value;
 
   if (!title) {
-    alert("Tên task không được để trống.");
+    alert("Task title cannot be empty.");
     return;
   }
   if (!deadlineStr) {
-    alert("Deadline không hợp lệ.");
+    alert("Please provide a valid deadline.");
     return;
   }
   if (!duration || duration <= 0) {
-    alert("Duration phải > 0.");
+    alert("Duration must be greater than 0.");
     return;
   }
 
@@ -529,7 +552,13 @@ editTaskForm.addEventListener("submit", async (e) => {
   const isPending = cbEditPending.checked;
   const isParallel = cbEditParallel.checked;
 
-  const docRef = doc(db, "users", currentUid, "mainTasks", currentEditingTaskId);
+  const docRef = doc(
+    db,
+    "users",
+    currentUid,
+    "mainTasks",
+    currentEditingTaskId
+  );
 
   try {
     await updateDoc(docRef, {
@@ -547,7 +576,7 @@ editTaskForm.addEventListener("submit", async (e) => {
     await loadMainTasks();
   } catch (err) {
     console.error("Error saving edited task:", err);
-    alert("Không lưu được thay đổi. Kiểm tra console.");
+    alert("Unable to save changes. Please check the console.");
   }
 });
 
@@ -556,12 +585,14 @@ editTaskForm.addEventListener("submit", async (e) => {
 // ===================================================
 const duplicateModal = document.getElementById("duplicateModal");
 const duplicateCancelBtn = document.getElementById("duplicateCancelBtn");
-const duplicateOptionButtons = document.querySelectorAll(".duplicate-option-btn");
+const duplicateOptionButtons = document.querySelectorAll(
+  ".duplicate-option-btn"
+);
 
 const DuplicateModal = {
   open(task) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please sign in first.");
       return;
     }
     currentDuplicateTask = task;
@@ -583,14 +614,9 @@ duplicateModal.addEventListener("click", (e) => {
   }
 });
 
-// Hàm tính deadline mới
 function computeNewDeadline(oldIso, mode) {
   if (!oldIso) {
-    // nếu task gốc không có deadline mà user chọn keep/+7/+1M,
-    // thì vẫn trả null
-    if (mode === "empty" || mode === "keep" || mode === "plus7" || mode === "plus1M") {
-      return null;
-    }
+    // If no original deadline, any mode results in no deadline
     return null;
   }
 
@@ -609,7 +635,6 @@ function computeNewDeadline(oldIso, mode) {
   if (mode === "plus1M") {
     const day = d.getDate();
     d.setMonth(d.getMonth() + 1);
-    // nếu tháng mới không đủ ngày -> JS tự lùi về cuối tháng
     if (d.getDate() < day) {
       d.setDate(0);
     }
@@ -625,7 +650,7 @@ function computeNewDeadline(oldIso, mode) {
 
 async function duplicateMainTask(task, mode) {
   if (!currentUid) {
-    alert("Vui lòng login.");
+    alert("Please sign in first.");
     return;
   }
 
@@ -657,7 +682,7 @@ async function duplicateMainTask(task, mode) {
   await loadMainTasks();
 }
 
-duplicateOptionButtons.forEach(btn => {
+duplicateOptionButtons.forEach((btn) => {
   btn.addEventListener("click", async () => {
     const mode = btn.dataset.mode;
     if (!currentDuplicateTask) {
@@ -668,7 +693,7 @@ duplicateOptionButtons.forEach(btn => {
       await duplicateMainTask(currentDuplicateTask, mode);
     } catch (err) {
       console.error("Error duplicating task:", err);
-      alert("Không duplicate được task.");
+      alert("Unable to duplicate this task.");
     } finally {
       DuplicateModal.close();
     }
@@ -676,20 +701,26 @@ duplicateOptionButtons.forEach(btn => {
 });
 
 // ===================================================
-// TASK ACTIONS MODULE (MAIN TASK)
+// MAIN TASK ACTIONS
 // ===================================================
 const TaskActions = {
   async setStatus(task, status) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please sign in first.");
       return;
     }
-    const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
+    const docRef = doc(
+      db,
+      "users",
+      currentUid,
+      "mainTasks",
+      task.id
+    );
 
     const confirmMsg =
       status === "done"
-        ? "Đánh dấu task này là DONE?"
-        : "Chuyển task này về trạng thái ACTIVE?";
+        ? "Mark this task as DONE?"
+        : "Move this task back to ACTIVE?";
 
     if (!confirm(confirmMsg)) return;
 
@@ -698,25 +729,31 @@ const TaskActions = {
       await loadMainTasks();
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Không cập nhật được trạng thái task.");
+      alert("Unable to update task status.");
     }
   },
 
   async delete(task) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please sign in first.");
       return;
     }
-    const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
+    const docRef = doc(
+      db,
+      "users",
+      currentUid,
+      "mainTasks",
+      task.id
+    );
 
-    if (!confirm("Xóa task này? Không thể hoàn tác.")) return;
+    if (!confirm("Delete this task? This cannot be undone.")) return;
 
     try {
       await deleteDoc(docRef);
       await loadMainTasks();
     } catch (err) {
       console.error("Error deleting task:", err);
-      alert("Không xóa được task.");
+      alert("Unable to delete this task.");
     }
   },
 
@@ -730,62 +767,83 @@ const TaskActions = {
 };
 
 // ===================================================
-// MAIN TASKS – SUBMIT (ADD NEW)
+// MAIN TASKS – CREATE
 // ===================================================
-document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!currentUid) {
-    alert("Vui lòng login trước khi thêm task.");
-    return;
-  }
+document
+  .getElementById("mainTaskForm")
+  .addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!currentUid) {
+      alert("Please sign in before adding tasks.");
+      return;
+    }
 
-  const title = document.getElementById("mainTitle").value;
-  const description = document.getElementById("mainDescription").value;
-  const importance = Number(document.getElementById("mainImportance").value);
-  const duration = Number(document.getElementById("mainDuration").value);
-  const deadlineStr = document.getElementById("mainDeadline").value;
+    const title = document.getElementById("mainTitle").value.trim();
+    const description =
+      document.getElementById("mainDescription").value.trim();
+    const importance = Number(
+      document.getElementById("mainImportance").value
+    );
+    const duration = Number(
+      document.getElementById("mainDuration").value
+    );
+    const deadlineStr =
+      document.getElementById("mainDeadline").value;
 
-  const isPending = cbMainPending.checked;
-  const isParallel = cbMainParallel.checked;
+    const isPending = cbMainPending.checked;
+    const isParallel = cbMainParallel.checked;
 
-  let deadlineAt = null;
-  if (deadlineStr) {
-    const d = new Date(deadlineStr);
-    deadlineAt = d.toISOString();
-  }
+    if (!title) {
+      alert("Task title cannot be empty.");
+      return;
+    }
+    if (!deadlineStr) {
+      alert("Please provide a valid deadline.");
+      return;
+    }
+    if (!duration || duration <= 0) {
+      alert("Duration must be greater than 0.");
+      return;
+    }
 
-  const now = new Date();
-  const createdAtLocal = now.toISOString();
+    let deadlineAt = null;
+    if (deadlineStr) {
+      const d = new Date(deadlineStr);
+      deadlineAt = d.toISOString();
+    }
 
-  try {
-    const taskId = await getNextCounter("mainTaskCount", currentUid);
+    const now = new Date();
+    const createdAtLocal = now.toISOString();
 
-    await addDoc(collection(db, "users", currentUid, "mainTasks"), {
-      taskId,
-      title,
-      description,
-      importance,
-      duration,
-      deadlineAt,
-      isPending,
-      isParallel,
-      status: "active",
-      createdAtLocal,
-      createdAt: serverTimestamp()
-    });
+    try {
+      const taskId = await getNextCounter("mainTaskCount", currentUid);
 
-    e.target.reset();
-    pillMainPending.classList.remove("active");
-    pillMainParallel.classList.remove("active");
-    cbMainPending.checked = false;
-    cbMainParallel.checked = false;
+      await addDoc(collection(db, "users", currentUid, "mainTasks"), {
+        taskId,
+        title,
+        description,
+        importance,
+        duration,
+        deadlineAt,
+        isPending,
+        isParallel,
+        status: "active",
+        createdAtLocal,
+        createdAt: serverTimestamp()
+      });
 
-    await loadMainTasks();
-  } catch (err) {
-    console.error("Error adding main task:", err);
-    alert("Lỗi khi lưu main task. Kiểm tra console.");
-  }
-});
+      e.target.reset();
+      pillMainPending.classList.remove("active");
+      pillMainParallel.classList.remove("active");
+      cbMainPending.checked = false;
+      cbMainParallel.checked = false;
+
+      await loadMainTasks();
+    } catch (err) {
+      console.error("Error adding main task:", err);
+      alert("Unable to create main task. Please check the console.");
+    }
+  });
 
 // ===================================================
 // MAIN TASKS – LOAD & SORT
@@ -794,19 +852,22 @@ async function loadMainTasks() {
   const list = document.getElementById("mainTaskList");
   if (!currentUid) {
     if (list) {
-      list.innerHTML = "<p class=\"task-meta\">Hãy login để xem task.</p>";
+      list.innerHTML =
+        '<p class="task-meta">Sign in to see your main tasks.</p>';
     }
     return;
   }
 
-  const snap = await getDocs(collection(db, "users", currentUid, "mainTasks"));
+  const snap = await getDocs(
+    collection(db, "users", currentUid, "mainTasks")
+  );
   const items = [];
-  snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
+  snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
 
   const now = Date.now();
   const FORTY_EIGHT_HOURS_MIN = 48 * 60;
 
-  items.forEach(task => {
+  items.forEach((task) => {
     let minutesLeft;
     if (task.deadlineAt) {
       const d = new Date(task.deadlineAt);
@@ -820,7 +881,7 @@ async function loadMainTasks() {
 
     const duration = Number(task.duration) || 0;
     const priority =
-      (minutesLeft === Infinity || minutesLeft <= 0)
+      minutesLeft === Infinity || minutesLeft <= 0
         ? 0
         : duration / minutesLeft;
 
@@ -833,6 +894,7 @@ async function loadMainTasks() {
     task.status = task.status || "active";
   });
 
+  // Sort: active first, short-boost first, then by priority desc
   items.sort((a, b) => {
     if (a.status === "active" && b.status !== "active") return -1;
     if (a.status !== "active" && b.status === "active") return 1;
@@ -847,20 +909,23 @@ async function loadMainTasks() {
 
   list.innerHTML = "";
 
-  items.forEach(task => {
+  items.forEach((task) => {
     const div = document.createElement("div");
     div.className = "task-item task-item-main";
     if (task.status === "done") {
       div.classList.add("task-item-done");
     }
 
-    const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+    const idText =
+      typeof task.taskId === "number" ? `#${task.taskId} ` : "";
     const deadlineText = task.deadlineAt
       ? new Date(task.deadlineAt).toLocaleString()
       : "N/A";
 
     const minutesText =
-      task._minutesLeft === Infinity ? "N/A" : `${task._minutesLeft} phút`;
+      task._minutesLeft === Infinity
+        ? "N/A"
+        : `${task._minutesLeft} minutes left`;
     const priorityText = isFinite(task._priority)
       ? task._priority.toFixed(3)
       : "N/A";
@@ -872,20 +937,20 @@ async function loadMainTasks() {
       <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
-        Importance: ${task.importance} · Duration: ${task.duration} phút
+        Importance: ${task.importance} · Duration: ${task.duration} min
       </p>
       <p class="task-meta">
-        Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
+        Deadline: ${deadlineText} · Time remaining: ${minutesText}
       </p>
       <p class="task-meta">
         Created: ${createdText}
       </p>
       <p class="task-meta">
         Status: ${statusLabel} ·
-        Short-boost: ${task._isShortBoost ? "Có" : "Không"} ·
-        Priority: ${priorityText} ·
-        Parallel: ${task.isParallel ? "Có" : "Không"} ·
-        Pending: ${task.isPending ? "Có" : "Không"}
+        Short boost: ${task._isShortBoost ? "Yes" : "No"} ·
+        Priority ratio: ${priorityText} ·
+        Parallel: ${task.isParallel ? "Yes" : "No"} ·
+        Pending: ${task.isPending ? "Yes" : "No"}
       </p>
     `;
 
@@ -912,7 +977,7 @@ async function loadMainTasks() {
 
     const doneBtn = document.createElement("button");
     doneBtn.className = "task-btn task-btn-primary";
-    doneBtn.textContent = task.status === "done" ? "Undone" : "Done";
+    doneBtn.textContent = task.status === "done" ? "Mark as active" : "Mark as done";
     doneBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const newStatus = task.status === "done" ? "active" : "done";
@@ -953,7 +1018,6 @@ function getDayCode(date) {
   return map[idx];
 }
 
-// Generate segments cho 1 ngày baseDate
 function generateSegmentsForDate(task, baseDate) {
   const startMinutes = parseTimeToMinutes(task.startTime);
   const endMinutes = parseTimeToMinutes(task.endTime);
@@ -992,13 +1056,12 @@ function generateSegmentsForDate(task, baseDate) {
       isOvernight: true
     });
   } else {
-    // start == end -> bỏ
+    // start == end -> skip
   }
 
   return segments;
 }
 
-// Generate instances theo repeatType cho 14 ngày
 function generateBackgroundInstances(task, rangeStart, rangeEnd) {
   const instances = [];
   const repeatType = task.repeatType || "none";
@@ -1036,7 +1099,6 @@ function generateBackgroundInstances(task, rangeStart, rangeEnd) {
   return instances;
 }
 
-// Vẽ background blocks lên laneBackgroundContent
 function renderBackgroundOnTimeline() {
   if (!laneBackgroundContent) return;
   laneBackgroundContent.innerHTML = "";
@@ -1046,23 +1108,24 @@ function renderBackgroundOnTimeline() {
   const rangeStart = startOfToday;
   const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
 
-  backgroundTasksCache.forEach(task => {
+  backgroundTasksCache.forEach((task) => {
     const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
-    segments.forEach(seg => {
+    segments.forEach((seg) => {
       const dateObj = new Date(seg.date + "T00:00:00");
       const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
       if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
 
-      const totalHoursOffset = diffDays * 24 + (seg.startMinutes / 60);
+      const totalHoursOffset =
+        diffDays * 24 + seg.startMinutes / 60;
       const hoursWidth = (seg.endMinutes - seg.startMinutes) / 60;
 
       if (hoursWidth <= 0) return;
 
       const block = document.createElement("div");
       block.className = "timeline-bg-block";
-      block.style.left = (totalHoursOffset * pixelsPerHour) + "px";
-      block.style.width = (hoursWidth * pixelsPerHour) + "px";
-      block.textContent = seg.title || "(BG)";
+      block.style.left = totalHoursOffset * pixelsPerHour + "px";
+      block.style.width = hoursWidth * pixelsPerHour + "px";
+      block.textContent = seg.title || "(background)";
 
       laneBackgroundContent.appendChild(block);
     });
@@ -1070,98 +1133,118 @@ function renderBackgroundOnTimeline() {
 }
 
 // ===================================================
-// BACKGROUND TASKS – SUBMIT (ADD NEW)
+// BACKGROUND TASKS – CREATE
 // ===================================================
-document.getElementById("backgroundTaskForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!currentUid) {
-    alert("Vui lòng login trước khi thêm background task.");
-    return;
-  }
-
-  const title = document.getElementById("bgTitle").value.trim();
-  const description = document.getElementById("bgDescription").value.trim();
-  const startTime = document.getElementById("bgStartTime").value;
-  const endTime = document.getElementById("bgEndTime").value;
-  const isParallel = cbBgParallel.checked;
-
-  if (!title) {
-    alert("Tên background task không được để trống.");
-    return;
-  }
-  if (!startTime || !endTime) {
-    alert("Start/End time không hợp lệ.");
-    return;
-  }
-
-  const repeatTypeInput = document.querySelector('input[name="bgRepeatType"]:checked');
-  const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
-
-  let repeatDays = [];
-  let repeatDate = null;
-  let specificDate = null;
-
-  if (repeatType === "none") {
-    specificDate = bgSpecificDateInput.value;
-    if (!specificDate) {
-      alert("Vui lòng chọn ngày cho background task (không lặp).");
+document
+  .getElementById("backgroundTaskForm")
+  .addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!currentUid) {
+      alert("Please sign in before adding background tasks.");
       return;
     }
-  } else if (repeatType === "weekly") {
-    const activePills = Array.from(bgWeeklyPillsContainer.querySelectorAll(".pill-toggle.active"));
-    repeatDays = activePills.map(p => p.getAttribute("data-day"));
-    if (repeatDays.length === 0) {
-      alert("Vui lòng chọn ít nhất một thứ cho background task lặp tuần.");
+
+    const title = document.getElementById("bgTitle").value.trim();
+    const description =
+      document.getElementById("bgDescription").value.trim();
+    const startTime = document.getElementById("bgStartTime").value;
+    const endTime = document.getElementById("bgEndTime").value;
+    const isParallel = cbBgParallel.checked;
+
+    if (!title) {
+      alert("Background task title cannot be empty.");
       return;
     }
-  } else if (repeatType === "monthly") {
-    repeatDate = Number(bgRepeatDateInput.value);
-    if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
-      alert("Ngày trong tháng phải từ 1 đến 31.");
+    if (!startTime || !endTime) {
+      alert("Please provide valid start and end times.");
       return;
     }
-  }
 
-  const now = new Date();
-  const createdAtLocal = now.toISOString();
+    const repeatTypeInput = document.querySelector(
+      'input[name="bgRepeatType"]:checked'
+    );
+    const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
 
-  try {
-    const taskId = await getNextCounter("backgroundTaskCount", currentUid);
+    let repeatDays = [];
+    let repeatDate = null;
+    let specificDate = null;
 
-    await addDoc(collection(db, "users", currentUid, "backgroundTasks"), {
-      taskId,
-      title,
-      description,
-      startTime,
-      endTime,
-      isParallel,
-      repeatType,
-      repeatDays,
-      repeatDate,
-      specificDate,
-      createdAtLocal,
-      createdAt: serverTimestamp()
-    });
+    if (repeatType === "none") {
+      specificDate = bgSpecificDateInput.value;
+      if (!specificDate) {
+        alert("Please select an exact date for this non-repeating task.");
+        return;
+      }
+    } else if (repeatType === "weekly") {
+      const activePills = Array.from(
+        bgWeeklyPillsContainer.querySelectorAll(".pill-toggle.active")
+      );
+      repeatDays = activePills.map((p) => p.getAttribute("data-day"));
+      if (repeatDays.length === 0) {
+        alert("Please choose at least one weekday for the weekly pattern.");
+        return;
+      }
+    } else if (repeatType === "monthly") {
+      repeatDate = Number(bgRepeatDateInput.value);
+      if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
+        alert("Day of month must be between 1 and 31.");
+        return;
+      }
+    }
 
-    e.target.reset();
-    pillBgParallel.classList.remove("active");
-    cbBgParallel.checked = false;
-    bgRepeatRadios.forEach(r => { r.checked = false; });
-    const noneRadio = document.querySelector('input[name="bgRepeatType"][value="none"]');
-    if (noneRadio) noneRadio.checked = true;
-    bgSpecificDateRow.classList.remove("hidden");
-    bgWeeklyRow.classList.add("hidden");
-    bgMonthlyRow.classList.add("hidden");
-    bgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
-    bgRepeatDateInput.value = "";
-    bgSpecificDateInput.value = "";
+    const now = new Date();
+    const createdAtLocal = now.toISOString();
 
-    await loadBackgroundTasks();
-  } catch (err) {
-    console.error("Error adding background task:", err);
-    alert("Lỗi khi lưu background task. Kiểm tra console.");
-  }
-});
+    try {
+      const taskId = await getNextCounter(
+        "backgroundTaskCount",
+        currentUid
+      );
+
+      await addDoc(
+        collection(db, "users", currentUid, "backgroundTasks"),
+        {
+          taskId,
+          title,
+          description,
+          startTime,
+          endTime,
+          isParallel,
+          repeatType,
+          repeatDays,
+          repeatDate,
+          specificDate,
+          createdAtLocal,
+          createdAt: serverTimestamp()
+        }
+      );
+
+      e.target.reset();
+      pillBgParallel.classList.remove("active");
+      cbBgParallel.checked = false;
+
+      bgRepeatRadios.forEach((r) => {
+        r.checked = false;
+      });
+      const noneRadio = document.querySelector(
+        'input[name="bgRepeatType"][value="none"]'
+      );
+      if (noneRadio) noneRadio.checked = true;
+      bgSpecificDateRow.classList.remove("hidden");
+      bgWeeklyRow.classList.add("hidden");
+      bgMonthlyRow.classList.add("hidden");
+      bgWeeklyPillsContainer
+        .querySelectorAll(".pill-toggle")
+        .forEach((p) => p.classList.remove("active"));
+      bgRepeatDateInput.value = "";
+      bgSpecificDateInput.value = "";
+
+      await loadBackgroundTasks();
+    } catch (err) {
+      console.error("Error adding background task:", err);
+      alert("Unable to create background task. Please check the console.");
+    }
+  });
 
 // ===================================================
 // EDIT BACKGROUND TASK MODAL
@@ -1170,24 +1253,36 @@ const editBgTaskModal = document.getElementById("editBgTaskModal");
 const editBgTaskForm = document.getElementById("editBgTaskForm");
 
 const editBgTitleInput = document.getElementById("editBgTitle");
-const editBgDescriptionInput = document.getElementById("editBgDescription");
+const editBgDescriptionInput = document.getElementById(
+  "editBgDescription"
+);
 const editBgStartTimeInput = document.getElementById("editBgStartTime");
 const editBgEndTimeInput = document.getElementById("editBgEndTime");
 
-const editBgSpecificDateRow = document.getElementById("editBgSpecificDateRow");
+const editBgSpecificDateRow = document.getElementById(
+  "editBgSpecificDateRow"
+);
 const editBgWeeklyRow = document.getElementById("editBgWeeklyRow");
 const editBgMonthlyRow = document.getElementById("editBgMonthlyRow");
 
-const editBgSpecificDateInput = document.getElementById("editBgSpecificDate");
-const editBgWeeklyPillsContainer = document.getElementById("editBgWeeklyPills");
-const editBgRepeatDateInput = document.getElementById("editBgRepeatDate");
-const editBgRepeatRadios = document.querySelectorAll('input[name="editBgRepeatType"]');
+const editBgSpecificDateInput = document.getElementById(
+  "editBgSpecificDate"
+);
+const editBgWeeklyPillsContainer = document.getElementById(
+  "editBgWeeklyPills"
+);
+const editBgRepeatDateInput = document.getElementById(
+  "editBgRepeatDate"
+);
+const editBgRepeatRadios = document.querySelectorAll(
+  'input[name="editBgRepeatType"]'
+);
 
 const pillEditBgParallel = document.getElementById("pillEditBgParallel");
 const cbEditBgParallel = document.getElementById("editBgIsParallel");
 const cancelEditBgBtn = document.getElementById("cancelEditBgBtn");
 
-editBgRepeatRadios.forEach(r => {
+editBgRepeatRadios.forEach((r) => {
   r.addEventListener("change", () => {
     const value = r.value;
     if (!r.checked) return;
@@ -1206,20 +1301,23 @@ editBgRepeatRadios.forEach(r => {
   });
 });
 
-editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(pill => {
-  pill.addEventListener("click", () => {
-    pill.classList.toggle("active");
+editBgWeeklyPillsContainer
+  .querySelectorAll(".pill-toggle")
+  .forEach((pill) => {
+    pill.addEventListener("click", () => {
+      pill.classList.toggle("active");
+    });
   });
-});
 
 pillEditBgParallel.addEventListener("click", () => {
   pillEditBgParallel.classList.toggle("active");
-  cbEditBgParallel.checked = pillEditBgParallel.classList.contains("active");
+  cbEditBgParallel.checked =
+    pillEditBgParallel.classList.contains("active");
 });
 
 function openBgEditModal(task) {
   if (!currentUid) {
-    alert("Vui lòng login.");
+    alert("Please sign in first.");
     return;
   }
 
@@ -1232,7 +1330,7 @@ function openBgEditModal(task) {
 
   const repeatType = task.repeatType || "none";
 
-  editBgRepeatRadios.forEach(r => {
+  editBgRepeatRadios.forEach((r) => {
     r.checked = r.value === repeatType;
   });
 
@@ -1245,11 +1343,13 @@ function openBgEditModal(task) {
     editBgSpecificDateInput.value = task.specificDate || "";
   } else if (repeatType === "weekly") {
     editBgWeeklyRow.classList.remove("hidden");
-    editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => {
-      const day = p.getAttribute("data-day");
-      const active = (task.repeatDays || []).includes(day);
-      p.classList.toggle("active", active);
-    });
+    editBgWeeklyPillsContainer
+      .querySelectorAll(".pill-toggle")
+      .forEach((p) => {
+        const day = p.getAttribute("data-day");
+        const active = (task.repeatDays || []).includes(day);
+        p.classList.toggle("active", active);
+      });
   } else if (repeatType === "monthly") {
     editBgMonthlyRow.classList.remove("hidden");
     editBgRepeatDateInput.value = task.repeatDate || "";
@@ -1266,8 +1366,12 @@ function closeBgEditModal() {
   editBgTaskModal.classList.remove("active");
   currentEditingBgTaskId = null;
   editBgTaskForm.reset();
-  editBgRepeatRadios.forEach(r => { r.checked = false; });
-  editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+  editBgRepeatRadios.forEach((r) => {
+    r.checked = false;
+  });
+  editBgWeeklyPillsContainer
+    .querySelectorAll(".pill-toggle")
+    .forEach((p) => p.classList.remove("active"));
   editBgSpecificDateRow.classList.add("hidden");
   editBgWeeklyRow.classList.add("hidden");
   editBgMonthlyRow.classList.add("hidden");
@@ -1290,21 +1394,24 @@ editBgTaskForm.addEventListener("submit", async (e) => {
   if (!currentUid || !currentEditingBgTaskId) return;
 
   const title = editBgTitleInput.value.trim();
-  const description = editBgDescriptionInput.value.trim();
+  const description =
+    editBgDescriptionInput.value.trim();
   const startTime = editBgStartTimeInput.value;
   const endTime = editBgEndTimeInput.value;
   const isParallel = cbEditBgParallel.checked;
 
   if (!title) {
-    alert("Tên background task không được để trống.");
+    alert("Background task title cannot be empty.");
     return;
   }
   if (!startTime || !endTime) {
-    alert("Start/End time không hợp lệ.");
+    alert("Please provide valid start and end times.");
     return;
   }
 
-  const repeatTypeInput = Array.from(editBgRepeatRadios).find(r => r.checked);
+  const repeatTypeInput = Array.from(editBgRepeatRadios).find(
+    (r) => r.checked
+  );
   const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
 
   let repeatDays = [];
@@ -1314,25 +1421,33 @@ editBgTaskForm.addEventListener("submit", async (e) => {
   if (repeatType === "none") {
     specificDate = editBgSpecificDateInput.value;
     if (!specificDate) {
-      alert("Vui lòng chọn ngày cho background task (không lặp).");
+      alert("Please select an exact date for this non-repeating task.");
       return;
     }
   } else if (repeatType === "weekly") {
-    const activePills = Array.from(editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle.active"));
-    repeatDays = activePills.map(p => p.getAttribute("data-day"));
+    const activePills = Array.from(
+      editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle.active")
+    );
+    repeatDays = activePills.map((p) => p.getAttribute("data-day"));
     if (repeatDays.length === 0) {
-      alert("Vui lòng chọn ít nhất một thứ cho background task lặp tuần.");
+      alert("Please choose at least one weekday for the weekly pattern.");
       return;
     }
   } else if (repeatType === "monthly") {
     repeatDate = Number(editBgRepeatDateInput.value);
     if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
-      alert("Ngày trong tháng phải từ 1 đến 31.");
+      alert("Day of month must be between 1 and 31.");
       return;
     }
   }
 
-  const docRef = doc(db, "users", currentUid, "backgroundTasks", currentEditingBgTaskId);
+  const docRef = doc(
+    db,
+    "users",
+    currentUid,
+    "backgroundTasks",
+    currentEditingBgTaskId
+  );
 
   try {
     await updateDoc(docRef, {
@@ -1352,12 +1467,12 @@ editBgTaskForm.addEventListener("submit", async (e) => {
     await loadBackgroundTasks();
   } catch (err) {
     console.error("Error updating background task:", err);
-    alert("Không lưu được thay đổi background task.");
+    alert("Unable to save changes for this background task.");
   }
 });
 
 // ===================================================
-// BACKGROUND TASK ACTIONS (Edit/Delete)
+// BACKGROUND TASK ACTIONS
 // ===================================================
 const BackgroundActions = {
   openEdit(task) {
@@ -1366,64 +1481,84 @@ const BackgroundActions = {
 
   async delete(task) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please sign in first.");
       return;
     }
 
-    if (!confirm("Xóa background task này? Không thể hoàn tác.")) return;
+    if (
+      !confirm("Delete this background task? This cannot be undone.")
+    )
+      return;
 
-    const docRef = doc(db, "users", currentUid, "backgroundTasks", task.id);
+    const docRef = doc(
+      db,
+      "users",
+      currentUid,
+      "backgroundTasks",
+      task.id
+    );
 
     try {
       await deleteDoc(docRef);
       await loadBackgroundTasks();
     } catch (err) {
       console.error("Error deleting background task:", err);
-      alert("Không xóa được background task.");
+      alert("Unable to delete this background task.");
     }
   }
 };
 
-// ===================================================
-// BACKGROUND TASKS – LOAD
-// ===================================================
 function formatRepeatSummary(task) {
   const type = task.repeatType || "none";
-  if (type === "daily") return "Lặp: hằng ngày";
+  if (type === "daily") return "Repeat: daily";
 
   if (type === "weekly") {
     const mapLabel = {
-      mon: "T2", tue: "T3", wed: "T4", thu: "T5", fri: "T6", sat: "T7", sun: "CN"
+      mon: "Mon",
+      tue: "Tue",
+      wed: "Wed",
+      thu: "Thu",
+      fri: "Fri",
+      sat: "Sat",
+      sun: "Sun"
     };
-    const days = (task.repeatDays || []).map(d => mapLabel[d] || d).join(", ");
-    return "Lặp: hằng tuần (" + (days || "không có") + ")";
+    const days = (task.repeatDays || [])
+      .map((d) => mapLabel[d] || d)
+      .join(", ");
+    return "Repeat: weekly (" + (days || "no days") + ")";
   }
 
   if (type === "monthly") {
-    return `Lặp: ngày ${task.repeatDate} hằng tháng`;
+    return `Repeat: day ${task.repeatDate} of every month`;
   }
 
   if (task.specificDate) {
-    return "Không lặp – Ngày " + task.specificDate;
+    return "Single date: " + task.specificDate;
   }
 
-  return "Không lặp";
+  return "No repeat pattern";
 }
 
+// ===================================================
+// BACKGROUND TASKS – LOAD
+// ===================================================
 async function loadBackgroundTasks() {
   const list = document.getElementById("backgroundTaskList");
   if (!currentUid) {
     if (list) {
-      list.innerHTML = "<p class=\"task-meta\">Hãy login để xem background task.</p>";
+      list.innerHTML =
+        '<p class="task-meta">Sign in to see your background tasks.</p>';
     }
     backgroundTasksCache = [];
     renderBackgroundOnTimeline();
     return;
   }
 
-  const snap = await getDocs(collection(db, "users", currentUid, "backgroundTasks"));
+  const snap = await getDocs(
+    collection(db, "users", currentUid, "backgroundTasks")
+  );
   const items = [];
-  snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
+  snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
 
   items.sort((a, b) =>
     (a.startTime || "").localeCompare(b.startTime || "")
@@ -1434,11 +1569,12 @@ async function loadBackgroundTasks() {
 
   list.innerHTML = "";
 
-  items.forEach(task => {
+  items.forEach((task) => {
     const div = document.createElement("div");
     div.className = "task-item task-item-bg";
 
-    const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+    const idText =
+      typeof task.taskId === "number" ? `#${task.taskId} ` : "";
     const repeatText = formatRepeatSummary(task);
     const createdText = formatLocalDateTime(task.createdAtLocal);
 
@@ -1447,10 +1583,10 @@ async function loadBackgroundTasks() {
       <p>${task.description || ""}</p>
       <p class="task-meta">
         ${task.startTime} – ${task.endTime} ·
-        Parallel: ${task.isParallel ? "Có" : "Không"}
+        Parallel: ${task.isParallel ? "Yes" : "No"}
       </p>
       <p class="task-meta">${repeatText}</p>
-      <p class="task-meta">Tạo lúc: ${createdText}</p>
+      <p class="task-meta">Created: ${createdText}</p>
     `;
 
     const actionsDiv = document.createElement("div");
