@@ -138,9 +138,7 @@ form textarea {
   font-size: 14px;
 }
 
-form textarea {
-  min-height: 60px;
-}
+form textarea { min-height: 60px; }
 
 form input:focus,
 form textarea:focus {
@@ -160,17 +158,12 @@ form textarea:focus {
   color: var(--text-muted);
 }
 
-.checkbox-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* BUTTONS --------------------------------------------- */
 
 .primary-btn,
 .secondary-btn,
-.icon-btn {
+.icon-btn,
+.task-btn {
   border: none;
   cursor: pointer;
   border-radius: 999px;
@@ -260,9 +253,7 @@ form textarea:focus {
   background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
 }
 
-.timeline-day {
-  border-right: 1px solid var(--border-subtle);
-}
+.timeline-day { border-right: 1px solid var(--border-subtle); }
 
 .timeline-day-label {
   padding: 2px 4px;
@@ -326,6 +317,48 @@ form textarea:focus {
 .task-item p {
   margin: 2px 0;
   font-size: 12px;
+}
+
+.task-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* DONE STATE ------------------------------------------ */
+
+.task-item-done {
+  background: #e5e7eb;
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+.task-item-done h4 {
+  text-decoration: line-through;
+}
+
+/* TASK ACTIONS ---------------------------------------- */
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.task-btn {
+  background: #e5e7eb;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.task-btn-primary {
+  background: #22c55e;
+  color: #fff;
+}
+
+.task-btn-danger {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* BLOCK COLORS FUTURE -------------------------------- */
