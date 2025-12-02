@@ -42,6 +42,7 @@ const provider = new GoogleAuthProvider();
 // ===================================================
 let currentUid = null;
 let currentEditingTaskId = null;
+let currentEditingBgTaskId = null;
 
 // cache background tasks cho Repeat Engine
 let backgroundTasksCache = [];
@@ -244,7 +245,7 @@ jumpDateModal.addEventListener("click", (e) => {
 });
 
 // ===================================================
-// PILL TOGGLE LOGIC – ADD MAIN
+// PILL TOGGLE LOGIC – MAIN
 // ===================================================
 const pillMainPending = document.getElementById("pillMainPending");
 const pillMainParallel = document.getElementById("pillMainParallel");
@@ -261,6 +262,7 @@ pillMainParallel.addEventListener("click", () => {
   cbMainParallel.checked = pillMainParallel.classList.contains("active");
 });
 
+// BACKGROUND PILL PARALLEL
 const pillBgParallel = document.getElementById("pillBgParallel");
 const cbBgParallel = document.getElementById("bgIsParallel");
 
@@ -269,7 +271,7 @@ pillBgParallel.addEventListener("click", () => {
   cbBgParallel.checked = pillBgParallel.classList.contains("active");
 });
 
-// Weekly pills for background repeat
+// Weekly pills for background repeat (create form)
 const bgWeeklyRow = document.getElementById("bgWeeklyRow");
 const bgMonthlyRow = document.getElementById("bgMonthlyRow");
 const bgSpecificDateRow = document.getElementById("bgSpecificDateRow");
@@ -409,7 +411,7 @@ async function getNextCounter(fieldName, uid) {
 }
 
 // ===================================================
-// EDIT MODAL HANDLING (MAIN TASK)
+// EDIT MAIN TASK MODAL
 // ===================================================
 const editTaskModal = document.getElementById("editTaskModal");
 const editTaskForm = document.getElementById("editTaskForm");
@@ -623,7 +625,6 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     deadlineAt = d.toISOString();
   }
 
-  // createdAtLocal – lưu ISO, hiển thị sau
   const now = new Date();
   const createdAtLocal = now.toISOString();
 
@@ -703,7 +704,6 @@ async function loadMainTasks() {
     task.status = task.status || "active";
   });
 
-  // Sort
   items.sort((a, b) => {
     if (a.status === "active" && b.status !== "active") return -1;
     if (a.status !== "active" && b.status === "active") return 1;
@@ -834,7 +834,6 @@ function generateSegmentsForDate(task, baseDate) {
       isOvernight: false
     });
   } else if (endMinutes < startMinutes) {
-    // overnight
     segments.push({
       date: dateISO,
       startMinutes,
@@ -933,7 +932,7 @@ function renderBackgroundOnTimeline() {
 }
 
 // ===================================================
-// BACKGROUND TASKS – SUBMIT
+// BACKGROUND TASKS – SUBMIT (ADD NEW)
 // ===================================================
 document.getElementById("backgroundTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1027,6 +1026,227 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
 });
 
 // ===================================================
+// EDIT BACKGROUND TASK MODAL
+// ===================================================
+const editBgTaskModal = document.getElementById("editBgTaskModal");
+const editBgTaskForm = document.getElementById("editBgTaskForm");
+
+const editBgTitleInput = document.getElementById("editBgTitle");
+const editBgDescriptionInput = document.getElementById("editBgDescription");
+const editBgStartTimeInput = document.getElementById("editBgStartTime");
+const editBgEndTimeInput = document.getElementById("editBgEndTime");
+
+const editBgSpecificDateRow = document.getElementById("editBgSpecificDateRow");
+const editBgWeeklyRow = document.getElementById("editBgWeeklyRow");
+const editBgMonthlyRow = document.getElementById("editBgMonthlyRow");
+
+const editBgSpecificDateInput = document.getElementById("editBgSpecificDate");
+const editBgWeeklyPillsContainer = document.getElementById("editBgWeeklyPills");
+const editBgRepeatDateInput = document.getElementById("editBgRepeatDate");
+const editBgRepeatRadios = document.querySelectorAll('input[name="editBgRepeatType"]');
+
+const pillEditBgParallel = document.getElementById("pillEditBgParallel");
+const cbEditBgParallel = document.getElementById("editBgIsParallel");
+const cancelEditBgBtn = document.getElementById("cancelEditBgBtn");
+
+editBgRepeatRadios.forEach(r => {
+  r.addEventListener("change", () => {
+    const value = r.value;
+    if (!r.checked) return;
+
+    editBgSpecificDateRow.classList.add("hidden");
+    editBgWeeklyRow.classList.add("hidden");
+    editBgMonthlyRow.classList.add("hidden");
+
+    if (value === "none") {
+      editBgSpecificDateRow.classList.remove("hidden");
+    } else if (value === "weekly") {
+      editBgWeeklyRow.classList.remove("hidden");
+    } else if (value === "monthly") {
+      editBgMonthlyRow.classList.remove("hidden");
+    }
+  });
+});
+
+editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(pill => {
+  pill.addEventListener("click", () => {
+    pill.classList.toggle("active");
+  });
+});
+
+pillEditBgParallel.addEventListener("click", () => {
+  pillEditBgParallel.classList.toggle("active");
+  cbEditBgParallel.checked = pillEditBgParallel.classList.contains("active");
+});
+
+function openBgEditModal(task) {
+  if (!currentUid) {
+    alert("Vui lòng login.");
+    return;
+  }
+
+  currentEditingBgTaskId = task.id;
+
+  editBgTitleInput.value = task.title || "";
+  editBgDescriptionInput.value = task.description || "";
+  editBgStartTimeInput.value = task.startTime || "";
+  editBgEndTimeInput.value = task.endTime || "";
+
+  const repeatType = task.repeatType || "none";
+
+  editBgRepeatRadios.forEach(r => {
+    r.checked = r.value === repeatType;
+  });
+
+  editBgSpecificDateRow.classList.add("hidden");
+  editBgWeeklyRow.classList.add("hidden");
+  editBgMonthlyRow.classList.add("hidden");
+
+  if (repeatType === "none") {
+    editBgSpecificDateRow.classList.remove("hidden");
+    editBgSpecificDateInput.value = task.specificDate || "";
+  } else if (repeatType === "weekly") {
+    editBgWeeklyRow.classList.remove("hidden");
+    editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => {
+      const day = p.getAttribute("data-day");
+      const active = (task.repeatDays || []).includes(day);
+      p.classList.toggle("active", active);
+    });
+  } else if (repeatType === "monthly") {
+    editBgMonthlyRow.classList.remove("hidden");
+    editBgRepeatDateInput.value = task.repeatDate || "";
+  }
+
+  const isParallel = !!task.isParallel;
+  cbEditBgParallel.checked = isParallel;
+  pillEditBgParallel.classList.toggle("active", isParallel);
+
+  editBgTaskModal.classList.add("active");
+}
+
+function closeBgEditModal() {
+  editBgTaskModal.classList.remove("active");
+  currentEditingBgTaskId = null;
+  editBgTaskForm.reset();
+  editBgRepeatRadios.forEach(r => { r.checked = false; });
+  editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+  editBgSpecificDateRow.classList.add("hidden");
+  editBgWeeklyRow.classList.add("hidden");
+  editBgMonthlyRow.classList.add("hidden");
+  pillEditBgParallel.classList.remove("active");
+  cbEditBgParallel.checked = false;
+}
+
+cancelEditBgBtn.addEventListener("click", () => {
+  closeBgEditModal();
+});
+
+editBgTaskModal.addEventListener("click", (e) => {
+  if (e.target === editBgTaskModal) {
+    closeBgEditModal();
+  }
+});
+
+editBgTaskForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUid || !currentEditingBgTaskId) return;
+
+  const title = editBgTitleInput.value.trim();
+  const description = editBgDescriptionInput.value.trim();
+  const startTime = editBgStartTimeInput.value;
+  const endTime = editBgEndTimeInput.value;
+  const isParallel = cbEditBgParallel.checked;
+
+  if (!title) {
+    alert("Tên background task không được để trống.");
+    return;
+  }
+  if (!startTime || !endTime) {
+    alert("Start/End time không hợp lệ.");
+    return;
+  }
+
+  const repeatTypeInput = Array.from(editBgRepeatRadios).find(r => r.checked);
+  const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
+
+  let repeatDays = [];
+  let repeatDate = null;
+  let specificDate = null;
+
+  if (repeatType === "none") {
+    specificDate = editBgSpecificDateInput.value;
+    if (!specificDate) {
+      alert("Vui lòng chọn ngày cho background task (không lặp).");
+      return;
+    }
+  } else if (repeatType === "weekly") {
+    const activePills = Array.from(editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle.active"));
+    repeatDays = activePills.map(p => p.getAttribute("data-day"));
+    if (repeatDays.length === 0) {
+      alert("Vui lòng chọn ít nhất một thứ cho background task lặp tuần.");
+      return;
+    }
+  } else if (repeatType === "monthly") {
+    repeatDate = Number(editBgRepeatDateInput.value);
+    if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
+      alert("Ngày trong tháng phải từ 1 đến 31.");
+      return;
+    }
+  }
+
+  const docRef = doc(db, "users", currentUid, "backgroundTasks", currentEditingBgTaskId);
+
+  try {
+    await updateDoc(docRef, {
+      title,
+      description,
+      startTime,
+      endTime,
+      isParallel,
+      repeatType,
+      repeatDays,
+      repeatDate,
+      specificDate,
+      updatedAt: serverTimestamp()
+    });
+
+    closeBgEditModal();
+    await loadBackgroundTasks();
+  } catch (err) {
+    console.error("Error updating background task:", err);
+    alert("Không lưu được thay đổi background task.");
+  }
+});
+
+// ===================================================
+// BACKGROUND TASK ACTIONS (Edit/Delete)
+// ===================================================
+const BackgroundActions = {
+  openEdit(task) {
+    openBgEditModal(task);
+  },
+
+  async delete(task) {
+    if (!currentUid) {
+      alert("Vui lòng login.");
+      return;
+    }
+
+    if (!confirm("Xóa background task này? Không thể hoàn tác.")) return;
+
+    const docRef = doc(db, "users", currentUid, "backgroundTasks", task.id);
+
+    try {
+      await deleteDoc(docRef);
+      await loadBackgroundTasks();
+    } catch (err) {
+      console.error("Error deleting background task:", err);
+      alert("Không xóa được background task.");
+    }
+  }
+};
+
+// ===================================================
 // BACKGROUND TASKS – LOAD
 // ===================================================
 function formatRepeatSummary(task) {
@@ -1094,6 +1314,29 @@ async function loadBackgroundTasks() {
       <p class="task-meta">${repeatText}</p>
       <p class="task-meta">Tạo lúc: ${createdText}</p>
     `;
+
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "task-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "task-btn";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      BackgroundActions.openEdit(task);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "task-btn task-btn-danger";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      BackgroundActions.delete(task);
+    });
+
+    actionsDiv.appendChild(editBtn);
+    actionsDiv.appendChild(deleteBtn);
+    div.appendChild(actionsDiv);
 
     list.appendChild(div);
   });
