@@ -24,14 +24,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // *** THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
-  authDomain: "dnmstasker-3b85f.firebaseapp.com",
-  projectId: "dnmstasker-3b85f",
-  storageBucket: "dnmstasker-3b85f.firebasestorage.app",
-  messagingSenderId: "1053072513804",
-  appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_BUCKET",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -43,6 +42,9 @@ const provider = new GoogleAuthProvider();
 // GLOBAL STATE
 // ===================================================
 let currentUid = null;
+
+// trạng thái edit
+let currentEditingTaskId = null;
 
 // ===================================================
 // TAB HANDLING
@@ -226,7 +228,7 @@ jumpDateModal.addEventListener("click", (e) => {
 });
 
 // ===================================================
-// PILL TOGGLE LOGIC
+// PILL TOGGLE LOGIC – ADD FORM
 // ===================================================
 const pillMainPending = document.getElementById("pillMainPending");
 const pillMainParallel = document.getElementById("pillMainParallel");
@@ -355,7 +357,148 @@ async function getNextCounter(fieldName, uid) {
 }
 
 // ===================================================
-// TASK ACTIONS MODULE (CHO MAIN TASK) – dùng lại cho tooltip/timeline sau này
+// EDIT MODAL HANDLING
+// ===================================================
+const editTaskModal = document.getElementById("editTaskModal");
+const editTaskForm = document.getElementById("editTaskForm");
+
+const editTitleInput = document.getElementById("editTitle");
+const editDescriptionInput = document.getElementById("editDescription");
+const editImportanceInput = document.getElementById("editImportance");
+const editDurationInput = document.getElementById("editDuration");
+const editDeadlineInput = document.getElementById("editDeadline");
+
+const pillEditPending = document.getElementById("pillEditPending");
+const pillEditParallel = document.getElementById("pillEditParallel");
+const cbEditPending = document.getElementById("editIsPending");
+const cbEditParallel = document.getElementById("editIsParallel");
+
+const cancelEditBtn = document.getElementById("cancelEditBtn");
+
+function openEditModal(task) {
+  if (!currentUid) {
+    alert("Vui lòng login.");
+    return;
+  }
+
+  currentEditingTaskId = task.id;
+
+  editTitleInput.value = task.title || "";
+  editDescriptionInput.value = task.description || "";
+  editImportanceInput.value = task.importance ?? "";
+  editDurationInput.value = task.duration ?? "";
+
+  if (task.deadlineAt) {
+    const d = new Date(task.deadlineAt);
+    const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    editDeadlineInput.value = isoLocal;
+  } else {
+    editDeadlineInput.value = "";
+  }
+
+  const isPending = !!task.isPending;
+  const isParallel = !!task.isParallel;
+
+  cbEditPending.checked = isPending;
+  cbEditParallel.checked = isParallel;
+
+  pillEditPending.classList.toggle("active", isPending);
+  pillEditParallel.classList.toggle("active", isParallel);
+
+  editTaskModal.classList.add("active");
+}
+
+function closeEditModal() {
+  editTaskModal.classList.remove("active");
+  currentEditingTaskId = null;
+  editTaskForm.reset();
+  pillEditPending.classList.remove("active");
+  pillEditParallel.classList.remove("active");
+  cbEditPending.checked = false;
+  cbEditParallel.checked = false;
+}
+
+// PILL EDIT TOGGLES
+pillEditPending.addEventListener("click", () => {
+  pillEditPending.classList.toggle("active");
+  cbEditPending.checked = pillEditPending.classList.contains("active");
+});
+
+pillEditParallel.addEventListener("click", () => {
+  pillEditParallel.classList.toggle("active");
+  cbEditParallel.checked = pillEditParallel.classList.contains("active");
+});
+
+cancelEditBtn.addEventListener("click", () => {
+  closeEditModal();
+});
+
+editTaskModal.addEventListener("click", (e) => {
+  if (e.target === editTaskModal) {
+    closeEditModal();
+  }
+});
+
+// Submit edit – không hỏi confirm, chỉ validate và save
+editTaskForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUid || !currentEditingTaskId) return;
+
+  const title = editTitleInput.value.trim();
+  const description = editDescriptionInput.value.trim();
+  const importance = Number(editImportanceInput.value);
+  const duration = Number(editDurationInput.value);
+  const deadlineStr = editDeadlineInput.value;
+
+  if (!title) {
+    alert("Tên task không được để trống.");
+    return;
+  }
+  if (!deadlineStr) {
+    alert("Deadline không hợp lệ.");
+    return;
+  }
+  if (!duration || duration <= 0) {
+    alert("Duration phải > 0.");
+    return;
+  }
+
+  let deadlineAt = null;
+  if (deadlineStr) {
+    const d = new Date(deadlineStr);
+    deadlineAt = d.toISOString();
+  }
+
+  const isPending = cbEditPending.checked;
+  const isParallel = cbEditParallel.checked;
+
+  const docRef = doc(db, "users", currentUid, "mainTasks", currentEditingTaskId);
+
+  try {
+    await updateDoc(docRef, {
+      title,
+      description,
+      importance,
+      duration,
+      deadlineAt,
+      isPending,
+      isParallel,
+      updatedAt: serverTimestamp()
+    });
+
+    closeEditModal();
+    // Tính lại toàn bộ priority/sort
+    await loadMainTasks();
+  } catch (err) {
+    console.error("Error saving edited task:", err);
+    alert("Không lưu được thay đổi. Kiểm tra console.");
+  }
+});
+
+// ===================================================
+// TASK ACTIONS MODULE (CHO MAIN TASK) – dùng lại cho tooltip/timeline
 // ===================================================
 const TaskActions = {
   async setStatus(task, status) {
@@ -373,8 +516,8 @@ const TaskActions = {
     if (!confirm(confirmMsg)) return;
 
     try {
-      await updateDoc(docRef, { status });
-      await loadMainTasks();
+      await updateDoc(docRef, { status, updatedAt: serverTimestamp() });
+      await loadMainTasks(); // tính lại toàn bộ
     } catch (err) {
       console.error("Error updating status:", err);
       alert("Không cập nhật được trạng thái task.");
@@ -392,18 +535,22 @@ const TaskActions = {
 
     try {
       await deleteDoc(docRef);
-      await loadMainTasks();
+      await loadMainTasks(); // tính lại toàn bộ
     } catch (err) {
       console.error("Error deleting task:", err);
       alert("Không xóa được task.");
     }
+  },
+
+  openEdit(task) {
+    openEditModal(task);
   }
 
-  // Tương lai: thêm edit(), openOnTimeline(), openTooltip()...
+  // Tương lai: openTooltip(task), openOnTimeline(task)...
 };
 
 // ===================================================
-// MAIN TASKS – SUBMIT
+// MAIN TASKS – SUBMIT (ADD NEW)
 // ===================================================
 document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -449,7 +596,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     cbMainPending.checked = false;
     cbMainParallel.checked = false;
 
-    await loadAllData();
+    await loadMainTasks(); // tính lại priority
   } catch (err) {
     console.error("Error adding main task:", err);
     alert("Lỗi khi lưu main task. Kiểm tra console.");
@@ -563,6 +710,14 @@ async function loadMainTasks() {
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "task-actions";
 
+    const editBtn = document.createElement("button");
+    editBtn.className = "task-btn";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      TaskActions.openEdit(task);
+    });
+
     const doneBtn = document.createElement("button");
     doneBtn.className = "task-btn task-btn-primary";
     doneBtn.textContent = task.status === "done" ? "Undone" : "Done";
@@ -580,6 +735,7 @@ async function loadMainTasks() {
       TaskActions.delete(task);
     });
 
+    actionsDiv.appendChild(editBtn);
     actionsDiv.appendChild(doneBtn);
     actionsDiv.appendChild(deleteBtn);
 
@@ -621,7 +777,7 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
     pillBgParallel.classList.remove("active");
     cbBgParallel.checked = false;
 
-    await loadAllData();
+    await loadBackgroundTasks();
   } catch (err) {
     console.error("Error adding background task:", err);
     alert("Lỗi khi lưu background task. Kiểm tra console.");
