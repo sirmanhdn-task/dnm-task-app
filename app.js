@@ -31,7 +31,6 @@ const firebaseConfig = {
   messagingSenderId: "1053072513804",
   appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -93,7 +92,6 @@ function formatDayLabel(date) {
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
-// Format local timestamp for display
 function formatLocalDateTime(isoString) {
   if (!isoString) return "N/A";
   const d = new Date(isoString);
@@ -218,7 +216,7 @@ function handleJumpDateChosen(iso) {
   const chosen = new Date(iso + "T00:00:00");
   const diff = chosen - startOfToday;
   const dayIndex = diff / MS_PER_DAY;
-  const hours = dayIndex * 24 + 8; // center around 8 AM
+  const hours = dayIndex * 24 + 8;
   scrollToTime(hours);
 }
 
@@ -424,7 +422,8 @@ async function getNextCounter(fieldName, uid) {
   } else {
     data = snap.data();
     if (data.mainTaskCount == null) data.mainTaskCount = 0;
-    if (data.backgroundTaskCount == null) data.backgroundTaskCount = 0;
+    if (data.backgroundTaskCount == null)
+      data.backgroundTaskCount = 0;
   }
 
   const newCount = (data[fieldName] || 0) + 1;
@@ -441,7 +440,9 @@ const editTaskModal = document.getElementById("editTaskModal");
 const editTaskForm = document.getElementById("editTaskForm");
 
 const editTitleInput = document.getElementById("editTitle");
-const editDescriptionInput = document.getElementById("editDescription");
+const editDescriptionInput = document.getElementById(
+  "editDescription"
+);
 const editImportanceInput = document.getElementById("editImportance");
 const editDurationInput = document.getElementById("editDuration");
 const editDeadlineInput = document.getElementById("editDeadline");
@@ -507,7 +508,8 @@ pillEditPending.addEventListener("click", () => {
 
 pillEditParallel.addEventListener("click", () => {
   pillEditParallel.classList.toggle("active");
-  cbEditParallel.checked = pillEditParallel.classList.contains("active");
+  cbEditParallel.checked =
+    pillEditParallel.classList.contains("active");
 });
 
 cancelEditBtn.addEventListener("click", () => {
@@ -525,7 +527,8 @@ editTaskForm.addEventListener("submit", async (e) => {
   if (!currentUid || !currentEditingTaskId) return;
 
   const title = editTitleInput.value.trim();
-  const description = editDescriptionInput.value.trim();
+  const description =
+    editDescriptionInput.value.trim();
   const importance = Number(editImportanceInput.value);
   const duration = Number(editDurationInput.value);
   const deadlineStr = editDeadlineInput.value;
@@ -584,7 +587,9 @@ editTaskForm.addEventListener("submit", async (e) => {
 // DUPLICATE MODAL & LOGIC
 // ===================================================
 const duplicateModal = document.getElementById("duplicateModal");
-const duplicateCancelBtn = document.getElementById("duplicateCancelBtn");
+const duplicateCancelBtn = document.getElementById(
+  "duplicateCancelBtn"
+);
 const duplicateOptionButtons = document.querySelectorAll(
   ".duplicate-option-btn"
 );
@@ -616,7 +621,6 @@ duplicateModal.addEventListener("click", (e) => {
 
 function computeNewDeadline(oldIso, mode) {
   if (!oldIso) {
-    // If no original deadline, any mode results in no deadline
     return null;
   }
 
@@ -894,7 +898,6 @@ async function loadMainTasks() {
     task.status = task.status || "active";
   });
 
-  // Sort: active first, short-boost first, then by priority desc
   items.sort((a, b) => {
     if (a.status === "active" && b.status !== "active") return -1;
     if (a.status !== "active" && b.status === "active") return 1;
@@ -977,7 +980,8 @@ async function loadMainTasks() {
 
     const doneBtn = document.createElement("button");
     doneBtn.className = "task-btn task-btn-primary";
-    doneBtn.textContent = task.status === "done" ? "Mark as active" : "Mark as done";
+    doneBtn.textContent =
+      task.status === "done" ? "Mark as active" : "Mark as done";
     doneBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const newStatus = task.status === "done" ? "active" : "done";
@@ -1013,7 +1017,7 @@ function parseTimeToMinutes(t) {
 }
 
 function getDayCode(date) {
-  const idx = date.getDay(); // 0=Sun..6=Sat
+  const idx = date.getDay();
   const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   return map[idx];
 }
@@ -1055,8 +1059,6 @@ function generateSegmentsForDate(task, baseDate) {
       title: task.title || "",
       isOvernight: true
     });
-  } else {
-    // start == end -> skip
   }
 
   return segments;
