@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.6</title>
+  <title>DNM's Tasker v1.1.7</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -166,22 +166,64 @@
     </div>
   </div>
 
+  <!-- EDIT TASK MODAL -->
+  <div id="editTaskModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>Chỉnh sửa main task</h3>
+      <form id="editTaskForm" class="edit-form">
+        <input type="text" id="editTitle" placeholder="Tên main task" required>
+        <textarea id="editDescription" placeholder="Mô tả"></textarea>
+
+        <div class="form-row">
+          <input type="number" id="editImportance" placeholder="Importance (1–5)" min="1" max="5" required>
+          <input type="number" id="editDuration" placeholder="Duration (phút)" min="1" required>
+        </div>
+
+        <label class="inline-label">
+          <span>Deadline</span>
+          <input type="datetime-local" id="editDeadline" required>
+        </label>
+
+        <div class="pill-row">
+          <div class="pill-toggle" id="pillEditPending">Pending</div>
+          <div class="pill-toggle" id="pillEditParallel">Parallel</div>
+        </div>
+
+        <input type="checkbox" id="editIsPending" hidden>
+        <input type="checkbox" id="editIsParallel" hidden>
+
+        <div class="edit-actions-row">
+          <button type="button" id="cancelEditBtn" class="secondary-btn">Hủy</button>
+          <button type="submit" class="primary-btn">Lưu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 
 <!--
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.6
-- Thêm trạng thái task: status = "active" | "done".
-- Thêm nút Done/Undone và Delete cho mỗi main task.
-- Done: xác nhận trước khi chuyển trạng thái.
-- Undone: xác nhận trước khi chuyển lại active.
-- Delete: xác nhận trước khi xóa, gọi Firestore deleteDoc.
-- Kiến trúc TaskActions tách riêng: chuẩn bị cho việc
-  dùng lại cùng logic khi click task trên timeline / tooltip.
-- Sorting: Active tasks ở trên, Done tasks ở dưới;
-  bên trong mỗi nhóm vẫn sort theo short-boost + priority.
+v1.1.7
+- Thêm chức năng EDIT main task bằng modal riêng:
+  + Nút Edit trên mỗi task mở modal.
+  + Modal load đầy đủ title, description, importance,
+    duration, deadline, Pending/Parallel.
+  + Bấm Save là update Firestore, đóng modal luôn,
+    không hỏi lại.
+- Kiến trúc TaskActions mở rộng:
+  + TaskActions.setStatus()
+  + TaskActions.delete()
+  + TaskActions.openEdit()
+  + TaskActions.saveEdit()
+  Có thể dùng lại y nguyên khi click task trên timeline
+  hoặc trong tooltip sau này.
+- Sau mọi thao tác có thể làm thay đổi trọng số:
+  + Add / Edit / Done / Undone / Delete
+  đều gọi lại loadMainTasks(), tính lại priority từ đầu,
+  đảm bảo danh sách luôn cập nhật đúng thứ tự.
 ===========================================
 -->
 
