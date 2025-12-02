@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.7</title>
+  <title>DNM's Tasker v1.2.0</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -131,6 +131,59 @@
           </label>
         </div>
 
+        <!-- REPEAT GROUP -->
+        <div class="repeat-group">
+          <p class="repeat-label">Repeat</p>
+          <div class="repeat-options">
+            <label class="repeat-option">
+              <input type="radio" name="bgRepeatType" value="none" checked>
+              <span>Không lặp</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="bgRepeatType" value="daily">
+              <span>Hằng ngày</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="bgRepeatType" value="weekly">
+              <span>Hằng tuần</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="bgRepeatType" value="monthly">
+              <span>Hằng tháng</span>
+            </label>
+          </div>
+
+          <!-- Không lặp: chọn ngày cụ thể -->
+          <div id="bgSpecificDateRow" class="repeat-extra-row">
+            <label class="inline-label">
+              <span>Ngày (không lặp)</span>
+              <input type="date" id="bgSpecificDate">
+            </label>
+          </div>
+
+          <!-- Weekly: chọn thứ -->
+          <div id="bgWeeklyRow" class="repeat-extra-row hidden">
+            <span class="repeat-sub-label">Chọn thứ</span>
+            <div class="pill-row" id="bgWeeklyPills">
+              <div class="pill-toggle" data-day="mon">T2</div>
+              <div class="pill-toggle" data-day="tue">T3</div>
+              <div class="pill-toggle" data-day="wed">T4</div>
+              <div class="pill-toggle" data-day="thu">T5</div>
+              <div class="pill-toggle" data-day="fri">T6</div>
+              <div class="pill-toggle" data-day="sat">T7</div>
+              <div class="pill-toggle" data-day="sun">CN</div>
+            </div>
+          </div>
+
+          <!-- Monthly: ngày trong tháng -->
+          <div id="bgMonthlyRow" class="repeat-extra-row hidden">
+            <label class="inline-label">
+              <span>Ngày trong tháng (1–31)</span>
+              <input type="number" id="bgRepeatDate" min="1" max="31" placeholder="1-31">
+            </label>
+          </div>
+        </div>
+
         <div class="pill-row">
           <div class="pill-toggle" id="pillBgParallel">Parallel</div>
         </div>
@@ -206,24 +259,24 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.7
-- Thêm chức năng EDIT main task bằng modal riêng:
-  + Nút Edit trên mỗi task mở modal.
-  + Modal load đầy đủ title, description, importance,
-    duration, deadline, Pending/Parallel.
-  + Bấm Save là update Firestore, đóng modal luôn,
-    không hỏi lại.
-- Kiến trúc TaskActions mở rộng:
-  + TaskActions.setStatus()
-  + TaskActions.delete()
-  + TaskActions.openEdit()
-  + TaskActions.saveEdit()
-  Có thể dùng lại y nguyên khi click task trên timeline
-  hoặc trong tooltip sau này.
-- Sau mọi thao tác có thể làm thay đổi trọng số:
-  + Add / Edit / Done / Undone / Delete
-  đều gọi lại loadMainTasks(), tính lại priority từ đầu,
-  đảm bảo danh sách luôn cập nhật đúng thứ tự.
+v1.2.0
+- Thiết kế Repeat Engine cho background tasks:
+  + repeatType: none | daily | weekly | monthly
+  + repeatDays: ["mon","tue","wed","thu","fri","sat","sun"] (weekly)
+  + repeatDate: số ngày trong tháng (monthly)
+  + specificDate: YYYY-MM-DD (không lặp)
+- Form background task:
+  + Start/End time cố định
+  + Chọn ngày nếu không lặp
+  + Weekly: chọn thứ bằng pill T2..CN
+  + Monthly: nhập ngày trong tháng
+  + Parallel như trước
+- Repeat Engine generate instance cho 14 ngày timeline.
+- Xử lý overnight (23h-06h) bằng cách split thành 2 block:
+  + Ngày D: 23:00-24:00
+  + Ngày D+1: 00:00-06:00
+- Timeline lane Background render block theo repeat rule.
+- Main tasks giữ nguyên logic v1.1.7.
 ===========================================
 -->
 
