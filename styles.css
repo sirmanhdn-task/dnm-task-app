@@ -1,25 +1,35 @@
 :root {
-  --bg-main: #f5f6fa;
-  --bg-card: #ffffff;
-  --border-subtle: #dde1eb;
-  --accent: #007aff;
-  --accent-soft: rgba(0, 122, 255, 0.1);
+  --bg-app: #f4f5f7;
+  --bg-page: #f9fafb;
+  --bg-surface: #ffffff;
+  --border-subtle: #e1e4ec;
+  --border-strong: #cbd0dd;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-soft-strong: rgba(37, 99, 235, 0.16);
   --text-main: #111827;
   --text-muted: #6b7280;
-  --danger: #ff3b30;
+  --text-subtle: #9ca3af;
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.08);
+  --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --radius-card: 18px;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   padding: 0 16px 24px;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text";
-  background: radial-gradient(circle at top left, #fdfefe, #f2f3f7);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top left, #ffffff, #f3f4f6);
   color: var(--text-main);
 }
 
-/* HEADER ---------------------------------------------- */
+/* HEADER ------------------------------------------------ */
 
 .app-header {
   padding: 12px 4px 8px;
@@ -40,19 +50,20 @@ body {
 }
 
 .app-title {
-  font-family: "SF Pro Display";
+  font-family: "SF Pro Display", system-ui, sans-serif;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.3px;
   margin: 0;
+  color: #0f172a;
 }
 
 .app-subtitle {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-subtle);
 }
 
-/* USER INFO ------------------------------------------- */
+/* USER INFO ---------------------------------------------- */
 
 .user-info {
   display: flex;
@@ -65,7 +76,7 @@ body {
   height: 26px;
   border-radius: 999px;
   object-fit: cover;
-  border: 1px solid rgba(148,163,184,0.6);
+  border: 1px solid rgba(148, 163, 184, 0.6);
 }
 
 .user-email {
@@ -77,11 +88,11 @@ body {
   text-overflow: ellipsis;
 }
 
-/* TABS ------------------------------------------------ */
+/* TABS --------------------------------------------------- */
 
 .tabs {
   display: flex;
-  background: rgba(255,255,255,0.9);
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 999px;
   padding: 4px;
   backdrop-filter: blur(12px);
@@ -89,6 +100,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 40;
+  margin-top: 4px;
 }
 
 .tab-button {
@@ -98,6 +110,8 @@ body {
   padding: 8px 4px;
   border-radius: 999px;
   color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .tab-button.active {
@@ -106,10 +120,16 @@ body {
   font-weight: 600;
 }
 
-.tab-panel { display: none; }
-.tab-panel.active { display: block; margin-top: 12px; }
+.tab-panel {
+  display: none;
+  margin-top: 14px;
+}
 
-/* FORMS + CARDS --------------------------------------- */
+.tab-panel.active {
+  display: block;
+}
+
+/* SECTION HEADERS ---------------------------------------- */
 
 .panel-section {
   display: flex;
@@ -117,15 +137,60 @@ body {
   gap: 12px;
 }
 
-.card {
-  background: #fff;
-  border-radius: 18px;
-  padding: 12px;
-  border: 1px solid rgba(148,163,184,0.2);
-  box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+.section-header-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.list-card { max-height: 320px; overflow-y: auto; }
+.section-header-row h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.section-caption {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* CARDS & FORMS ------------------------------------------ */
+
+.card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-card);
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+}
+
+.card-header {
+  margin-bottom: 8px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.card-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.list-card {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.body-text {
+  font-size: 13px;
+  color: var(--text-main);
+  margin: 0;
+}
 
 form input,
 form textarea {
@@ -135,10 +200,13 @@ form textarea {
   border: 1px solid var(--border-subtle);
   background: #f9fafb;
   margin-bottom: 8px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
-form textarea { min-height: 60px; }
+form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
 
 form input:focus,
 form textarea:focus {
@@ -158,12 +226,12 @@ form textarea:focus {
   color: var(--text-muted);
 }
 
-/* Force 24h style: ẩn AM/PM trên WebKit ---------------- */
+/* Force 24h style on WebKit time input (visual only) */
 input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
 }
 
-/* BUTTONS --------------------------------------------- */
+/* BUTTONS ------------------------------------------------ */
 
 .primary-btn,
 .secondary-btn,
@@ -172,19 +240,19 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   border: none;
   cursor: pointer;
   border-radius: 999px;
+  font-size: 13px;
 }
 
 .primary-btn {
   background: var(--accent);
-  color: #fff;
+  color: #ffffff;
   padding: 8px 16px;
-  font-size: 13px;
 }
 
 .secondary-btn {
   background: #e5e7eb;
+  color: #111827;
   padding: 8px 16px;
-  font-size: 13px;
 }
 
 .secondary-btn-small {
@@ -196,14 +264,20 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   width: 30px;
   height: 30px;
   background: #e5e7eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.full-width { width: 100%; }
+.full-width {
+  width: 100%;
+}
 
-/* PILL TOGGLE ----------------------------------------- */
+/* PILL TOGGLES ------------------------------------------- */
 
 .pill-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 8px 0 12px;
 }
@@ -211,37 +285,39 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 .pill-toggle {
   padding: 6px 14px;
   border-radius: 999px;
-  background: #e5e7eb;
-  border: 1px solid #d1d5db;
-  color: #111;
+  background: #eef0f4;
+  border: 1px solid var(--border-subtle);
+  color: #111827;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   user-select: none;
-  transition: 0.15s;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .pill-toggle.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(0,122,255,0.25);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
 }
 
-/* TIMELINE -------------------------------------------- */
+/* TIMELINE ----------------------------------------------- */
 
 .timeline-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
 .timeline-wrapper {
-  background: #fff;
-  border-radius: 18px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-card);
   padding: 8px 0;
-  border: 1px solid rgba(148,163,184,0.25);
-  box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
   margin-bottom: 12px;
 }
 
@@ -253,38 +329,62 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 
 .timeline-header {
   display: flex;
-  height: 40px;
+  height: 44px;
   border-bottom: 1px solid var(--border-subtle);
   background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
 }
 
-.timeline-day { border-right: 1px solid var(--border-subtle); }
+.timeline-day {
+  border-right: 1px solid var(--border-subtle);
+}
 
 .timeline-day-label {
-  padding: 2px 4px;
+  padding: 2px 6px;
   font-size: 11px;
   font-weight: 500;
+  color: #111827;
 }
 
 .timeline-day-hours {
   display: flex;
   font-size: 10px;
+  color: var(--text-subtle);
 }
 
 .timeline-hour {
-  border-left: 1px dashed rgba(148,163,184,0.6);
+  border-left: 1px dashed rgba(148, 163, 184, 0.7);
   text-align: center;
   padding-top: 2px;
 }
 
+/* Lanes -------------------------------------------------- */
+
 .timeline-lane {
-  min-height: 40px;
-  border-bottom: 1px solid rgba(148,163,184,0.2);
+  position: relative;
+  min-height: 46px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  align-items: stretch;
 }
 
-.lane-content { position: relative; }
+.lane-label {
+  font-size: 11px;
+  color: var(--text-subtle);
+  border-right: 1px solid var(--border-subtle);
+  padding: 6px 8px;
+  background: #f9fafb;
+}
 
-/* NOW MARKER ------------------------------------------ */
+.lane-main .lane-label {
+  font-weight: 600;
+}
+
+.lane-content {
+  position: relative;
+}
+
+/* Now marker -------------------------------------------- */
 
 .timeline-now-marker {
   position: absolute;
@@ -295,39 +395,40 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   pointer-events: none;
 }
 
-/* BACKGROUND BLOCKS ON TIMELINE ----------------------- */
+/* Background blocks on timeline ------------------------- */
 
 .timeline-bg-block {
   position: absolute;
-  top: 4px;
+  top: 8px;
   height: 24px;
   border-radius: 10px;
-  background: rgba(55, 65, 81, 0.9);
+  background: #4b5563;
   color: #f9fafb;
   font-size: 10px;
-  padding: 2px 6px;
+  padding: 2px 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 2px 4px rgba(15,23,42,0.4);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.5);
 }
 
-/* LIST TASK ITEMS ------------------------------------- */
+/* TASK ITEMS (LIST) ------------------------------------- */
 
 .task-item {
   padding: 8px;
   margin-bottom: 6px;
   border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.4);
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: #f9fafb;
 }
 
 .task-item-main {
-  background: #e0ecff;
-  border-color: #bfdbfe;
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 .task-item-bg {
-  background: #e5e7eb;
+  background: #f3f4f6;
   border-color: #d1d5db;
 }
 
@@ -346,19 +447,19 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   color: var(--text-muted);
 }
 
-/* DONE STATE ------------------------------------------ */
+/* DONE STATE -------------------------------------------- */
 
 .task-item-done {
-  background: #e5e7eb;
+  background: #f3f4f6;
   border-style: dashed;
-  opacity: 0.7;
+  opacity: 0.75;
 }
 
 .task-item-done h4 {
   text-decoration: line-through;
 }
 
-/* TASK ACTIONS ---------------------------------------- */
+/* TASK ACTIONS ----------------------------------------- */
 
 .task-actions {
   display: flex;
@@ -375,40 +476,20 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 
 .task-btn-primary {
   background: #22c55e;
-  color: #fff;
+  color: #ffffff;
 }
 
 .task-btn-danger {
-  background: #fee2e2;
+  background: var(--danger-soft);
   color: #b91c1c;
 }
 
-/* BLOCK COLORS FUTURE -------------------------------- */
-
-.task-block-main {
-  background: #4a90e2;
-  color: #fff;
-  border-radius: 8px;
-}
-
-.task-block-background {
-  background: #7b8c9a;
-  color: #fff;
-  border-radius: 8px;
-}
-
-.task-block-pending {
-  background: #d1d5db;
-  color: #111;
-  border-radius: 8px;
-}
-
-/* MODAL ----------------------------------------------- */
+/* MODAL ------------------------------------------------- */
 
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.35);
+  background: rgba(15, 23, 42, 0.35);
   display: none;
   justify-content: center;
   align-items: center;
@@ -421,27 +502,51 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   animation: fadeIn 0.15s;
 }
 
-@keyframes fadeIn {
-  from {opacity: 0;} to {opacity: 1;}
-}
-
 .modal-content {
-  background: #fff;
+  background: #ffffff;
   padding: 16px;
   border-radius: 16px;
   width: 92%;
   max-width: 380px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25);
   animation: fadeUp 0.2s ease;
 }
 
 .modal-content h3 {
   margin-top: 0;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 16px;
 }
 
-/* Edit modal extra */
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Edit modal extra -------------------------------------- */
+
 .edit-form .form-row {
   margin-top: 4px;
 }
@@ -453,7 +558,8 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   margin-top: 4px;
 }
 
-/* Option buttons inside duplicate modal */
+/* Option buttons (duplicate modal) --------------------- */
+
 .option-btn {
   width: 100%;
   margin-bottom: 6px;
@@ -464,6 +570,8 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   font-size: 13px;
   cursor: pointer;
   text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .option-btn:hover {
@@ -472,10 +580,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   color: var(--accent);
 }
 
-@keyframes fadeUp {
-  from {opacity:0; transform:translateY(20px);}
-  to   {opacity:1; transform:translateY(0);}
-}
+/* Calendar ---------------------------------------------- */
 
 .calendar-grid {
   display: grid;
@@ -492,21 +597,23 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   cursor: pointer;
   user-select: none;
   border: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #111827;
 }
 
 .calendar-day.today {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: #ffffff;
 }
 
 .calendar-day:hover {
-  background: var(--accent-soft);
+  background: var(--accent-soft-strong);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-/* REPEAT GROUP ---------------------------------------- */
+/* REPEAT GROUP ------------------------------------------ */
 
 .repeat-group {
   margin-top: 4px;
@@ -556,11 +663,26 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
 }
 
-/* RESPONSIVE ------------------------------------------ */
+/* RESPONSIVE -------------------------------------------- */
 
 @media (max-width: 768px) {
-  body { padding: 0 10px 16px; }
-  .form-row { flex-direction: column; }
-  .app-title { font-size: 20px; }
-  .user-email { max-width: 100px; }
+  body {
+    padding: 0 10px 16px;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .app-title {
+    font-size: 20px;
+  }
+
+  .user-email {
+    max-width: 100px;
+  }
+
+  .timeline-lane {
+    grid-template-columns: 62px 1fr;
+  }
 }
