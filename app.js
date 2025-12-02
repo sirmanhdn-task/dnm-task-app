@@ -262,6 +262,35 @@ pillMainParallel.addEventListener("click", () => {
   cbMainParallel.checked = pillMainParallel.classList.contains("active");
 });
 
+// MAIN REPEAT UI
+const mainWeeklyRow = document.getElementById("mainWeeklyRow");
+const mainMonthlyRow = document.getElementById("mainMonthlyRow");
+const mainRepeatRadios = document.querySelectorAll('input[name="mainRepeatType"]');
+const mainWeeklyPillsContainer = document.getElementById("mainWeeklyPills");
+const mainRepeatDateInput = document.getElementById("mainRepeatDate");
+
+mainRepeatRadios.forEach(r => {
+  r.addEventListener("change", () => {
+    const value = r.value;
+    if (!r.checked) return;
+
+    mainWeeklyRow.classList.add("hidden");
+    mainMonthlyRow.classList.add("hidden");
+
+    if (value === "weekly") {
+      mainWeeklyRow.classList.remove("hidden");
+    } else if (value === "monthly") {
+      mainMonthlyRow.classList.remove("hidden");
+    }
+  });
+});
+
+mainWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(pill => {
+  pill.addEventListener("click", () => {
+    pill.classList.toggle("active");
+  });
+});
+
 // BACKGROUND PILL PARALLEL
 const pillBgParallel = document.getElementById("pillBgParallel");
 const cbBgParallel = document.getElementById("bgIsParallel");
@@ -429,6 +458,35 @@ const cbEditParallel = document.getElementById("editIsParallel");
 
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 
+// EDIT MAIN REPEAT UI
+const editMainWeeklyRow = document.getElementById("editMainWeeklyRow");
+const editMainMonthlyRow = document.getElementById("editMainMonthlyRow");
+const editMainRepeatRadios = document.querySelectorAll('input[name="editMainRepeatType"]');
+const editMainWeeklyPillsContainer = document.getElementById("editMainWeeklyPills");
+const editMainRepeatDateInput = document.getElementById("editMainRepeatDate");
+
+editMainRepeatRadios.forEach(r => {
+  r.addEventListener("change", () => {
+    const value = r.value;
+    if (!r.checked) return;
+
+    editMainWeeklyRow.classList.add("hidden");
+    editMainMonthlyRow.classList.add("hidden");
+
+    if (value === "weekly") {
+      editMainWeeklyRow.classList.remove("hidden");
+    } else if (value === "monthly") {
+      editMainMonthlyRow.classList.remove("hidden");
+    }
+  });
+});
+
+editMainWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(pill => {
+  pill.addEventListener("click", () => {
+    pill.classList.toggle("active");
+  });
+});
+
 function openEditModal(task) {
   if (!currentUid) {
     alert("Vui lòng login.");
@@ -461,6 +519,32 @@ function openEditModal(task) {
   pillEditPending.classList.toggle("active", isPending);
   pillEditParallel.classList.toggle("active", isParallel);
 
+  // Repeat fields
+  const repeatType = task.repeatType || "none";
+  editMainRepeatRadios.forEach(r => {
+    r.checked = (r.value === repeatType);
+  });
+
+  // Reset rows
+  editMainWeeklyRow.classList.add("hidden");
+  editMainMonthlyRow.classList.add("hidden");
+  editMainWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+  editMainRepeatDateInput.value = "";
+
+  if (repeatType === "weekly") {
+    editMainWeeklyRow.classList.remove("hidden");
+    const days = task.repeatDays || [];
+    editMainWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => {
+      const day = p.getAttribute("data-day");
+      p.classList.toggle("active", days.includes(day));
+    });
+  } else if (repeatType === "monthly") {
+    editMainMonthlyRow.classList.remove("hidden");
+    if (task.repeatDate != null) {
+      editMainRepeatDateInput.value = task.repeatDate;
+    }
+  }
+
   editTaskModal.classList.add("active");
 }
 
@@ -472,6 +556,11 @@ function closeEditModal() {
   pillEditParallel.classList.remove("active");
   cbEditPending.checked = false;
   cbEditParallel.checked = false;
+
+  editMainWeeklyRow.classList.add("hidden");
+  editMainMonthlyRow.classList.add("hidden");
+  editMainWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+  editMainRepeatDateInput.value = "";
 }
 
 // PILL EDIT TOGGLES
@@ -528,6 +617,28 @@ editTaskForm.addEventListener("submit", async (e) => {
   const isPending = cbEditPending.checked;
   const isParallel = cbEditParallel.checked;
 
+  // Read repeat from edit form
+  const repeatTypeInput = Array.from(editMainRepeatRadios).find(r => r.checked);
+  const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
+
+  let repeatDays = [];
+  let repeatDate = null;
+
+  if (repeatType === "weekly") {
+    const activePills = Array.from(editMainWeeklyPillsContainer.querySelectorAll(".pill-toggle.active"));
+    repeatDays = activePills.map(p => p.getAttribute("data-day"));
+    if (repeatDays.length === 0) {
+      alert("Vui lòng chọn ít nhất một thứ cho main task lặp tuần.");
+      return;
+    }
+  } else if (repeatType === "monthly") {
+    repeatDate = Number(editMainRepeatDateInput.value);
+    if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
+      alert("Ngày trong tháng phải từ 1 đến 31.");
+      return;
+    }
+  }
+
   const docRef = doc(db, "users", currentUid, "mainTasks", currentEditingTaskId);
 
   try {
@@ -539,6 +650,9 @@ editTaskForm.addEventListener("submit", async (e) => {
       deadlineAt,
       isPending,
       isParallel,
+      repeatType,
+      repeatDays,
+      repeatDate,
       updatedAt: serverTimestamp()
     });
 
@@ -601,6 +715,28 @@ const TaskActions = {
 };
 
 // ===================================================
+// FORMAT REPEAT MAIN TASK
+// ===================================================
+function formatMainRepeat(task) {
+  const type = task.repeatType || "none";
+  if (type === "daily") return "Daily";
+
+  if (type === "weekly") {
+    const mapLabel = {
+      mon: "T2", tue: "T3", wed: "T4", thu: "T5", fri: "T6", sat: "T7", sun: "CN"
+    };
+    const days = (task.repeatDays || []).map(d => mapLabel[d] || d).join(", ");
+    return "Weekly (" + (days || "chưa chọn") + ")";
+  }
+
+  if (type === "monthly") {
+    return `Monthly (ngày ${task.repeatDate || "?"})`;
+  }
+
+  return "None";
+}
+
+// ===================================================
 // MAIN TASKS – SUBMIT (ADD NEW)
 // ===================================================
 document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
@@ -610,11 +746,24 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     return;
   }
 
-  const title = document.getElementById("mainTitle").value;
-  const description = document.getElementById("mainDescription").value;
+  const title = document.getElementById("mainTitle").value.trim();
+  const description = document.getElementById("mainDescription").value.trim();
   const importance = Number(document.getElementById("mainImportance").value);
   const duration = Number(document.getElementById("mainDuration").value);
   const deadlineStr = document.getElementById("mainDeadline").value;
+
+  if (!title) {
+    alert("Tên main task không được để trống.");
+    return;
+  }
+  if (!deadlineStr) {
+    alert("Deadline không hợp lệ.");
+    return;
+  }
+  if (!duration || duration <= 0) {
+    alert("Duration phải > 0.");
+    return;
+  }
 
   const isPending = cbMainPending.checked;
   const isParallel = cbMainParallel.checked;
@@ -623,6 +772,28 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
   if (deadlineStr) {
     const d = new Date(deadlineStr);
     deadlineAt = d.toISOString();
+  }
+
+  // Read repeat from main form
+  const repeatTypeInput = document.querySelector('input[name="mainRepeatType"]:checked');
+  const repeatType = repeatTypeInput ? repeatTypeInput.value : "none";
+
+  let repeatDays = [];
+  let repeatDate = null;
+
+  if (repeatType === "weekly") {
+    const activePills = Array.from(mainWeeklyPillsContainer.querySelectorAll(".pill-toggle.active"));
+    repeatDays = activePills.map(p => p.getAttribute("data-day"));
+    if (repeatDays.length === 0) {
+      alert("Vui lòng chọn ít nhất một thứ cho main task lặp tuần.");
+      return;
+    }
+  } else if (repeatType === "monthly") {
+    repeatDate = Number(mainRepeatDateInput.value);
+    if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
+      alert("Ngày trong tháng phải từ 1 đến 31.");
+      return;
+    }
   }
 
   const now = new Date();
@@ -642,7 +813,10 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
       isParallel,
       status: "active",
       createdAtLocal,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      repeatType,
+      repeatDays,
+      repeatDate
     });
 
     e.target.reset();
@@ -650,6 +824,14 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     pillMainParallel.classList.remove("active");
     cbMainPending.checked = false;
     cbMainParallel.checked = false;
+
+    mainWeeklyRow.classList.add("hidden");
+    mainMonthlyRow.classList.add("hidden");
+    mainWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+    mainRepeatDateInput.value = "";
+
+    const noneRadio = document.querySelector('input[name="mainRepeatType"][value="none"]');
+    if (noneRadio) noneRadio.checked = true;
 
     await loadMainTasks();
   } catch (err) {
@@ -738,6 +920,7 @@ async function loadMainTasks() {
 
     const statusLabel = task.status === "done" ? "DONE" : "ACTIVE";
     const createdText = formatLocalDateTime(task.createdAtLocal);
+    const repeatText = formatMainRepeat(task);
 
     const headerHtml = `
       <h4>${idText}${task.title}</h4>
@@ -747,6 +930,9 @@ async function loadMainTasks() {
       </p>
       <p class="task-meta">
         Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
+      </p>
+      <p class="task-meta">
+        Repeat: ${repeatText}
       </p>
       <p class="task-meta">
         Created: ${createdText}
@@ -800,7 +986,7 @@ async function loadMainTasks() {
 }
 
 // ===================================================
-// REPEAT ENGINE – BACKGROUND TASKS
+// REPEAT ENGINE – BACKGROUND TASKS (GIỮ NGUYÊN)
 // ===================================================
 function parseTimeToMinutes(t) {
   if (!t) return null;
@@ -1095,26 +1281,31 @@ function openBgEditModal(task) {
   const repeatType = task.repeatType || "none";
 
   editBgRepeatRadios.forEach(r => {
-    r.checked = r.value === repeatType;
+    r.checked = (r.value === repeatType);
   });
 
   editBgSpecificDateRow.classList.add("hidden");
   editBgWeeklyRow.classList.add("hidden");
   editBgMonthlyRow.classList.add("hidden");
+  editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => p.classList.remove("active"));
+  editBgRepeatDateInput.value = "";
+  editBgSpecificDateInput.value = "";
 
   if (repeatType === "none") {
     editBgSpecificDateRow.classList.remove("hidden");
     editBgSpecificDateInput.value = task.specificDate || "";
   } else if (repeatType === "weekly") {
     editBgWeeklyRow.classList.remove("hidden");
+    const days = task.repeatDays || [];
     editBgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach(p => {
       const day = p.getAttribute("data-day");
-      const active = (task.repeatDays || []).includes(day);
-      p.classList.toggle("active", active);
+      p.classList.toggle("active", days.includes(day));
     });
   } else if (repeatType === "monthly") {
     editBgMonthlyRow.classList.remove("hidden");
-    editBgRepeatDateInput.value = task.repeatDate || "";
+    if (task.repeatDate != null) {
+      editBgRepeatDateInput.value = task.repeatDate;
+    }
   }
 
   const isParallel = !!task.isParallel;
