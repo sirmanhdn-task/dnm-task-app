@@ -22,8 +22,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-// *** THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -90,6 +88,19 @@ const startOfToday = (() => {
 function formatDayLabel(date) {
   const w = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   return `${w[date.getDay()]} ${date.getDate()}`;
+}
+
+// Helper format createdAtLocal -> "HH:mm · dd/MM/yyyy"
+function formatLocalDateTime(isoString) {
+  if (!isoString) return "N/A";
+  const d = new Date(isoString);
+  if (isNaN(d)) return "N/A";
+  const datePart = d.toLocaleDateString("vi-VN");
+  const timePart = d.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  return `${timePart} · ${datePart}`;
 }
 
 // ===================================================
@@ -538,7 +549,7 @@ editTaskForm.addEventListener("submit", async (e) => {
 });
 
 // ===================================================
-// TASK ACTIONS MODULE (MAIN TASK) – dùng lại cho tooltip/timeline
+// TASK ACTIONS MODULE (MAIN TASK)
 // ===================================================
 const TaskActions = {
   async setStatus(task, status) {
@@ -612,6 +623,10 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     deadlineAt = d.toISOString();
   }
 
+  // createdAtLocal – lưu ISO, hiển thị sau
+  const now = new Date();
+  const createdAtLocal = now.toISOString();
+
   try {
     const taskId = await getNextCounter("mainTaskCount", currentUid);
 
@@ -625,6 +640,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
       isPending,
       isParallel,
       status: "active",
+      createdAtLocal,
       createdAt: serverTimestamp()
     });
 
@@ -642,7 +658,7 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
 });
 
 // ===================================================
-// MAIN TASKS – LOAD & SORT (priority + status)
+// MAIN TASKS – LOAD & SORT
 // ===================================================
 async function loadMainTasks() {
   const list = document.getElementById("mainTaskList");
@@ -687,10 +703,7 @@ async function loadMainTasks() {
     task.status = task.status || "active";
   });
 
-  // Sort:
-  // 1. active trước, done sau
-  // 2. trong mỗi nhóm: shortBoost trước
-  // 3. priority giảm dần
+  // Sort
   items.sort((a, b) => {
     if (a.status === "active" && b.status !== "active") return -1;
     if (a.status !== "active" && b.status === "active") return 1;
@@ -724,6 +737,7 @@ async function loadMainTasks() {
       : "N/A";
 
     const statusLabel = task.status === "done" ? "DONE" : "ACTIVE";
+    const createdText = formatLocalDateTime(task.createdAtLocal);
 
     const headerHtml = `
       <h4>${idText}${task.title}</h4>
@@ -733,6 +747,9 @@ async function loadMainTasks() {
       </p>
       <p class="task-meta">
         Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
+      </p>
+      <p class="task-meta">
+        Created: ${createdText}
       </p>
       <p class="task-meta">
         Status: ${statusLabel} ·
@@ -817,7 +834,7 @@ function generateSegmentsForDate(task, baseDate) {
       isOvernight: false
     });
   } else if (endMinutes < startMinutes) {
-    // overnight: split thành 2 block
+    // overnight
     segments.push({
       date: dateISO,
       startMinutes,
@@ -838,7 +855,7 @@ function generateSegmentsForDate(task, baseDate) {
       isOvernight: true
     });
   } else {
-    // start == end: bỏ qua
+    // start == end -> bỏ
   }
 
   return segments;
@@ -968,6 +985,9 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
     }
   }
 
+  const now = new Date();
+  const createdAtLocal = now.toISOString();
+
   try {
     const taskId = await getNextCounter("backgroundTaskCount", currentUid);
 
@@ -982,6 +1002,7 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
       repeatDays,
       repeatDate,
       specificDate,
+      createdAtLocal,
       createdAt: serverTimestamp()
     });
 
@@ -989,7 +1010,6 @@ document.getElementById("backgroundTaskForm").addEventListener("submit", async (
     pillBgParallel.classList.remove("active");
     cbBgParallel.checked = false;
     bgRepeatRadios.forEach(r => { r.checked = false; });
-    // default lại "none"
     const noneRadio = document.querySelector('input[name="bgRepeatType"][value="none"]');
     if (noneRadio) noneRadio.checked = true;
     bgSpecificDateRow.classList.remove("hidden");
@@ -1047,7 +1067,6 @@ async function loadBackgroundTasks() {
   const items = [];
   snap.forEach(docSnap => items.push({ id: docSnap.id, ...docSnap.data() }));
 
-  // sort theo startTime (đơn giản)
   items.sort((a, b) =>
     (a.startTime || "").localeCompare(b.startTime || "")
   );
@@ -1062,8 +1081,8 @@ async function loadBackgroundTasks() {
     div.className = "task-item task-item-bg";
 
     const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
-
     const repeatText = formatRepeatSummary(task);
+    const createdText = formatLocalDateTime(task.createdAtLocal);
 
     div.innerHTML = `
       <h4>${idText}${task.title}</h4>
@@ -1073,6 +1092,7 @@ async function loadBackgroundTasks() {
         Parallel: ${task.isParallel ? "Có" : "Không"}
       </p>
       <p class="task-meta">${repeatText}</p>
+      <p class="task-meta">Tạo lúc: ${createdText}</p>
     `;
 
     list.appendChild(div);
