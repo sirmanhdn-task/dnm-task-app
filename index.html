@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.1.5</title>
+  <title>DNM's Tasker v1.1.6</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -172,15 +172,16 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.1.5
-- Thêm Firebase Authentication (Google login).
-- Mỗi user có dữ liệu riêng:
-  users/{uid}/mainTasks
-  users/{uid}/backgroundTasks
-  users/{uid}/metadata/counters
-- Nếu chưa login thì không cho ghi/đọc task (chỉ xem UI).
-- Giữ nguyên thuật toán v1.1.4
-  (ID tăng dần, priority = duration/deadline, short-boost).
+v1.1.6
+- Thêm trạng thái task: status = "active" | "done".
+- Thêm nút Done/Undone và Delete cho mỗi main task.
+- Done: xác nhận trước khi chuyển trạng thái.
+- Undone: xác nhận trước khi chuyển lại active.
+- Delete: xác nhận trước khi xóa, gọi Firestore deleteDoc.
+- Kiến trúc TaskActions tách riêng: chuẩn bị cho việc
+  dùng lại cùng logic khi click task trên timeline / tooltip.
+- Sorting: Active tasks ở trên, Done tasks ở dưới;
+  bên trong mỗi nhóm vẫn sort theo short-boost + priority.
 ===========================================
 -->
 
