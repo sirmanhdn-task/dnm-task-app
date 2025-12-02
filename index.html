@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.2.1</title>
+  <title>DNM's Tasker v1.2.2</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Ép iOS không tự xử lý time/date, tránh AM/PM -->
   <meta name="format-detection" content="telephone=no,time=no,date=no">
@@ -221,7 +221,7 @@
     </div>
   </div>
 
-  <!-- EDIT TASK MODAL -->
+  <!-- EDIT MAIN TASK MODAL -->
   <div id="editTaskModal" class="modal-overlay">
     <div class="modal-content">
       <h3>Chỉnh sửa main task</h3>
@@ -255,22 +255,110 @@
     </div>
   </div>
 
+  <!-- EDIT BACKGROUND TASK MODAL -->
+  <div id="editBgTaskModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>Chỉnh sửa background task</h3>
+      <form id="editBgTaskForm" class="edit-form">
+
+        <input type="text" id="editBgTitle" placeholder="Tên background task" required>
+        <textarea id="editBgDescription" placeholder="Mô tả"></textarea>
+
+        <div class="form-row">
+          <label class="inline-label">
+            <span>Start</span>
+            <input type="time" id="editBgStartTime" required>
+          </label>
+          <label class="inline-label">
+            <span>End</span>
+            <input type="time" id="editBgEndTime" required>
+          </label>
+        </div>
+
+        <!-- REPEAT GROUP EDIT -->
+        <div class="repeat-group">
+          <p class="repeat-label">Repeat</p>
+          <div class="repeat-options">
+            <label class="repeat-option">
+              <input type="radio" name="editBgRepeatType" value="none">
+              <span>Không lặp</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="editBgRepeatType" value="daily">
+              <span>Hằng ngày</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="editBgRepeatType" value="weekly">
+              <span>Hằng tuần</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="editBgRepeatType" value="monthly">
+              <span>Hằng tháng</span>
+            </label>
+          </div>
+
+          <!-- Không lặp: ngày cụ thể -->
+          <div id="editBgSpecificDateRow" class="repeat-extra-row">
+            <label class="inline-label">
+              <span>Ngày (không lặp)</span>
+              <input type="date" id="editBgSpecificDate">
+            </label>
+          </div>
+
+          <!-- Weekly pills -->
+          <div id="editBgWeeklyRow" class="repeat-extra-row hidden">
+            <span class="repeat-sub-label">Chọn thứ</span>
+            <div class="pill-row" id="editBgWeeklyPills">
+              <div class="pill-toggle" data-day="mon">T2</div>
+              <div class="pill-toggle" data-day="tue">T3</div>
+              <div class="pill-toggle" data-day="wed">T4</div>
+              <div class="pill-toggle" data-day="thu">T5</div>
+              <div class="pill-toggle" data-day="fri">T6</div>
+              <div class="pill-toggle" data-day="sat">T7</div>
+              <div class="pill-toggle" data-day="sun">CN</div>
+            </div>
+          </div>
+
+          <!-- Monthly date -->
+          <div id="editBgMonthlyRow" class="repeat-extra-row hidden">
+            <label class="inline-label">
+              <span>Ngày trong tháng (1–31)</span>
+              <input type="number" id="editBgRepeatDate" min="1" max="31" placeholder="1-31">
+            </label>
+          </div>
+        </div>
+
+        <div class="pill-row">
+          <div class="pill-toggle" id="pillEditBgParallel">Parallel</div>
+        </div>
+        <input type="checkbox" id="editBgIsParallel" hidden>
+
+        <div class="edit-actions-row">
+          <button type="button" id="cancelEditBgBtn" class="secondary-btn">Hủy</button>
+          <button type="submit" class="primary-btn">Lưu</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
   <script type="module" src="app.js"></script>
 
 <!--
 ===========================================
 VERSION NOTES
 ===========================================
-v1.2.1
-- Chuẩn hóa time picker 24h:
-  + Thêm meta format-detection để iOS không ép AM/PM.
-  + Thêm CSS ẩn trường AM/PM cho input[type=time] WebKit.
-- Thêm createdAtLocal cho:
-  + Main tasks
-  + Background tasks
-- Hiển thị "Giờ tạo" trong list:
-  + format: HH:mm · dd/MM/yyyy
-- Không thay đổi Repeat Engine, Timeline, priority.
+v1.2.2
+- Thêm Edit/Delete cho background tasks:
+  + Nút Edit mở modal chỉnh sửa background task.
+  + Nút Delete xóa background task (có confirm), reload list và timeline.
+- Modal chỉnh sửa background task:
+  + Chỉnh title, mô tả, start/end time.
+  + Chỉnh repeatType: none / daily / weekly / monthly.
+  + Chỉnh repeatDays, repeatDate, specificDate.
+  + Chỉnh Parallel on/off.
+- Dùng lại Repeat Engine, timeline tự cập nhật sau khi update.
+- Không thay đổi logic main tasks, priority, createdAtLocal.
 ===========================================
 -->
 
