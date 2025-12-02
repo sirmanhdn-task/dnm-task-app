@@ -158,6 +158,11 @@ form textarea:focus {
   color: var(--text-muted);
 }
 
+/* Force 24h style: ẩn AM/PM trên WebKit ---------------- */
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  display: none;
+}
+
 /* BUTTONS --------------------------------------------- */
 
 .primary-btn,
