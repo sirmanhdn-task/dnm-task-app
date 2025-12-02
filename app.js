@@ -24,7 +24,7 @@ import {
 const firebaseConfig = {
   apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
   authDomain: "dnmstasker.firebaseapp.com",
-  projectId: "dnmstasker",
+  projectId: "dnmstasker-3b85f",
   storageBucket: "dnmstasker.appspot.com",
   messagingSenderId: "98582966566",
   appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
