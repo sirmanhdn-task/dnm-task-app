@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.2.2</title>
+  <title>DNM's Tasker v1.3.0</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Ép iOS không tự xử lý time/date, tránh AM/PM -->
   <meta name="format-detection" content="telephone=no,time=no,date=no">
@@ -91,6 +91,51 @@
           <input type="datetime-local" id="mainDeadline" required>
         </label>
 
+        <!-- MAIN REPEAT GROUP -->
+        <div class="repeat-group">
+          <p class="repeat-label">Repeat</p>
+          <div class="repeat-options">
+            <label class="repeat-option">
+              <input type="radio" name="mainRepeatType" value="none" checked>
+              <span>Không lặp</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="mainRepeatType" value="daily">
+              <span>Hằng ngày</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="mainRepeatType" value="weekly">
+              <span>Hằng tuần</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="mainRepeatType" value="monthly">
+              <span>Hằng tháng</span>
+            </label>
+          </div>
+
+          <!-- Weekly: chọn thứ -->
+          <div id="mainWeeklyRow" class="repeat-extra-row hidden">
+            <span class="repeat-sub-label">Chọn thứ</span>
+            <div class="pill-row" id="mainWeeklyPills">
+              <div class="pill-toggle" data-day="mon">T2</div>
+              <div class="pill-toggle" data-day="tue">T3</div>
+              <div class="pill-toggle" data-day="wed">T4</div>
+              <div class="pill-toggle" data-day="thu">T5</div>
+              <div class="pill-toggle" data-day="fri">T6</div>
+              <div class="pill-toggle" data-day="sat">T7</div>
+              <div class="pill-toggle" data-day="sun">CN</div>
+            </div>
+          </div>
+
+          <!-- Monthly: ngày trong tháng -->
+          <div id="mainMonthlyRow" class="repeat-extra-row hidden">
+            <label class="inline-label">
+              <span>Ngày trong tháng (1–31)</span>
+              <input type="number" id="mainRepeatDate" min="1" max="31" placeholder="1-31">
+            </label>
+          </div>
+        </div>
+
         <!-- PILL TOGGLES -->
         <div class="pill-row">
           <div class="pill-toggle" id="pillMainPending">Pending</div>
@@ -133,7 +178,7 @@
           </label>
         </div>
 
-        <!-- REPEAT GROUP -->
+        <!-- REPEAT GROUP (BG) -->
         <div class="repeat-group">
           <p class="repeat-label">Repeat</p>
           <div class="repeat-options">
@@ -239,6 +284,51 @@
           <input type="datetime-local" id="editDeadline" required>
         </label>
 
+        <!-- EDIT MAIN REPEAT GROUP -->
+        <div class="repeat-group">
+          <p class="repeat-label">Repeat</p>
+          <div class="repeat-options">
+            <label class="repeat-option">
+              <input type="radio" name="editMainRepeatType" value="none">
+              <span>Không lặp</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="editMainRepeatType" value="daily">
+              <span>Hằng ngày</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="editMainRepeatType" value="weekly">
+              <span>Hằng tuần</span>
+            </label>
+            <label class="repeat-option">
+              <input type="radio" name="editMainRepeatType" value="monthly">
+              <span>Hằng tháng</span>
+            </label>
+          </div>
+
+          <!-- Weekly pills (edit) -->
+          <div id="editMainWeeklyRow" class="repeat-extra-row hidden">
+            <span class="repeat-sub-label">Chọn thứ</span>
+            <div class="pill-row" id="editMainWeeklyPills">
+              <div class="pill-toggle" data-day="mon">T2</div>
+              <div class="pill-toggle" data-day="tue">T3</div>
+              <div class="pill-toggle" data-day="wed">T4</div>
+              <div class="pill-toggle" data-day="thu">T5</div>
+              <div class="pill-toggle" data-day="fri">T6</div>
+              <div class="pill-toggle" data-day="sat">T7</div>
+              <div class="pill-toggle" data-day="sun">CN</div>
+            </div>
+          </div>
+
+          <!-- Monthly date (edit) -->
+          <div id="editMainMonthlyRow" class="repeat-extra-row hidden">
+            <label class="inline-label">
+              <span>Ngày trong tháng (1–31)</span>
+              <input type="number" id="editMainRepeatDate" min="1" max="31" placeholder="1-31">
+            </label>
+          </div>
+        </div>
+
         <div class="pill-row">
           <div class="pill-toggle" id="pillEditPending">Pending</div>
           <div class="pill-toggle" id="pillEditParallel">Parallel</div>
@@ -275,7 +365,7 @@
           </label>
         </div>
 
-        <!-- REPEAT GROUP EDIT -->
+        <!-- REPEAT GROUP EDIT BG -->
         <div class="repeat-group">
           <p class="repeat-label">Repeat</p>
           <div class="repeat-options">
@@ -348,17 +438,19 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.2.2
-- Thêm Edit/Delete cho background tasks:
-  + Nút Edit mở modal chỉnh sửa background task.
-  + Nút Delete xóa background task (có confirm), reload list và timeline.
-- Modal chỉnh sửa background task:
-  + Chỉnh title, mô tả, start/end time.
-  + Chỉnh repeatType: none / daily / weekly / monthly.
-  + Chỉnh repeatDays, repeatDate, specificDate.
-  + Chỉnh Parallel on/off.
-- Dùng lại Repeat Engine, timeline tự cập nhật sau khi update.
-- Không thay đổi logic main tasks, priority, createdAtLocal.
+v1.3.0
+- Thêm cấu trúc Repeat cho Main Task (UI + Firestore):
+  + repeatType: none / daily / weekly / monthly.
+  + repeatDays: array thứ trong tuần (weekly).
+  + repeatDate: ngày trong tháng (monthly).
+- Form Add Main Task:
+  + Nhóm chọn repeatType.
+  + Weekly: pill T2–CN.
+  + Monthly: input ngày 1–31.
+- Edit Main Task:
+  + Cho phép sửa repeatType + repeatDays + repeatDate.
+- Hiển thị meta Repeat cho main task trong list.
+- Chưa sinh instance repeat, chưa ảnh hưởng priority/timeline.
 ===========================================
 -->
 
