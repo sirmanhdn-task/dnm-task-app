@@ -2,8 +2,10 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>DNM's Tasker v1.2.0</title>
+  <title>DNM's Tasker v1.2.1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Ép iOS không tự xử lý time/date, tránh AM/PM -->
+  <meta name="format-detection" content="telephone=no,time=no,date=no">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -259,24 +261,16 @@
 ===========================================
 VERSION NOTES
 ===========================================
-v1.2.0
-- Thiết kế Repeat Engine cho background tasks:
-  + repeatType: none | daily | weekly | monthly
-  + repeatDays: ["mon","tue","wed","thu","fri","sat","sun"] (weekly)
-  + repeatDate: số ngày trong tháng (monthly)
-  + specificDate: YYYY-MM-DD (không lặp)
-- Form background task:
-  + Start/End time cố định
-  + Chọn ngày nếu không lặp
-  + Weekly: chọn thứ bằng pill T2..CN
-  + Monthly: nhập ngày trong tháng
-  + Parallel như trước
-- Repeat Engine generate instance cho 14 ngày timeline.
-- Xử lý overnight (23h-06h) bằng cách split thành 2 block:
-  + Ngày D: 23:00-24:00
-  + Ngày D+1: 00:00-06:00
-- Timeline lane Background render block theo repeat rule.
-- Main tasks giữ nguyên logic v1.1.7.
+v1.2.1
+- Chuẩn hóa time picker 24h:
+  + Thêm meta format-detection để iOS không ép AM/PM.
+  + Thêm CSS ẩn trường AM/PM cho input[type=time] WebKit.
+- Thêm createdAtLocal cho:
+  + Main tasks
+  + Background tasks
+- Hiển thị "Giờ tạo" trong list:
+  + format: HH:mm · dd/MM/yyyy
+- Không thay đổi Repeat Engine, Timeline, priority.
 ===========================================
 -->
 
