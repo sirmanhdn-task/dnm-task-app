@@ -22,15 +22,14 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-// *** THAY THÔNG SỐ BÊN DƯỚI BẰNG PROJECT FIREBASE CỦA BẠN ***
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
+  authDomain: "dnmstasker-3b85f.firebaseapp.com",
+  projectId: "dnmstasker-3b85f",
+  storageBucket: "dnmstasker-3b85f.firebasestorage.app",
+  messagingSenderId: "1053072513804",
+  appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
 };
 
 const app = initializeApp(firebaseConfig);
