@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.3.0</title>
+  <title>DNM's Tasker v1.3.1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Avoid auto phone/time/date detection on mobile -->
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -27,7 +26,6 @@
     </div>
   </header>
 
-  <!-- TAB HEADER -->
   <nav class="tabs">
     <button class="tab-button active" data-tab-target="tab-timeline">
       Timeline
@@ -56,12 +54,10 @@
       </div>
     </section>
 
-    <!-- TIMELINE -->
     <section class="timeline-wrapper">
       <div class="timeline-scroll" id="timelineScroll">
         <div class="timeline-header" id="timelineHeader"></div>
 
-        <!-- Lanes: we keep 3 lanes to align with future design -->
         <div class="timeline-lane lane-main">
           <div class="lane-label">Main</div>
           <div class="lane-content" id="laneMainContent"></div>
@@ -132,13 +128,11 @@
           <input type="datetime-local" id="mainDeadline" required />
         </label>
 
-        <!-- PILL TOGGLES -->
         <div class="pill-row">
           <div class="pill-toggle" id="pillMainPending">Mark as pending</div>
           <div class="pill-toggle" id="pillMainParallel">Parallel-friendly</div>
         </div>
 
-        <!-- Hidden checkboxes for logic -->
         <input type="checkbox" id="mainIsPending" hidden />
         <input type="checkbox" id="mainIsParallel" hidden />
 
@@ -199,7 +193,6 @@
           </label>
         </div>
 
-        <!-- REPEAT GROUP -->
         <div class="repeat-group">
           <p class="repeat-label">Repeat pattern</p>
           <div class="repeat-options">
@@ -226,7 +219,6 @@
             </label>
           </div>
 
-          <!-- Single date -->
           <div id="bgSpecificDateRow" class="repeat-extra-row">
             <label class="inline-label">
               <span>Date (no repeat)</span>
@@ -234,7 +226,6 @@
             </label>
           </div>
 
-          <!-- Weekly: day-of-week pills -->
           <div id="bgWeeklyRow" class="repeat-extra-row hidden">
             <span class="repeat-sub-label">Days of week</span>
             <div class="pill-row" id="bgWeeklyPills">
@@ -248,7 +239,6 @@
             </div>
           </div>
 
-          <!-- Monthly: date in month -->
           <div id="bgMonthlyRow" class="repeat-extra-row hidden">
             <label class="inline-label">
               <span>Day of month (1–31)</span>
@@ -407,7 +397,6 @@
           </label>
         </div>
 
-        <!-- EDIT REPEAT GROUP -->
         <div class="repeat-group">
           <p class="repeat-label">Repeat pattern</p>
           <div class="repeat-options">
@@ -549,18 +538,13 @@
   ===========================================
   VERSION NOTES
   ===========================================
-  v1.3.0 – Premium Minimal (Sunsama-style)
-  - Full UI text converted to English for office users.
-  - Visual style updated to a structured, minimal layout:
-    * Clear section headers and captions.
-    * Strong separation between timeline, main tasks, and background tasks.
-    * Neutral color palette optimized for long daily use.
-  - All functional logic from v1.2.3 preserved:
-    * Google sign-in and per-user data separation.
-    * Main / background tasks with Firestore.
-    * Priority engine based on duration / time-left ratio.
-    * Short-task boost, done/undone, delete, edit, duplicate with 4 options.
-    * Background repeat engine (none/daily/weekly/monthly) + timeline rendering.
+  v1.3.1 – Premium Timeline Enhancement (Soft Ghost Background Blocks)
+  - Kept all business logic, priority engine, repeat engine, auth, and Firestore structure from v1.3.0.
+  - Updated timeline background blocks to a "soft ghost" style:
+    * Higher transparency, reduced shadow, softer contrast.
+    * Still visible for reference but no longer competing with main tasks.
+    * Subtle hover highlight to see the block without distracting by default.
+  - Maintained three-lane timeline structure (Main / Background / Pending).
   ===========================================
   -->
 </body>
