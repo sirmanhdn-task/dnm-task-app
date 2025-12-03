@@ -660,6 +660,42 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   color: #b91c1c;
 }
 
+/* DEBUG PANEL ----------------------------------------- */
+
+.debug-card {
+  font-size: 11px;
+}
+
+.debug-grid-line {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.debug-grid-line strong {
+  color: var(--text-main);
+}
+
+.debug-task-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.debug-task-table th,
+.debug-task-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 2px 4px;
+  text-align: left;
+}
+
+.debug-task-table th {
+  font-weight: 600;
+  color: var(--text-main);
+  background: #f3f4f6;
+}
+
 /* RESPONSIVE ------------------------------------------ */
 
 @media (max-width: 768px) {
