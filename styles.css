@@ -430,33 +430,6 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   transform: translateY(-1px);
 }
 
-/* MAIN TASK BLOCKS ON TIMELINE -------------------------- */
-
-.timeline-main-block {
-  position: absolute;
-  top: 6px;
-  height: 28px;
-  border-radius: 10px;
-  background: #4f46e5;
-  color: #f9fafb;
-  font-size: 10px;
-  padding: 4px 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
-  border: 1px solid rgba(79, 70, 229, 0.5);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.timeline-main-block:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
-}
-
 /* TASK ITEMS (LIST) ------------------------------------- */
 
 .task-item {
@@ -574,23 +547,13 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Edit modal extra -------------------------------------- */
@@ -711,72 +674,95 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
 }
 
-/* DEBUG AVAILABILITY GRID ------------------------------- */
+/* DEBUG AVAILABILITY UI -------------------------------- */
 
-.debug-controls {
+.debug-controls-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
   align-items: flex-end;
-  margin-top: 4px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.debug-inline {
+  flex: 1;
 }
 
 .availability-legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 10px;
-  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .legend-box {
-  display: inline-block;
   width: 14px;
-  height: 8px;
+  height: 14px;
   border-radius: 4px;
-  margin-right: 4px;
+  border: 1px solid #d1d5db;
 }
 
-.legend-type1 {
-  background: rgba(34, 197, 94, 0.45);
+.legend-box.type-1 {
+  background: #e0f2fe;
+  border-color: #bae6fd;
 }
 
-.legend-type2 {
-  background: rgba(59, 130, 246, 0.45);
+.legend-box.type-2 {
+  background: #fef3c7;
+  border-color: #fde68a;
 }
 
-.legend-type3 {
-  background: rgba(239, 68, 68, 0.55);
+.legend-box.type-3 {
+  background: #fee2e2;
+  border-color: #fecaca;
 }
 
-.availability-debug-grid {
-  margin-top: 10px;
+.availability-grid {
   display: grid;
-  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-template-columns: repeat(24, 1fr);
   gap: 2px;
+  border-radius: 10px;
+  padding: 6px;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+  max-height: 260px;
+  overflow: auto;
 }
 
-.slot-debug {
-  height: 10px;
+.availability-slot {
+  width: 100%;
+  padding-top: 40%;
   border-radius: 3px;
-  background: #e5e7eb;
+  border: 1px solid transparent;
 }
 
-.slot-type1 {
-  background: rgba(34, 197, 94, 0.4);
+.availability-slot.type-1 {
+  background: #e0f2fe;
+  border-color: #bae6fd;
 }
 
-.slot-type2 {
-  background: rgba(59, 130, 246, 0.4);
+.availability-slot.type-2 {
+  background: #fef3c7;
+  border-color: #fde68a;
 }
 
-.slot-type3 {
-  background: rgba(239, 68, 68, 0.55);
+.availability-slot.type-3 {
+  background: #fee2e2;
+  border-color: #fecaca;
 }
 
-.slot-debug-hour-label {
-  border: 1px solid rgba(55, 65, 81, 0.35);
+.debug-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* RESPONSIVE -------------------------------------------- */
@@ -802,7 +788,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
     grid-template-columns: 62px 1fr;
   }
 
-  .availability-debug-grid {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+  .availability-grid {
+    grid-template-columns: repeat(16, 1fr);
   }
 }
