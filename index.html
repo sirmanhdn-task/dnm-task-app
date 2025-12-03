@@ -4,32 +4,49 @@
   <meta charset="UTF-8" />
   <title>DNM's Tasker v1.4.2 – Magnet Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Version notes:
-       v1.4.2 – Magnet-from-NOW scheduling engine
-       - Trọng số w = duration / minutesLeft
-       - Short task boost (<=10 phút & deadline <=48h)
-       - ONLY/PREFER nhân hệ số k vào w
-       - Parallel / non-parallel dùng slice type (1/2/3)
-       - Pack tuần tự từ frontierSlice = nowSlice, có split theo slice
-       - Debug panel hiển thị mọi thông số w + slices
+  <!--
+    Version notes:
+    v1.4.2-firebase
+    - Magnet-from-NOW engine với trọng số w = durationMinutes / minutesLeft
+    - Short-task boost (<=10 phút, deadline <=48h) bằng k_short
+    - ONLY / PREFER nhân hệ số k vào w (hoặc 0 nếu ONLY ngoài window)
+    - Parallel / non-parallel dùng slice type 1/2/3
+    - Sắp xếp tuần tự từ nowSlice, cho phép split theo slice
+    - Dữ liệu main/background task lưu trên Firestore theo từng user Google
+    - Google Auth (sign in / sign out)
   -->
 
   <div class="app-shell">
     <header class="app-header">
-      <div class="app-title">
-        <span class="logo-dot"></span>
-        <span class="title-main">DNM's Tasker</span>
-        <span class="title-sub">v1.4.2 Magnet Engine</span>
+      <div class="app-title-block">
+        <div class="logo-dot"></div>
+        <div class="title-texts">
+          <span class="title-main">DNM's Tasker</span>
+          <span class="title-sub">v1.4.2 · Magnet engine · Firebase</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button id="loginBtn" class="secondary-btn">Sign in with Google</button>
+
+        <div id="userInfo" class="user-info" style="display:none">
+          <img id="userAvatar" class="user-avatar" alt="avatar" />
+          <span id="userEmail" class="user-email"></span>
+          <button id="logoutBtn" class="secondary-btn secondary-btn-small">
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
 
     <main class="app-main">
       <div class="tabs">
         <button class="tab-button active" data-tab="timelineTab">Timeline</button>
-        <button class="tab-button" data-tab="backgroundTab">Background tasks</button>
+        <button class="tab-button" data-tab="backgroundTab">Background</button>
         <button class="tab-button" data-tab="settingsTab">Settings</button>
       </div>
 
@@ -62,9 +79,7 @@
 
         <div class="timeline-wrapper">
           <div id="timelineHeader" class="timeline-header"></div>
-          <div id="timelineCanvas" class="timeline-canvas">
-            <!-- lanes + tasks will be injected here -->
-          </div>
+          <div id="timelineCanvas" class="timeline-canvas"></div>
         </div>
 
         <div class="main-task-panel">
@@ -87,26 +102,30 @@
               <input type="datetime-local" id="mtDeadline" required />
             </div>
             <div class="form-row inline">
-              <label class="pill-label">Type</label>
-              <div class="pill-group" id="mtParallelGroup">
-                <button type="button" data-value="nonparallel" class="pill active">
-                  Non-parallel
-                </button>
-                <button type="button" data-value="parallel" class="pill">
-                  Parallel
-                </button>
+              <div>
+                <label class="pill-label">Type</label>
+                <div class="pill-group" id="mtParallelGroup">
+                  <button type="button" data-value="nonparallel" class="pill active">
+                    Non-parallel
+                  </button>
+                  <button type="button" data-value="parallel" class="pill">
+                    Parallel
+                  </button>
+                </div>
               </div>
-              <label class="pill-label">Mode</label>
-              <div class="pill-group" id="mtModeGroup">
-                <button type="button" data-value="NONE" class="pill active">
-                  Normal
-                </button>
-                <button type="button" data-value="ONLY" class="pill">
-                  ONLY
-                </button>
-                <button type="button" data-value="PREFER" class="pill">
-                  PREFER
-                </button>
+              <div>
+                <label class="pill-label">Mode</label>
+                <div class="pill-group" id="mtModeGroup">
+                  <button type="button" data-value="NONE" class="pill active">
+                    Normal
+                  </button>
+                  <button type="button" data-value="ONLY" class="pill">
+                    ONLY
+                  </button>
+                  <button type="button" data-value="PREFER" class="pill">
+                    PREFER
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -145,9 +164,6 @@
           <div class="card task-list-card">
             <div class="task-list-header">
               <h3>Task list (sorted by w)</h3>
-              <button id="clearTasksBtn" class="danger-link">
-                Clear all (local)
-              </button>
             </div>
             <div id="mainTaskList" class="task-list"></div>
           </div>
@@ -208,9 +224,6 @@
         <div class="card task-list-card">
           <div class="task-list-header">
             <h3>Background task list</h3>
-            <button id="clearBgTasksBtn" class="danger-link">
-              Clear all (local)
-            </button>
           </div>
           <div id="bgTaskList" class="task-list"></div>
         </div>
