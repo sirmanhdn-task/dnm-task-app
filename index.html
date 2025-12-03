@@ -16,7 +16,7 @@
     <div class="header-right">
       <button id="loginBtn" class="secondary-btn">Sign in with Google</button>
 
-      <div id="userInfo" class="user-info" style="display: none">
+      <div id="userInfo" class="user-info" style="display:none">
         <img id="userAvatar" class="user-avatar" alt="avatar" />
         <span id="userEmail" class="user-email"></span>
         <button id="logoutBtn" class="secondary-btn secondary-btn-small">
@@ -82,7 +82,7 @@
       <div class="section-header-row">
         <h2>Main tasks</h2>
         <span class="section-caption">
-          Capture high-value work and let the engine prioritize and place it.
+          Capture high-value work and let the engine prioritize it.
         </span>
       </div>
 
@@ -281,52 +281,58 @@
   <main class="tab-panel" id="tab-settings">
     <section class="panel-section">
       <div class="section-header-row">
-        <h2>Settings & debug</h2>
+        <h2>Settings</h2>
         <span class="section-caption">
-          Global preferences and internal availability map.
+          Global preferences, weighting parameters and internal debug tools.
         </span>
       </div>
 
       <div class="card">
         <p class="body-text">
-          This version introduces an availability engine with a 10-minute slot
-          resolution over the next 14 days. Main tasks are placed into the first
-          suitable continuous block of slots, respecting background blocks.
+          Settings and advanced tuning will be introduced in a later version.
+          The current focus is a stable scheduling engine and a clean daily
+          experience.
         </p>
       </div>
 
-      <!-- Availability debug UI -->
+      <!-- AVAILABILITY DEBUG UI -->
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">Availability debug</h3>
+          <h3 class="card-title">Availability debug (v1.3.2)</h3>
           <span class="card-subtitle">
-            Inspect background-based slot types over the next 14 days (10-minute resolution).
+            Visualize lane-1 availability for each day (10-minute slots).
           </span>
         </div>
 
-        <div class="debug-row">
-          <label class="inline-label">
-            <span>Day offset (0 = today)</span>
-            <input
-              type="number"
-              id="debugDayOffset"
-              min="0"
-              max="13"
-              value="0"
-            />
+        <div class="debug-controls-row">
+          <label class="inline-label debug-inline">
+            <span>Day offset (0 = today, 13 = +13 days)</span>
+            <select id="debugDaySelect"></select>
           </label>
-          <button id="renderDebugBtn" class="secondary-btn">
-            Render availability
+          <button id="debugRebuildBtn" class="secondary-btn">
+            Rebuild &amp; visualize
           </button>
         </div>
 
         <div class="availability-legend">
-          <span class="legend-box legend-type1"></span> Free (type 1)
-          <span class="legend-box legend-type2"></span> Parallel BG (type 2)
-          <span class="legend-box legend-type3"></span> Blocked (type 3)
+          <span class="legend-item">
+            <span class="legend-box type-1"></span> Type 1: free (no background)
+          </span>
+          <span class="legend-item">
+            <span class="legend-box type-2"></span> Type 2: parallel background
+          </span>
+          <span class="legend-item">
+            <span class="legend-box type-3"></span> Type 3: blocked (non-parallel)
+          </span>
         </div>
 
-        <div id="availabilityGrid" class="availability-grid"></div>
+        <div id="debugAvailabilityGrid" class="availability-grid">
+          <!-- Filled by JS -->
+        </div>
+
+        <p class="debug-note">
+          Each row represents 1 hour, each cell = 10-minute slot.
+        </p>
       </div>
     </section>
   </main>
@@ -443,15 +449,27 @@
               <span>Single date</span>
             </label>
             <label class="repeat-option">
-              <input type="radio" name="editBgRepeatType" value="daily" />
+              <input
+                type="radio"
+                name="editBgRepeatType"
+                value="daily"
+              />
               <span>Daily</span>
             </label>
             <label class="repeat-option">
-              <input type="radio" name="editBgRepeatType" value="weekly" />
+              <input
+                type="radio"
+                name="editBgRepeatType"
+                value="weekly"
+              />
               <span>Weekly</span>
             </label>
             <label class="repeat-option">
-              <input type="radio" name="editBgRepeatType" value="monthly" />
+              <input
+                type="radio"
+                name="editBgRepeatType"
+                value="monthly"
+              />
               <span>Monthly</span>
             </label>
           </div>
@@ -547,7 +565,7 @@
       <button
         id="duplicateCancelBtn"
         class="secondary-btn full-width"
-        style="margin-top: 10px"
+        style="margin-top:10px"
       >
         Close
       </button>
@@ -560,21 +578,25 @@
   ===========================================
   VERSION NOTES
   ===========================================
-  v1.3.2 – Availability Engine + Main Lane Auto Placement (10-minute slots)
-  - Added a 10-minute slot-based availability engine for the next 14 days.
-  - Each slot is classified as:
-      Type 1: no background (fully free)
-      Type 2: parallel background present
-      Type 3: non-parallel background present (blocked)
-  - Each slot has an availability factor, used by the scheduler:
-      Type 1 → 1.0
-      Type 2 → 0.7
-      Type 3 → 0.0
-  - Main tasks (active & non-pending) are automatically placed into the first
-    suitable continuous block of slots that can cover their duration.
-    Tasks are not split into disjoint blocks; they form one contiguous block
-    on the main lane.
-  - Added a debug UI in Settings to inspect slot availability per day.
+  v1.3.2 – Availability Engine + Debug UI
+  - Introduced a 10-minute slot-based availability engine for the next 14 days.
+  - Each slot is classified into:
+    * Type 1 (free, no background)
+    * Type 2 (parallel background)
+    * Type 3 (blocked by non-parallel background)
+  - For each slot, an availabilityFactor is computed:
+    * Type 1 → 1.0
+    * Type 2 → 0.7
+    * Type 3 → 0.0
+  - Added a debug panel in Settings:
+    * Visualize availability per day as a 24×6 grid (24 hours, 6 slots/hour).
+    * Each cell represents a 10-minute slot.
+  - Added per-task debug:
+    * For each main task, a "Debug slots" button evaluates the best windows (today)
+      that can host the full duration, using the slot engine.
+    * Long tasks are evaluated as continuous windows of multiple slots.
+  - This version does NOT yet place main tasks on the timeline lanes. It prepares
+    a robust scheduling backbone for future auto-placement and AI assistance.
   ===========================================
   -->
 </body>
