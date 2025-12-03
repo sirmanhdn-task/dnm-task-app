@@ -410,7 +410,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   top: 8px;
   height: 24px;
   border-radius: 8px;
-  background: rgba(55, 65, 81, 0.18); /* soft ghost */
+  background: rgba(55, 65, 81, 0.18);
   color: rgba(249, 250, 251, 0.7);
   font-size: 10px;
   padding: 3px 9px;
@@ -418,17 +418,43 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   overflow: hidden;
   text-overflow: ellipsis;
   border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: none; /* remove heavy shadow */
+  box-shadow: none;
   transition: background 0.15s ease, transform 0.15s ease,
     border-color 0.15s ease, color 0.15s ease;
 }
 
-/* Hover: only when user looks closely */
 .timeline-bg-block:hover {
   background: rgba(55, 65, 81, 0.28);
   border-color: rgba(15, 23, 42, 0.18);
   color: rgba(249, 250, 251, 0.92);
   transform: translateY(-1px);
+}
+
+/* MAIN TASK BLOCKS ON TIMELINE -------------------------- */
+
+.timeline-main-block {
+  position: absolute;
+  top: 6px;
+  height: 28px;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #f9fafb;
+  font-size: 10px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  border: 1px solid rgba(79, 70, 229, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.timeline-main-block:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
 }
 
 /* TASK ITEMS (LIST) ------------------------------------- */
@@ -685,6 +711,74 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
 }
 
+/* DEBUG AVAILABILITY GRID ------------------------------- */
+
+.debug-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 4px;
+}
+
+.availability-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.legend-box {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.legend-type1 {
+  background: rgba(34, 197, 94, 0.45);
+}
+
+.legend-type2 {
+  background: rgba(59, 130, 246, 0.45);
+}
+
+.legend-type3 {
+  background: rgba(239, 68, 68, 0.55);
+}
+
+.availability-debug-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.slot-debug {
+  height: 10px;
+  border-radius: 3px;
+  background: #e5e7eb;
+}
+
+.slot-type1 {
+  background: rgba(34, 197, 94, 0.4);
+}
+
+.slot-type2 {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+.slot-type3 {
+  background: rgba(239, 68, 68, 0.55);
+}
+
+.slot-debug-hour-label {
+  border: 1px solid rgba(55, 65, 81, 0.35);
+}
+
 /* RESPONSIVE -------------------------------------------- */
 
 @media (max-width: 768px) {
@@ -706,5 +800,9 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 
   .timeline-lane {
     grid-template-columns: 62px 1fr;
+  }
+
+  .availability-debug-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 }
