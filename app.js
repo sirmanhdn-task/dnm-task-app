@@ -22,7 +22,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -47,6 +46,9 @@ let currentEditingBgTaskId = null;
 
 let mainTasksCache = [];
 let backgroundTasksCache = [];
+
+// Debug info for scheduler
+let lastDebugSchedule = null;
 
 // ===================================================
 // TABS
@@ -76,6 +78,7 @@ const laneBackgroundContent = document.getElementById("laneBackgroundContent");
 const lanePendingContent = document.getElementById("lanePendingContent");
 const timelineNowMarker = document.getElementById("timelineNowMarker");
 const timelineTooltip = document.getElementById("timelineTooltip");
+const debugInfoContainer = document.getElementById("debugInfo");
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
@@ -94,7 +97,8 @@ const MAX_PX = 160;
 
 const startOfToday = (() => {
   const n = new Date();
-  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  const d = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  return d;
 })();
 
 function formatDayLabel(date) {
@@ -112,6 +116,18 @@ function formatLocalDateTime(isoString) {
     minute: "2-digit"
   });
   return `${timePart} · ${datePart}`;
+}
+
+// Convert slice index -> label (day+time)
+function sliceToLabel(sliceIndex) {
+  if (sliceIndex < 0 || sliceIndex >= TOTAL_SLICES) return "out-of-range";
+  const hoursTotal = sliceIndex / SLICES_PER_HOUR;
+  const dayIdx = Math.floor(hoursTotal / 24);
+  const hourOfDay = Math.floor(hoursTotal % 24);
+  const minute = (sliceIndex % SLICES_PER_HOUR) * SLICE_MINUTES;
+  return `D+${dayIdx} ${String(hourOfDay).padStart(2, "0")}:${String(
+    minute
+  ).padStart(2, "0")}`;
 }
 
 // ===================================================
@@ -361,6 +377,8 @@ function setLoggedOutUI() {
 
   mainTasksCache = [];
   backgroundTasksCache = [];
+  lastDebugSchedule = null;
+  renderDebugPanel();
   hideTooltip();
 }
 
@@ -990,7 +1008,7 @@ function renderBackgroundOnTimeline() {
 }
 
 // ===================================================
-// BEST WINDOW PLACEMENT ENGINE
+// BEST WINDOW PLACEMENT ENGINE + DEBUG
 // ===================================================
 function buildBusyGridFromBackground(rangeStart, rangeEnd) {
   const busy = new Array(TOTAL_SLICES).fill(false);
@@ -1078,20 +1096,33 @@ function findEarliestSlotFrom(busy, fromSlice, neededSlices) {
 
 function scheduleMainTasksUsingGrid() {
   const schedule = {};
-  if (!mainTasksCache || mainTasksCache.length === 0) return schedule;
+  if (!mainTasksCache || mainTasksCache.length === 0) {
+    lastDebugSchedule = null;
+    renderDebugPanel();
+    return schedule;
+  }
 
   const rangeStart = startOfToday;
   const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
   const now = new Date();
 
   let busy = buildBusyGridFromBackground(rangeStart, rangeEnd);
+  const busyCount = busy.reduce((acc, v) => (v ? acc + 1 : acc), 0);
 
   const nowIndexRaw = Math.floor(
     (now.getTime() - rangeStart.getTime()) / MS_PER_SLICE
   );
   const nowSlice = Math.max(0, Math.min(TOTAL_SLICES - 1, nowIndexRaw));
 
-  // Process tasks in the order of mainTasksCache (already sorted by priority)
+  const debug = {
+    gridBusyCount: busyCount,
+    gridTotalSlices: TOTAL_SLICES,
+    gridBusyPercent: ((busyCount / TOTAL_SLICES) * 100).toFixed(2),
+    nowSlice,
+    nowLabel: sliceToLabel(nowSlice),
+    tasks: []
+  };
+
   const tasksToSchedule = mainTasksCache.filter((task) => {
     if (task.status && task.status !== "active") return false;
     if (task.isPending) return false;
@@ -1129,14 +1160,6 @@ function scheduleMainTasksUsingGrid() {
       windowEnd = new Date(rangeEnd.getTime());
     }
 
-    if (windowEnd <= windowStart) {
-      // fallback: use [now, rangeEnd]
-      windowStart = new Date(
-        Math.max(now.getTime(), rangeStart.getTime())
-      );
-      windowEnd = new Date(rangeEnd.getTime());
-    }
-
     let windowStartSlice = Math.floor(
       (windowStart.getTime() - rangeStart.getTime()) / MS_PER_SLICE
     );
@@ -1148,6 +1171,7 @@ function scheduleMainTasksUsingGrid() {
     windowEndSlice = Math.max(0, Math.min(TOTAL_SLICES, windowEndSlice));
 
     let slot = null;
+    let usedFallback = false;
 
     if (windowEndSlice > windowStartSlice && neededSlices > 0) {
       slot = findSlotInWindow(
@@ -1159,31 +1183,150 @@ function scheduleMainTasksUsingGrid() {
     }
 
     if (!slot) {
-      // fallback: look from nowSlice forward
+      usedFallback = true;
       slot = findEarliestSlotFrom(busy, nowSlice, neededSlices);
     }
 
-    if (!slot) {
-      // if still no slot, skip scheduling for this task
-      return;
+    if (slot) {
+      for (let i = slot.startSlice; i < slot.endSlice; i++) {
+        busy[i] = true;
+      }
+
+      const startMs =
+        rangeStart.getTime() + slot.startSlice * MS_PER_SLICE;
+      const endMs =
+        rangeStart.getTime() + slot.endSlice * MS_PER_SLICE;
+
+      schedule[task.id] = {
+        startTime: new Date(startMs),
+        endTime: new Date(endMs)
+      };
+
+      debug.tasks.push({
+        id: task.id,
+        taskId: task.taskId,
+        title: task.title,
+        status: task.status,
+        isPending: !!task.isPending,
+        duration: durationMinutes,
+        minutesLeft: task._minutesLeft,
+        priority: task._priority,
+        shortBoost: !!task._isShortBoost,
+        windowStartSlice,
+        windowEndSlice,
+        neededSlices,
+        usedFallback,
+        slotFound: true,
+        slotStartSlice: slot.startSlice,
+        slotEndSlice: slot.endSlice,
+        slotStartLabel: sliceToLabel(slot.startSlice),
+        slotEndLabel: sliceToLabel(slot.endSlice)
+      });
+    } else {
+      debug.tasks.push({
+        id: task.id,
+        taskId: task.taskId,
+        title: task.title,
+        status: task.status,
+        isPending: !!task.isPending,
+        duration: durationMinutes,
+        minutesLeft: task._minutesLeft,
+        priority: task._priority,
+        shortBoost: !!task._isShortBoost,
+        windowStartSlice,
+        windowEndSlice,
+        neededSlices,
+        usedFallback,
+        slotFound: false
+      });
     }
-
-    for (let i = slot.startSlice; i < slot.endSlice; i++) {
-      busy[i] = true;
-    }
-
-    const startMs =
-      rangeStart.getTime() + slot.startSlice * MS_PER_SLICE;
-    const endMs =
-      rangeStart.getTime() + slot.endSlice * MS_PER_SLICE;
-
-    schedule[task.id] = {
-      startTime: new Date(startMs),
-      endTime: new Date(endMs)
-    };
   });
 
+  lastDebugSchedule = debug;
+  renderDebugPanel();
+  console.log("[Scheduler debug v1.4.1]", debug);
+
   return schedule;
+}
+
+// ===================================================
+// DEBUG PANEL RENDER
+// ===================================================
+function renderDebugPanel() {
+  if (!debugInfoContainer) return;
+
+  if (!lastDebugSchedule) {
+    debugInfoContainer.innerHTML =
+      '<p class="task-meta">No scheduler debug data yet.</p>';
+    return;
+  }
+
+  const d = lastDebugSchedule;
+
+  let html = "";
+  html += `<div class="debug-grid-line"><strong>Grid:</strong> busy ${d.gridBusyCount} / ${d.gridTotalSlices} slices (${d.gridBusyPercent}%)</div>`;
+  html += `<div class="debug-grid-line"><strong>Now slice:</strong> #${d.nowSlice} (${d.nowLabel})</div>`;
+
+  if (!d.tasks || d.tasks.length === 0) {
+    html += `<p class="task-meta">No active, non-pending main tasks to schedule.</p>`;
+    debugInfoContainer.innerHTML = html;
+    return;
+  }
+
+  html += `<table class="debug-task-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Dur</th>
+        <th>Remain</th>
+        <th>Prio</th>
+        <th>Win [start→end]</th>
+        <th>Need</th>
+        <th>Slot</th>
+      </tr>
+    </thead>
+    <tbody>
+  `;
+
+  d.tasks.forEach((t) => {
+    const idText =
+      typeof t.taskId === "number" ? `#${t.taskId}` : t.id.slice(0, 4);
+    const prioText =
+      t.priority == null || !isFinite(t.priority)
+        ? "N/A"
+        : t.priority.toFixed(3);
+    const winText = `${t.windowStartSlice}→${t.windowEndSlice}`;
+    let slotText = "none";
+
+    if (t.slotFound) {
+      slotText = `${t.slotStartSlice}→${t.slotEndSlice} (${t.slotStartLabel} → ${t.slotEndLabel})`;
+      if (t.usedFallback) slotText += " [fallback]";
+    } else if (t.usedFallback) {
+      slotText = "no slot (fallback tried)";
+    }
+
+    html += `
+      <tr>
+        <td>${idText}</td>
+        <td>${t.title || ""}</td>
+        <td>${t.duration}</td>
+        <td>${
+          t.minutesLeft === Infinity || t.minutesLeft == null
+            ? "∞"
+            : t.minutesLeft
+        }</td>
+        <td>${prioText}</td>
+        <td>${winText}</td>
+        <td>${t.neededSlices}</td>
+        <td>${slotText}</td>
+      </tr>
+    `;
+  });
+
+  html += "</tbody></table>";
+
+  debugInfoContainer.innerHTML = html;
 }
 
 // ===================================================
@@ -1195,8 +1338,16 @@ function renderMainOnTimeline() {
   hideTooltip();
   laneMainContent.innerHTML = "";
 
-  if (!currentUid) return;
-  if (!mainTasksCache || mainTasksCache.length === 0) return;
+  if (!currentUid) {
+    lastDebugSchedule = null;
+    renderDebugPanel();
+    return;
+  }
+  if (!mainTasksCache || mainTasksCache.length === 0) {
+    lastDebugSchedule = null;
+    renderDebugPanel();
+    return;
+  }
 
   const scheduleMap = scheduleMainTasksUsingGrid();
   const rangeStart = startOfToday;
