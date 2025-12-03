@@ -42,7 +42,7 @@ body {
 }
 
 .app-title {
-  font-family: "SF Pro Display";
+  font-family: "SF Pro Display", system-ui, -apple-system;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.3px;
@@ -100,6 +100,8 @@ body {
   padding: 8px 4px;
   border-radius: 999px;
   color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .tab-button.active {
@@ -171,7 +173,7 @@ form textarea:focus {
   color: var(--text-muted);
 }
 
-/* 24H TIME PICKER HACK ---------------------------------- */
+/* FORCE 24H TIME IN CHROME ------------------------------ */
 
 input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
@@ -186,6 +188,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   border: none;
   cursor: pointer;
   border-radius: 999px;
+  font-family: inherit;
 }
 
 .primary-btn {
@@ -243,13 +246,14 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
 }
 
-/* TIMELINE --------------------------------------------- */
+/* TIMELINE ---------------------------------------------- */
 
 .timeline-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
 .timeline-wrapper {
@@ -367,7 +371,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   text-decoration: line-through;
 }
 
-/* TASK LIST ITEMS -------------------------------------- */
+/* MAIN TASK LIST ITEMS --------------------------------- */
 
 .task-item {
   padding: 8px;
@@ -438,7 +442,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   color: #b91c1c;
 }
 
-/* MODAL ------------------------------------------------ */
+/* MODALS ----------------------------------------------- */
 
 .modal-overlay {
   position: fixed;
@@ -518,6 +522,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   cursor: pointer;
   user-select: none;
   border: 1px solid #e5e7eb;
+  font-size: 12px;
 }
 
 .calendar-day.today {
@@ -580,6 +585,79 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 
 .hidden {
   display: none;
+}
+
+/* TIMELINE TOOLTIP (STATIC POPOVER) ------------------- */
+
+.timeline-tooltip {
+  position: fixed;
+  z-index: 1200;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.28);
+  font-size: 12px;
+  color: var(--text-main);
+  display: none;
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+}
+
+.timeline-tooltip.active {
+  display: block;
+}
+
+.timeline-tooltip[data-position="below"] {
+  transform: translate(-50%, 0);
+}
+
+.tooltip-header {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #0f172a;
+}
+
+.tooltip-body {
+  margin-bottom: 8px;
+}
+
+.tooltip-row {
+  margin: 1px 0;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.tooltip-row:first-of-type {
+  color: var(--text-main);
+}
+
+.tooltip-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tooltip-btn {
+  border: none;
+  border-radius: 999px;
+  background: #e5e7eb;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.tooltip-btn-primary {
+  background: #22c55e;
+  color: #fff;
+}
+
+.tooltip-btn-danger {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* RESPONSIVE ------------------------------------------ */
