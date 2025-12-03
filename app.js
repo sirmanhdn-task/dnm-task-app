@@ -22,6 +22,7 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -80,6 +81,12 @@ const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
 const DAYS_TOTAL = 14;
 const HOURS_TOTAL = DAYS_TOTAL * 24;
+
+// Best Window Engine: 10-minute slices
+const SLICE_MINUTES = 10;
+const SLICES_PER_HOUR = 60 / SLICE_MINUTES;
+const TOTAL_SLICES = HOURS_TOTAL * SLICES_PER_HOUR;
+const MS_PER_SLICE = SLICE_MINUTES * 60000;
 
 let pixelsPerHour = 60;
 const MIN_PX = 24;
@@ -983,6 +990,203 @@ function renderBackgroundOnTimeline() {
 }
 
 // ===================================================
+// BEST WINDOW PLACEMENT ENGINE
+// ===================================================
+function buildBusyGridFromBackground(rangeStart, rangeEnd) {
+  const busy = new Array(TOTAL_SLICES).fill(false);
+
+  backgroundTasksCache.forEach((task) => {
+    // Only non-parallel background tasks block main tasks
+    if (task.isParallel) return;
+
+    const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
+
+    segments.forEach((seg) => {
+      const baseDate = new Date(seg.date + "T00:00:00");
+      const offsetMs = baseDate - rangeStart;
+      if (offsetMs < 0 || offsetMs >= DAYS_TOTAL * MS_PER_DAY) return;
+
+      const absStartMs =
+        rangeStart.getTime() +
+        offsetMs +
+        seg.startMinutes * 60000;
+      const absEndMs =
+        rangeStart.getTime() + offsetMs + seg.endMinutes * 60000;
+
+      let startSlice = Math.floor(
+        (absStartMs - rangeStart.getTime()) / MS_PER_SLICE
+      );
+      let endSlice = Math.floor(
+        (absEndMs - rangeStart.getTime()) / MS_PER_SLICE
+      );
+
+      startSlice = Math.max(0, Math.min(TOTAL_SLICES, startSlice));
+      endSlice = Math.max(0, Math.min(TOTAL_SLICES, endSlice));
+
+      if (endSlice <= startSlice) return;
+
+      for (let i = startSlice; i < endSlice; i++) {
+        busy[i] = true;
+      }
+    });
+  });
+
+  return busy;
+}
+
+function findSlotInWindow(busy, windowStartSlice, windowEndSlice, neededSlices) {
+  if (windowEndSlice <= windowStartSlice || neededSlices <= 0) return null;
+
+  const maxStart = Math.min(windowEndSlice, TOTAL_SLICES) - neededSlices;
+  const minStart = Math.max(0, windowStartSlice);
+
+  for (let start = maxStart; start >= minStart; start--) {
+    let ok = true;
+    for (let k = 0; k < neededSlices; k++) {
+      const idx = start + k;
+      if (idx < 0 || idx >= TOTAL_SLICES || busy[idx]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      return { startSlice: start, endSlice: start + neededSlices };
+    }
+  }
+  return null;
+}
+
+function findEarliestSlotFrom(busy, fromSlice, neededSlices) {
+  const minStart = Math.max(0, fromSlice);
+  const maxStart = TOTAL_SLICES - neededSlices;
+
+  for (let start = minStart; start <= maxStart; start++) {
+    let ok = true;
+    for (let k = 0; k < neededSlices; k++) {
+      const idx = start + k;
+      if (idx < 0 || idx >= TOTAL_SLICES || busy[idx]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      return { startSlice: start, endSlice: start + neededSlices };
+    }
+  }
+  return null;
+}
+
+function scheduleMainTasksUsingGrid() {
+  const schedule = {};
+  if (!mainTasksCache || mainTasksCache.length === 0) return schedule;
+
+  const rangeStart = startOfToday;
+  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
+  const now = new Date();
+
+  let busy = buildBusyGridFromBackground(rangeStart, rangeEnd);
+
+  const nowIndexRaw = Math.floor(
+    (now.getTime() - rangeStart.getTime()) / MS_PER_SLICE
+  );
+  const nowSlice = Math.max(0, Math.min(TOTAL_SLICES - 1, nowIndexRaw));
+
+  // Process tasks in the order of mainTasksCache (already sorted by priority)
+  const tasksToSchedule = mainTasksCache.filter((task) => {
+    if (task.status && task.status !== "active") return false;
+    if (task.isPending) return false;
+    const duration = Number(task.duration) || 0;
+    if (!duration || duration <= 0) return false;
+    return true;
+  });
+
+  tasksToSchedule.forEach((task) => {
+    const durationMinutes = Number(task.duration) || 0;
+    if (!durationMinutes || durationMinutes <= 0) return;
+
+    const neededSlices = Math.max(
+      1,
+      Math.ceil(durationMinutes / SLICE_MINUTES)
+    );
+
+    let deadline = null;
+    if (task.deadlineAt) {
+      const d = new Date(task.deadlineAt);
+      if (!isNaN(d)) {
+        deadline = d;
+      }
+    }
+
+    let windowStart = new Date(
+      Math.max(now.getTime(), rangeStart.getTime())
+    );
+    let windowEnd = deadline ? new Date(deadline.getTime()) : new Date(rangeEnd.getTime());
+
+    if (windowEnd < rangeStart) {
+      windowEnd = new Date(rangeStart.getTime());
+    }
+    if (windowEnd > rangeEnd) {
+      windowEnd = new Date(rangeEnd.getTime());
+    }
+
+    if (windowEnd <= windowStart) {
+      // fallback: use [now, rangeEnd]
+      windowStart = new Date(
+        Math.max(now.getTime(), rangeStart.getTime())
+      );
+      windowEnd = new Date(rangeEnd.getTime());
+    }
+
+    let windowStartSlice = Math.floor(
+      (windowStart.getTime() - rangeStart.getTime()) / MS_PER_SLICE
+    );
+    let windowEndSlice = Math.floor(
+      (windowEnd.getTime() - rangeStart.getTime()) / MS_PER_SLICE
+    );
+
+    windowStartSlice = Math.max(0, Math.min(TOTAL_SLICES, windowStartSlice));
+    windowEndSlice = Math.max(0, Math.min(TOTAL_SLICES, windowEndSlice));
+
+    let slot = null;
+
+    if (windowEndSlice > windowStartSlice && neededSlices > 0) {
+      slot = findSlotInWindow(
+        busy,
+        windowStartSlice,
+        windowEndSlice,
+        neededSlices
+      );
+    }
+
+    if (!slot) {
+      // fallback: look from nowSlice forward
+      slot = findEarliestSlotFrom(busy, nowSlice, neededSlices);
+    }
+
+    if (!slot) {
+      // if still no slot, skip scheduling for this task
+      return;
+    }
+
+    for (let i = slot.startSlice; i < slot.endSlice; i++) {
+      busy[i] = true;
+    }
+
+    const startMs =
+      rangeStart.getTime() + slot.startSlice * MS_PER_SLICE;
+    const endMs =
+      rangeStart.getTime() + slot.endSlice * MS_PER_SLICE;
+
+    schedule[task.id] = {
+      startTime: new Date(startMs),
+      endTime: new Date(endMs)
+    };
+  });
+
+  return schedule;
+}
+
+// ===================================================
 // MAIN TASKS – RENDER ON TIMELINE (LANE MAIN)
 // ===================================================
 function renderMainOnTimeline() {
@@ -994,44 +1198,23 @@ function renderMainOnTimeline() {
   if (!currentUid) return;
   if (!mainTasksCache || mainTasksCache.length === 0) return;
 
+  const scheduleMap = scheduleMainTasksUsingGrid();
   const rangeStart = startOfToday;
   const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
 
   mainTasksCache.forEach((task) => {
-    const status = task.status || "active";
-    if (status !== "active") return;
+    if (task.status && task.status !== "active") return;
     if (task.isPending) return;
 
-    const durationMinutes = Number(task.duration) || 0;
-    if (!durationMinutes || durationMinutes <= 0) return;
+    const slot = scheduleMap[task.id];
+    if (!slot) return;
 
-    let endTime = null;
-    if (task.deadlineAt) {
-      endTime = new Date(task.deadlineAt);
-      if (isNaN(endTime)) {
-        endTime = null;
-      }
-    }
+    let { startTime, endTime } = slot;
 
-    if (!endTime) {
-      const now = new Date();
-      endTime = new Date(
-        Math.min(
-          Math.max(now.getTime(), rangeStart.getTime()),
-          rangeEnd.getTime()
-        )
-      );
-    }
+    if (endTime <= rangeStart || startTime >= rangeEnd) return;
 
-    if (endTime < rangeStart) return;
-    if (endTime > rangeEnd) {
-      endTime = new Date(rangeEnd.getTime());
-    }
-
-    let startTime = new Date(endTime.getTime() - durationMinutes * 60000);
-    if (startTime < rangeStart) {
-      startTime = new Date(rangeStart.getTime());
-    }
+    if (startTime < rangeStart) startTime = new Date(rangeStart.getTime());
+    if (endTime > rangeEnd) endTime = new Date(rangeEnd.getTime());
 
     const diffStart = startTime - rangeStart;
     const diffEnd = endTime - rangeStart;
