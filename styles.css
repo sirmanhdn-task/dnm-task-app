@@ -17,7 +17,6 @@
   --lane-height: 64px;
   --lane-gap: 8px;
   --px-per-hour: 50;
-  --px-per-slice: 10;
 }
 
 *,
@@ -46,6 +45,8 @@ body {
   padding: 16px;
 }
 
+/* HEADER */
+
 .app-header {
   display: flex;
   align-items: center;
@@ -53,19 +54,24 @@ body {
   margin-bottom: 12px;
 }
 
-.app-title {
+.app-title-block {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
 }
 
 .logo-dot {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   background: radial-gradient(circle at 30% 30%, #e5e7eb, #38bdf8);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.9);
-  margin-bottom: 4px;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.9);
+}
+
+.title-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .title-main {
@@ -79,15 +85,45 @@ body {
   color: var(--text-soft);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+}
+
+.user-email {
+  font-size: 0.8rem;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* APP MAIN WRAPPER */
+
 .app-main {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.92);
   border-radius: 24px;
   padding: 12px;
   box-shadow: var(--shadow-soft);
   border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-/* Tabs */
+/* TABS */
 
 .tabs {
   display: flex;
@@ -127,7 +163,7 @@ body {
   display: block;
 }
 
-/* Common */
+/* COMMON */
 
 .card {
   background: var(--bg-elevated);
@@ -194,7 +230,7 @@ textarea {
   margin-top: 4px;
 }
 
-/* Buttons */
+/* BUTTONS */
 
 .primary-btn,
 .secondary-btn {
@@ -220,7 +256,8 @@ textarea {
   border: 1px solid rgba(148, 163, 184, 0.5);
 }
 
-.secondary-btn.small {
+.secondary-btn.small,
+.secondary-btn-small {
   padding: 4px 8px;
   font-size: 0.75rem;
 }
@@ -230,15 +267,7 @@ textarea {
   filter: brightness(1.05);
 }
 
-.danger-link {
-  background: transparent;
-  border: none;
-  color: var(--danger);
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-/* Pills */
+/* PILLS */
 
 .pill-group {
   display: inline-flex;
@@ -274,7 +303,7 @@ textarea {
   color: var(--text-muted);
 }
 
-/* Timeline */
+/* TIMELINE */
 
 .timeline-top-bar {
   display: flex;
@@ -333,7 +362,7 @@ textarea {
   background: rgba(248, 113, 113, 0.9);
 }
 
-/* Timeline canvas */
+/* TIMELINE CANVAS */
 
 .timeline-wrapper {
   margin-top: 4px;
@@ -411,7 +440,7 @@ textarea {
   color: var(--text-muted);
 }
 
-/* Blocks */
+/* BLOCKS */
 
 .timeline-block {
   position: absolute;
@@ -429,7 +458,11 @@ textarea {
 }
 
 .timeline-block.main {
-  background: linear-gradient(120deg, rgba(56, 189, 248, 0.25), rgba(34, 197, 94, 0.35));
+  background: linear-gradient(
+    120deg,
+    rgba(56, 189, 248, 0.25),
+    rgba(34, 197, 94, 0.35)
+  );
   border: 1px solid rgba(56, 189, 248, 0.6);
 }
 
@@ -448,7 +481,7 @@ textarea {
   border: 1px solid rgba(248, 113, 113, 0.8);
 }
 
-/* Current time line */
+/* CURRENT TIME LINE */
 
 .current-time-line {
   position: absolute;
@@ -459,7 +492,7 @@ textarea {
   box-shadow: 0 0 10px rgba(248, 113, 113, 0.9);
 }
 
-/* Task list */
+/* TASK LIST */
 
 .task-list-card {
   margin-top: 12px;
@@ -558,7 +591,7 @@ textarea {
   cursor: pointer;
 }
 
-/* Debug */
+/* DEBUG PANEL */
 
 .debug-panel {
   margin-top: 16px;
@@ -605,7 +638,7 @@ textarea {
   top: 0;
 }
 
-/* Responsive */
+/* RESPONSIVE */
 
 @media (max-width: 768px) {
   .app-shell {
@@ -622,5 +655,9 @@ textarea {
 
   .timeline-canvas {
     height: calc(var(--lane-height) * 3 + var(--lane-gap) * 2 + 32px);
+  }
+
+  .user-email {
+    max-width: 110px;
   }
 }
