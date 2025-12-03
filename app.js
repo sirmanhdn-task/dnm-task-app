@@ -1,13 +1,48 @@
-// DNM's Tasker v1.4.2 – Magnet-from-NOW scheduling engine
-// No Firebase here: tasks are stored in localStorage to focus on engine.
-// Core ideas:
-//   w0 = duration / minutesLeft
-//   shortBoost if duration <= 10 & deadline <= 48h
-//   ONLY / PREFER -> multiply by k or 0 as user specified
-//   Parallel / non-parallel via slice types (1/2/3)
-//   Pack sequentially from frontierSlice = nowSlice, allow splitting
+// DNM's Tasker v1.4.2 – Magnet-from-NOW + Firebase
 
-// ----------------- STATE -----------------
+// =============================
+// Firebase init
+// =============================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
+  authDomain: "dnmstasker-3b85f.firebaseapp.com",
+  projectId: "dnmstasker-3b85f",
+  storageBucket: "dnmstasker-3b85f.firebasestorage.app",
+  messagingSenderId: "1053072513804",
+  appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+// =============================
+// Global state
+// =============================
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 
 const state = {
   settings: {
@@ -23,16 +58,13 @@ const state = {
   timelineStart: null,
   timelineEnd: null,
   now: null,
-  nowSlice: 0
+  nowSlice: 0,
+  currentUid: null
 };
 
-const STORAGE_KEY = "dnm_tasker_v142_local";
-
-// ----------------- UTILITIES -----------------
-
-const MINUTE_MS = 60 * 1000;
-const HOUR_MS = 60 * MINUTE_MS;
-
+// =============================
+// Utilities
+// =============================
 function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -67,36 +99,6 @@ function formatHM(ms) {
   );
 }
 
-function uuid() {
-  return (
-    Date.now().toString(36) +
-    "-" +
-    Math.random().toString(36).substring(2, 8)
-  );
-}
-
-function saveToStorage() {
-  const payload = {
-    settings: state.settings,
-    mainTasks: state.mainTasks,
-    bgTasks: state.bgTasks
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-}
-
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    if (data.settings) state.settings = { ...state.settings, ...data.settings };
-    if (Array.isArray(data.mainTasks)) state.mainTasks = data.mainTasks;
-    if (Array.isArray(data.bgTasks)) state.bgTasks = data.bgTasks;
-  } catch (e) {
-    console.warn("Failed to load local data", e);
-  }
-}
-
 // Map ms to slice index
 function msToSliceIndex(ms) {
   const offset = ms - state.timelineStart;
@@ -109,14 +111,13 @@ function sliceIndexToMs(sliceIndex) {
   return state.timelineStart + sliceIndex * sliceLenMs;
 }
 
-// Check NOW in ONLY/PREFER window of a task
+// Check NOW in ONLY/PREFER window
 function isNowWithinTaskWindow(task, nowMs) {
   if (task.onlyMode === "NONE") return false;
-
   const now = new Date(nowMs);
-  const day = now.getDay(); // 0 Sunday
+  const day = now.getDay();
   const hour = now.getHours();
-  const slot = Math.floor(hour / 3); // 0..7
+  const slot = Math.floor(hour / 3);
 
   const hasDays = Array.isArray(task.dayPills) && task.dayPills.length > 0;
   const hasSlots =
@@ -128,28 +129,71 @@ function isNowWithinTaskWindow(task, nowMs) {
   return dayOk && slotOk;
 }
 
-// ----------------- SCHEDULER CORE -----------------
+// =============================
+// Firebase helpers
+// =============================
+async function ensureUserInitialized(uid) {
+  const userRef = doc(db, "users", uid);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    await setDoc(userRef, {
+      createdAt: serverTimestamp()
+    });
+  }
 
+  const countersRef = doc(db, "users", uid, "metadata", "counters");
+  const countersSnap = await getDoc(countersRef);
+  if (!countersSnap.exists()) {
+    await setDoc(countersRef, {
+      mainTaskCount: 0,
+      backgroundTaskCount: 0
+    });
+  }
+}
+
+// Incremental shortId per user (giống counter trước đây )
+async function getNextCounter(fieldName, uid) {
+  const countersRef = doc(db, "users", uid, "metadata", "counters");
+  const snap = await getDoc(countersRef);
+
+  let data;
+  if (!snap.exists()) {
+    data = { mainTaskCount: 0, backgroundTaskCount: 0 };
+  } else {
+    data = snap.data();
+    if (data.mainTaskCount == null) data.mainTaskCount = 0;
+    if (data.backgroundTaskCount == null) data.backgroundTaskCount = 0;
+  }
+
+  const newCount = (data[fieldName] || 0) + 1;
+  data[fieldName] = newCount;
+  await setDoc(countersRef, data);
+  return newCount;
+}
+
+// =============================
+// Scheduler core (Magnet engine)
+// =============================
 function recomputeTimeline() {
-  // 1) time bounds
   state.now = Date.now();
   state.timelineStart = startOfToday();
   state.timelineEnd =
     state.timelineStart +
     state.settings.horizonDays * 24 * HOUR_MS -
     1;
+
   const totalSlices =
     (state.settings.horizonDays * 24 * 60) / state.settings.sliceMinutes;
 
-  // 2) slice types from background tasks
-  state.sliceTypes = new Array(totalSlices).fill(1); // 1 = blank
+  // sliceTypes: 1 = blank, 2 = parallel-bg, 3 = non-parallel-bg
+  state.sliceTypes = new Array(totalSlices).fill(1);
 
+  // Build sliceTypes from background tasks (absolute start/end)
   for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
     if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) continue;
 
-    // clamp inside horizon
     const startClamped = clamp(startMs, state.timelineStart, state.timelineEnd);
     const endClamped = clamp(endMs, state.timelineStart, state.timelineEnd);
 
@@ -159,17 +203,15 @@ function recomputeTimeline() {
 
     for (let s = si; s <= ei; s++) {
       if (bg.isParallel) {
-        if (state.sliceTypes[s] !== 3) state.sliceTypes[s] = 2; // parallel bg
+        if (state.sliceTypes[s] !== 3) state.sliceTypes[s] = 2;
       } else {
-        state.sliceTypes[s] = 3; // non-parallel bg dominates
+        state.sliceTypes[s] = 3;
       }
     }
   }
 
-  // 3) schedule main tasks with magnet-from-NOW
   state.scheduledMain = scheduleMainTasks(totalSlices);
 
-  // 4) render
   renderTimeline();
   renderMainTaskList();
   renderBgTaskList();
@@ -188,20 +230,31 @@ function scheduleMainTasks(totalSlices) {
   const kShort = state.settings.kShort;
 
   for (const t of tasks) {
-    const dlMs = new Date(t.deadline).getTime();
-    let minutesLeft = (dlMs - now) / MINUTE_MS;
-    if (minutesLeft <= 0) minutesLeft = 1; // avoid /0, overdue -> w lớn
+    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+    let minutesLeft;
 
-    const baseW = t.durationMinutes / minutesLeft;
+    if (!dlMs || isNaN(dlMs)) {
+      // fallback: infinity -> w cực nhỏ
+      minutesLeft = 1e9;
+    } else {
+      const diff = dlMs - now;
+      minutesLeft = diff <= 0 ? 1 : Math.max(1, diff / MINUTE_MS);
+    }
+
+    const baseW =
+      minutesLeft === 1e9
+        ? 0
+        : (t.durationMinutes || 0) / minutesLeft;
 
     let w = baseW;
 
-    // Short task boost
-    if (t.durationMinutes <= 10 && minutesLeft <= 48 * 60) {
+    if (
+      t.durationMinutes <= 10 &&
+      minutesLeft <= 48 * 60
+    ) {
       w *= kShort;
     }
 
-    // ONLY / PREFER
     let timeFactor = 1;
     if (t.onlyMode === "ONLY" || t.onlyMode === "PREFER") {
       const within = isNowWithinTaskWindow(t, now);
@@ -223,7 +276,6 @@ function scheduleMainTasks(totalSlices) {
     });
   }
 
-  // Sort by w desc, then by minutesLeft asc (gần deadline hơn ưu tiên)
   decorated.sort((a, b) => {
     if (b.w !== a.w) return b.w - a.w;
     return a.minutesLeft - b.minutesLeft;
@@ -231,7 +283,6 @@ function scheduleMainTasks(totalSlices) {
 
   const sliceTypes = state.sliceTypes;
   let frontier = state.nowSlice;
-
   const sliceMinutes = state.settings.sliceMinutes;
 
   for (const entry of decorated) {
@@ -257,8 +308,9 @@ function scheduleMainTasks(totalSlices) {
   return decorated;
 }
 
-// ----------------- RENDER TIMELINE -----------------
-
+// =============================
+// Render timeline
+// =============================
 function renderTimeline() {
   const header = document.getElementById("timelineHeader");
   const canvas = document.getElementById("timelineCanvas");
@@ -269,7 +321,7 @@ function renderTimeline() {
   const totalHours = state.settings.horizonDays * 24;
   const totalWidth = totalHours * pxPerHour;
 
-  // Header: hours + day bands
+  // Header
   const headerInner = document.createElement("div");
   headerInner.className = "timeline-header-inner";
   headerInner.style.width = totalWidth + "px";
@@ -292,7 +344,6 @@ function renderTimeline() {
     }
   }
 
-  // Day bands
   for (let d = 0; d < state.settings.horizonDays; d++) {
     const dayStartMs = start + d * 24 * HOUR_MS;
     const date = new Date(dayStartMs);
@@ -316,7 +367,7 @@ function renderTimeline() {
 
   header.appendChild(headerInner);
 
-  // Canvas: lanes + blocks
+  // Canvas & lanes
   const inner = document.createElement("div");
   inner.className = "timeline-inner";
   inner.style.width = totalWidth + "px";
@@ -373,7 +424,6 @@ function renderTimeline() {
     const slices = entry.assignedSlices;
     if (!slices || slices.length === 0) continue;
 
-    // group contiguous slices into segments
     const segments = [];
     let curStart = slices[0];
     let prev = slices[0];
@@ -388,8 +438,8 @@ function renderTimeline() {
     }
     segments.push([curStart, prev]);
 
-    const dlMs = new Date(t.deadline).getTime();
-    const isOverdue = dlMs < now;
+    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+    const isOverdue = dlMs && dlMs < now;
 
     for (const [sStart, sEnd] of segments) {
       const startMs = sliceIndexToMs(sStart);
@@ -405,19 +455,19 @@ function renderTimeline() {
       block.innerHTML = `
         <div style="font-weight:500">${t.title}</div>
         <div style="font-size:0.65rem;opacity:0.85">
-          #${t.shortId || ""} ${formatHM(startMs)}–${formatHM(endMs)}
+          #${t.shortId ?? ""} ${formatHM(startMs)}–${formatHM(endMs)}
         </div>
       `;
       laneMain.appendChild(block);
     }
   }
 
-  // Pending tasks: just list them loosely
+  // Pending lane: hiển thị dạng block đơn giản
   for (const t of state.mainTasks.filter((t) => t.isPending)) {
     const block = document.createElement("div");
     block.className = "timeline-block main";
     block.style.left = "4px";
-    block.style.width = "120px";
+    block.style.width = "140px";
     block.innerHTML = `<div>${t.title}</div><div style="font-size:0.65rem;opacity:0.8">Pending (no timeline)</div>`;
     lanePending.appendChild(block);
   }
@@ -436,11 +486,20 @@ function renderTimeline() {
   canvas.appendChild(inner);
 }
 
-// ----------------- RENDER LISTS -----------------
-
+// =============================
+// Render lists + debug
+// =============================
 function renderMainTaskList() {
   const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
+
+  if (!state.currentUid) {
+    const p = document.createElement("p");
+    p.className = "task-meta";
+    p.textContent = "Sign in to see your main tasks.";
+    list.appendChild(p);
+    return;
+  }
 
   for (const entry of state.scheduledMain) {
     const t = entry.task;
@@ -460,15 +519,15 @@ function renderMainTaskList() {
     const idSpan = document.createElement("span");
     idSpan.style.fontSize = "0.65rem";
     idSpan.style.color = "#9ca3af";
-    idSpan.textContent = "#" + (t.shortId || "");
+    idSpan.textContent = "#" + (t.shortId ?? "");
     titleRow.appendChild(idSpan);
     main.appendChild(titleRow);
 
     const meta = document.createElement("div");
     meta.className = "task-meta";
-    const dlMs = new Date(t.deadline).getTime();
+    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
     meta.innerHTML = `
-      <span>${formatDateTimeShort(dlMs)}</span>
+      <span>${dlMs ? formatDateTimeShort(dlMs) : "No deadline"}</span>
       <span>${t.durationMinutes} min</span>
       <span>mode: ${t.onlyMode}</span>
     `;
@@ -502,10 +561,12 @@ function renderMainTaskList() {
     const delBtn = document.createElement("button");
     delBtn.className = "icon-btn";
     delBtn.textContent = "Delete";
-    delBtn.onclick = () => {
-      state.mainTasks = state.mainTasks.filter((x) => x.id !== t.id);
-      saveToStorage();
-      recomputeTimeline();
+    delBtn.onclick = async () => {
+      if (!confirm("Delete this task?")) return;
+      await deleteDoc(
+        doc(db, "users", state.currentUid, "mainTasks", t.id)
+      );
+      await loadAllData();
     };
     actions.appendChild(delBtn);
 
@@ -518,9 +579,18 @@ function renderMainTaskList() {
 function renderBgTaskList() {
   const list = document.getElementById("bgTaskList");
   list.innerHTML = "";
+
+  if (!state.currentUid) {
+    const p = document.createElement("p");
+    p.className = "task-meta";
+    p.textContent = "Sign in to see your background tasks.";
+    list.appendChild(p);
+    return;
+  }
+
   for (const t of state.bgTasks) {
     const row = document.createElement("div");
-    row.className = "task-item";
+    row.className = "task-item task-item-bg";
 
     const main = document.createElement("div");
     main.className = "task-main";
@@ -549,10 +619,12 @@ function renderBgTaskList() {
     const delBtn = document.createElement("button");
     delBtn.className = "icon-btn";
     delBtn.textContent = "Delete";
-    delBtn.onclick = () => {
-      state.bgTasks = state.bgTasks.filter((x) => x.id !== t.id);
-      saveToStorage();
-      recomputeTimeline();
+    delBtn.onclick = async () => {
+      if (!confirm("Delete this background task?")) return;
+      await deleteDoc(
+        doc(db, "users", state.currentUid, "backgroundTasks", t.id)
+      );
+      await loadAllData();
     };
     actions.appendChild(delBtn);
 
@@ -561,8 +633,6 @@ function renderBgTaskList() {
     list.appendChild(row);
   }
 }
-
-// ----------------- DEBUG PANEL -----------------
 
 function renderDebugPanel() {
   const summary = document.getElementById("debugSummary");
@@ -574,7 +644,7 @@ function renderDebugPanel() {
     (e) => e.assignedSlices.length > 0
   ).length;
 
-  summary.textContent = `Main tasks: ${totalMain}, scheduled: ${scheduled}. SliceMinutes=${state.settings.sliceMinutes}, HorizonDays=${state.settings.horizonDays}, k=${state.settings.kOnlyPrefer}, k_short=${state.settings.kShort}. nowSlice=${state.nowSlice}`;
+  summary.textContent = `Main tasks: ${totalMain}, scheduled: ${scheduled}. SliceMinutes=${state.settings.sliceMinutes}, HorizonDays=${state.settings.horizonDays}, k=${state.settings.kOnlyPrefer}, k_short=${state.settings.kShort}, nowSlice=${state.nowSlice}`;
 
   const table = document.createElement("table");
   table.className = "debug-table";
@@ -617,8 +687,9 @@ function renderDebugPanel() {
   wrapper.appendChild(table);
 }
 
-// ----------------- UI WIRING -----------------
-
+// =============================
+// UI wiring
+// =============================
 function setupTabs() {
   const buttons = document.querySelectorAll(".tab-button");
   const tabs = document.querySelectorAll(".tab-content");
@@ -647,7 +718,7 @@ function setupPillGroupSingle(groupEl, defaultVal) {
   return () => current;
 }
 
-function setupTogglePills(groupEl, attrName) {
+function setupTogglePills(groupEl) {
   const pills = groupEl.querySelectorAll(".pill");
   pills.forEach((pill) => {
     pill.addEventListener("click", () => {
@@ -690,8 +761,13 @@ function setupMainTaskForm() {
   setupTogglePills(document.getElementById("mtDayPills"));
   setupTogglePills(document.getElementById("mtSlotPills"));
 
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!state.currentUid) {
+      alert("Please sign in before adding tasks.");
+      return;
+    }
+
     const title = document.getElementById("mtTitle").value.trim();
     const desc = document.getElementById("mtDescription").value.trim();
     const dur = parseInt(
@@ -703,11 +779,18 @@ function setupMainTaskForm() {
 
     if (!title || !dur || isNaN(dlMs)) return;
 
-    const id = uuid();
-    const shortId = state.mainTasks.length + 1;
+    const shortId = await getNextCounter(
+      "mainTaskCount",
+      state.currentUid
+    );
 
-    const task = {
-      id,
+    const docRef = collection(
+      db,
+      "users",
+      state.currentUid,
+      "mainTasks"
+    );
+    await addDoc(docRef, {
       shortId,
       title,
       description: desc,
@@ -718,28 +801,12 @@ function setupMainTaskForm() {
       onlyMode: modeGetter(),
       dayPills: getActiveDayPills(),
       slotPills: getActiveSlotPills(),
-      createdAt: Date.now()
-    };
-
-    state.mainTasks.push(task);
-    saveToStorage();
-    form.reset();
-    recomputeTimeline();
-  });
-
-  document
-    .getElementById("clearTasksBtn")
-    .addEventListener("click", () => {
-      if (
-        confirm(
-          "Clear all main tasks stored locally? This cannot be undone."
-        )
-      ) {
-        state.mainTasks = [];
-        saveToStorage();
-        recomputeTimeline();
-      }
+      createdAt: serverTimestamp()
     });
+
+    form.reset();
+    recomputeAfterReload();
+  });
 }
 
 function setupBgTaskForm() {
@@ -749,8 +816,13 @@ function setupBgTaskForm() {
     "nonparallel"
   );
 
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!state.currentUid) {
+      alert("Please sign in before adding background tasks.");
+      return;
+    }
+
     const title = document.getElementById("bgTitle").value.trim();
     const desc = document.getElementById("bgDescription").value.trim();
     const startStr = document.getElementById("bgStart").value;
@@ -758,37 +830,32 @@ function setupBgTaskForm() {
 
     const sMs = new Date(startStr).getTime();
     const eMs = new Date(endStr).getTime();
-    if (!title || isNaN(sMs) || isNaN(eMs) || eMs <= sMs) return;
+    if (!title || isNaN(sMs) || isNaN(eMs) || eMs <= sMs) {
+      alert("Invalid background task times.");
+      return;
+    }
 
-    const t = {
-      id: uuid(),
-      title,
-      description: desc,
-      start: new Date(sMs).toISOString(),
-      end: new Date(eMs).toISOString(),
-      isParallel: parallelGetter() === "parallel",
-      createdAt: Date.now()
-    };
+    const shortId = await getNextCounter(
+      "backgroundTaskCount",
+      state.currentUid
+    );
 
-    state.bgTasks.push(t);
-    saveToStorage();
-    form.reset();
-    recomputeTimeline();
-  });
-
-  document
-    .getElementById("clearBgTasksBtn")
-    .addEventListener("click", () => {
-      if (
-        confirm(
-          "Clear all background tasks stored locally? This cannot be undone."
-        )
-      ) {
-        state.bgTasks = [];
-        saveToStorage();
-        recomputeTimeline();
+    await addDoc(
+      collection(db, "users", state.currentUid, "backgroundTasks"),
+      {
+        shortId,
+        title,
+        description: desc,
+        start: new Date(sMs).toISOString(),
+        end: new Date(eMs).toISOString(),
+        isParallel: parallelGetter() === "parallel",
+        createdAt: serverTimestamp()
       }
-    });
+    );
+
+    form.reset();
+    recomputeAfterReload();
+  });
 }
 
 function setupSettings() {
@@ -819,7 +886,6 @@ function setupSettings() {
       if (d > 0) state.settings.horizonDays = d;
       if (k > 0) state.settings.kOnlyPrefer = k;
       if (ks > 0) state.settings.kShort = ks;
-      saveToStorage();
       recomputeTimeline();
     });
 }
@@ -858,16 +924,173 @@ function setupDebugToggle() {
   });
 }
 
-// ----------------- INIT -----------------
+// =============================
+// Auth UI
+// =============================
+function setLoggedOutUI() {
+  state.currentUid = null;
+  document.getElementById("loginBtn").style.display = "inline-flex";
+  document.getElementById("userInfo").style.display = "none";
+  state.mainTasks = [];
+  state.bgTasks = [];
+  recomputeTimeline();
+}
 
+function setLoggedInUI(user) {
+  state.currentUid = user.uid;
+  document.getElementById("loginBtn").style.display = "none";
+  const userInfo = document.getElementById("userInfo");
+  userInfo.style.display = "flex";
+
+  const userEmail = document.getElementById("userEmail");
+  const userAvatar = document.getElementById("userAvatar");
+  userEmail.textContent = user.email || "";
+  if (user.photoURL) {
+    userAvatar.src = user.photoURL;
+  } else {
+    userAvatar.src =
+      "https://ui-avatars.com/api/?name=" +
+      encodeURIComponent(user.email || "User");
+  }
+}
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    console.error("Login error:", err);
+    alert("Unable to sign in with Google.");
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.error("Logout error:", err);
+    alert("Unable to sign out.");
+  }
+});
+
+// =============================
+// Load data from Firestore
+// =============================
+async function loadMainTasksFromFirestore() {
+  if (!state.currentUid) {
+    state.mainTasks = [];
+    return;
+  }
+  const snap = await getDocs(
+    collection(db, "users", state.currentUid, "mainTasks")
+  );
+  const items = [];
+  snap.forEach((docSnap) =>
+    items.push({ id: docSnap.id, ...docSnap.data() })
+  );
+
+  // map schema cũ -> schema mới nếu cần 
+  state.mainTasks = items.map((d, index) => {
+    const durationMinutes =
+      d.durationMinutes ??
+      d.duration ??
+      30;
+    const deadline =
+      d.deadline ??
+      d.deadlineAt ??
+      null;
+    return {
+      id: d.id,
+      shortId: d.shortId ?? d.taskId ?? index + 1,
+      title: d.title || "",
+      description: d.description || "",
+      durationMinutes,
+      deadline,
+      isParallel: !!d.isParallel,
+      isPending: !!d.isPending,
+      onlyMode: d.onlyMode ?? "NONE",
+      dayPills: Array.isArray(d.dayPills) ? d.dayPills : [],
+      slotPills: Array.isArray(d.slotPills) ? d.slotPills : [],
+      createdAt: d.createdAt ?? null
+    };
+  });
+}
+
+async function loadBgTasksFromFirestore() {
+  if (!state.currentUid) {
+    state.bgTasks = [];
+    return;
+  }
+  const snap = await getDocs(
+    collection(db, "users", state.currentUid, "backgroundTasks")
+  );
+  const items = [];
+  snap.forEach((docSnap) =>
+    items.push({ id: docSnap.id, ...docSnap.data() })
+  );
+
+  // chỉ hỗ trợ loại absolute start/end mới; các task cũ kiểu repeat sẽ không render trên engine magnet
+  state.bgTasks = items
+    .filter((d) => d.start && d.end)
+    .map((d, index) => ({
+      id: d.id,
+      shortId: d.shortId ?? d.taskId ?? index + 1,
+      title: d.title || "",
+      description: d.description || "",
+      start: d.start,
+      end: d.end,
+      isParallel: !!d.isParallel,
+      createdAt: d.createdAt ?? null
+    }));
+}
+
+async function loadAllData() {
+  if (!state.currentUid) {
+    state.mainTasks = [];
+    state.bgTasks = [];
+    recomputeTimeline();
+    return;
+  }
+  await Promise.all([
+    loadMainTasksFromFirestore(),
+    loadBgTasksFromFirestore()
+  ]);
+  recomputeTimeline();
+}
+
+// Helper sau khi thêm / xóa: reload từ Firestore rồi recompute
+async function recomputeAfterReload() {
+  await loadAllData();
+}
+
+// =============================
+// Init
+// =============================
 function init() {
-  loadFromStorage();
   setupTabs();
   setupMainTaskForm();
   setupBgTaskForm();
   setupSettings();
   setupTimelineControls();
   setupDebugToggle();
+
+  // Auth state
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      setLoggedInUI(user);
+      await ensureUserInitialized(user.uid);
+      await loadAllData();
+    } else {
+      setLoggedOutUI();
+    }
+  });
+
+  // lần đầu (chưa auth) vẫn render timeline trống
+  state.now = Date.now();
+  state.timelineStart = startOfToday();
+  state.timelineEnd =
+    state.timelineStart +
+    state.settings.horizonDays * 24 * HOUR_MS -
+    1;
   recomputeTimeline();
 }
 
