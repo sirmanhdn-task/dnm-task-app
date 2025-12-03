@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.4.0</title>
+  <title>DNM's Tasker v1.4.1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
@@ -73,6 +73,16 @@
         </div>
 
         <div class="timeline-now-marker" id="timelineNowMarker"></div>
+      </div>
+    </section>
+
+    <!-- DEBUG PANEL -->
+    <section class="panel-section">
+      <h3>Scheduler debug (v1.4.1)</h3>
+      <div id="debugInfo" class="card debug-card">
+        <p class="task-meta">
+          Debug info will appear here after tasks are loaded and timeline is rendered.
+        </p>
       </div>
     </section>
 
@@ -450,26 +460,21 @@
   ===========================================
   VERSION NOTES
   ===========================================
-  v1.4.0
-  - Keeps all v1.3.x features:
-    + Google login & per-user Firestore data.
-    + Auto counters for main/background taskId.
-    + createdAtLocal for both main & background tasks.
-    + Main task priority engine (duration / minutes-left + short-task boost).
-    + Background repeat engine: none / daily / weekly / monthly using weekly pills.
-    + Edit / Delete / Done / Undone for main tasks.
-    + Edit / Delete for background tasks.
-    + Static tooltip (popover) when clicking main block on timeline.
-    + 14-day horizontal timeline with zoom, Jump to now/date, and now marker.
-  - NEW (Best Window Placement Engine – phase 1):
-    + Builds a 14-day time grid with 10-minute slices.
-    + Generates background-block matrix from non-parallel background tasks.
-    + Schedules each ACTIVE, non-pending main task into the best available window:
-      * Window between now and its deadline (clamped into 14-day range).
-      * Greedy backward search: place as late as possible before deadline.
-      * Uses the background-block matrix to avoid collisions with non-parallel tasks.
-      * Prevents overlap between main tasks by marking their slots as busy.
-    + Scheduling happens in-memory only; no changes are written back to Firestore.
+  v1.4.1 (debug hotfix)
+  - Keeps all v1.4.0 features:
+    + 14-day horizontal timeline, zoom, now marker, jump to date/now.
+    + Background repeat engine (none/daily/weekly/monthly).
+    + Best Window Placement Engine for main tasks with 10-min slices.
+    + Static tooltip on main blocks with Edit/Done/Delete.
+  - NEW (debug):
+    + Adds a "Scheduler debug" panel under the timeline.
+    + The engine now records:
+      * Busy slice count in the 14-day grid.
+      * Now-slice index and its approximate time.
+      * Per-task scheduling window (startSlice/endSlice).
+      * Needed slices (duration).
+      * Whether a slot was found and where.
+    + Debug info is rendered into the panel every time main tasks are scheduled.
   ===========================================
   -->
 </body>
