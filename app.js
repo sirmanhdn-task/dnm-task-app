@@ -22,7 +22,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -49,7 +48,7 @@ let mainTasksCache = [];
 let backgroundTasksCache = [];
 
 // ===================================================
-// TAB HANDLING
+// TABS
 // ===================================================
 document.querySelectorAll(".tab-button").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -67,7 +66,7 @@ document.querySelectorAll(".tab-button").forEach((btn) => {
 });
 
 // ===================================================
-// TIMELINE CONSTANTS
+// TIMELINE CONSTANTS & UTILS
 // ===================================================
 const timelineScroll = document.getElementById("timelineScroll");
 const timelineHeader = document.getElementById("timelineHeader");
@@ -75,6 +74,7 @@ const laneMainContent = document.getElementById("laneMainContent");
 const laneBackgroundContent = document.getElementById("laneBackgroundContent");
 const lanePendingContent = document.getElementById("lanePendingContent");
 const timelineNowMarker = document.getElementById("timelineNowMarker");
+const timelineTooltip = document.getElementById("timelineTooltip");
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
@@ -91,7 +91,7 @@ const startOfToday = (() => {
 })();
 
 function formatDayLabel(date) {
-  const w = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const w = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
@@ -99,8 +99,8 @@ function formatLocalDateTime(isoString) {
   if (!isoString) return "N/A";
   const d = new Date(isoString);
   if (isNaN(d)) return "N/A";
-  const datePart = d.toLocaleDateString("vi-VN");
-  const timePart = d.toLocaleTimeString("vi-VN", {
+  const datePart = d.toLocaleDateString("en-GB");
+  const timePart = d.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit"
   });
@@ -108,7 +108,7 @@ function formatLocalDateTime(isoString) {
 }
 
 // ===================================================
-// RENDER TIMELINE
+// TIMELINE RENDER
 // ===================================================
 function renderTimeline() {
   const totalWidth = HOURS_TOTAL * pixelsPerHour;
@@ -256,7 +256,7 @@ jumpDateModal.addEventListener("click", (e) => {
 });
 
 // ===================================================
-// PILL TOGGLES
+// PILL TOGGLES (MAIN + BACKGROUND CREATE)
 // ===================================================
 const pillMainPending = document.getElementById("pillMainPending");
 const pillMainParallel = document.getElementById("pillMainParallel");
@@ -324,6 +324,14 @@ const userInfo = document.getElementById("userInfo");
 const userAvatar = document.getElementById("userAvatar");
 const userEmail = document.getElementById("userEmail");
 
+function hideTooltip() {
+  if (!timelineTooltip) return;
+  timelineTooltip.classList.remove("active");
+  timelineTooltip.innerHTML = "";
+  timelineTooltip.removeAttribute("data-position");
+  currentTooltipTaskId = null;
+}
+
 function setLoggedOutUI() {
   currentUid = null;
   loginBtn.style.display = "inline-flex";
@@ -333,11 +341,11 @@ function setLoggedOutUI() {
   const bgList = document.getElementById("backgroundTaskList");
   if (mainList) {
     mainList.innerHTML =
-      '<p class="task-meta">Hãy login để xem main tasks.</p>';
+      '<p class="task-meta">Please log in to see your main tasks.</p>';
   }
   if (bgList) {
     bgList.innerHTML =
-      '<p class="task-meta">Hãy login để xem background tasks.</p>';
+      '<p class="task-meta">Please log in to see your background tasks.</p>';
   }
 
   if (laneMainContent) laneMainContent.innerHTML = "";
@@ -346,6 +354,7 @@ function setLoggedOutUI() {
 
   mainTasksCache = [];
   backgroundTasksCache = [];
+  hideTooltip();
 }
 
 function setLoggedInUI(user) {
@@ -387,7 +396,7 @@ loginBtn.addEventListener("click", async () => {
     await signInWithPopup(auth, provider);
   } catch (err) {
     console.error("Login error:", err);
-    alert("Không login được với Google. Kiểm tra console.");
+    alert("Failed to login with Google. Check console for details.");
   }
 });
 
@@ -396,7 +405,7 @@ logoutBtn.addEventListener("click", async () => {
     await signOut(auth);
   } catch (err) {
     console.error("Logout error:", err);
-    alert("Không logout được. Kiểm tra console.");
+    alert("Failed to logout. Check console for details.");
   }
 });
 
@@ -411,7 +420,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ===================================================
-// COUNTER HELPER (taskId tự tăng)
+// COUNTER HELPER (auto-increment taskId)
 // ===================================================
 async function getNextCounter(fieldName, uid) {
   const countersRef = doc(db, "users", uid, "metadata", "counters");
@@ -454,7 +463,7 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 
 function openEditModal(task) {
   if (!currentUid) {
-    alert("Vui lòng login.");
+    alert("Please log in first.");
     return;
   }
 
@@ -528,15 +537,15 @@ editTaskForm.addEventListener("submit", async (e) => {
   const deadlineStr = editDeadlineInput.value;
 
   if (!title) {
-    alert("Tên task không được để trống.");
+    alert("Task title cannot be empty.");
     return;
   }
   if (!deadlineStr) {
-    alert("Deadline không hợp lệ.");
+    alert("Invalid deadline.");
     return;
   }
   if (!duration || duration <= 0) {
-    alert("Duration phải > 0.");
+    alert("Duration must be > 0.");
     return;
   }
 
@@ -567,25 +576,25 @@ editTaskForm.addEventListener("submit", async (e) => {
     await loadMainTasks();
   } catch (err) {
     console.error("Error saving edited task:", err);
-    alert("Không lưu được thay đổi. Kiểm tra console.");
+    alert("Failed to save changes. Check console for details.");
   }
 });
 
 // ===================================================
-// TASK ACTIONS (MAIN)
+// MAIN TASK ACTIONS
 // ===================================================
 const TaskActions = {
   async setStatus(task, status) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please log in.");
       return;
     }
     const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
 
     const confirmMsg =
       status === "done"
-        ? "Đánh dấu task này là DONE?"
-        : "Chuyển task này về trạng thái ACTIVE?";
+        ? "Mark this task as DONE?"
+        : "Set this task back to ACTIVE?";
 
     if (!confirm(confirmMsg)) return;
 
@@ -594,45 +603,48 @@ const TaskActions = {
       await loadMainTasks();
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Không cập nhật được trạng thái task.");
+      alert("Failed to update task status.");
     }
   },
 
   async delete(task) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please log in.");
       return;
     }
     const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
 
-    if (!confirm("Xóa task này? Không thể hoàn tác.")) return;
+    if (!confirm("Delete this task? This cannot be undone.")) return;
 
     try {
       await deleteDoc(docRef);
       await loadMainTasks();
     } catch (err) {
       console.error("Error deleting task:", err);
-      alert("Không xóa được task.");
+      alert("Failed to delete task.");
     }
   },
 
   openEdit(task) {
+    hideTooltip();
     openEditModal(task);
   }
 };
 
 // ===================================================
-// MAIN TASKS – SUBMIT
+// MAIN TASK CREATE
 // ===================================================
 document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUid) {
-    alert("Vui lòng login trước khi thêm task.");
+    alert("Please log in before adding tasks.");
     return;
   }
 
   const title = document.getElementById("mainTitle").value.trim();
-  const description = document.getElementById("mainDescription").value.trim();
+  const description = document
+    .getElementById("mainDescription")
+    .value.trim();
   const importance = Number(
     document.getElementById("mainImportance").value
   );
@@ -643,15 +655,15 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
   const isParallel = cbMainParallel.checked;
 
   if (!title) {
-    alert("Tên task không được để trống.");
+    alert("Task title cannot be empty.");
     return;
   }
   if (!deadlineStr) {
-    alert("Deadline không hợp lệ.");
+    alert("Invalid deadline.");
     return;
   }
   if (!duration || duration <= 0) {
-    alert("Duration phải > 0.");
+    alert("Duration must be > 0.");
     return;
   }
 
@@ -690,19 +702,19 @@ document.getElementById("mainTaskForm").addEventListener("submit", async (e) => 
     await loadMainTasks();
   } catch (err) {
     console.error("Error adding main task:", err);
-    alert("Lỗi khi lưu main task. Kiểm tra console.");
+    alert("Failed to save main task. Check console for details.");
   }
 });
 
 // ===================================================
-// MAIN TASKS – LOAD & SORT + CACHE + TIMELINE
+// MAIN TASK LOAD + SORT + CACHE + TIMELINE
 // ===================================================
 async function loadMainTasks() {
   const list = document.getElementById("mainTaskList");
   if (!currentUid) {
     if (list) {
       list.innerHTML =
-        '<p class="task-meta">Hãy login để xem main tasks.</p>';
+        '<p class="task-meta">Please log in to see your main tasks.</p>';
     }
     mainTasksCache = [];
     renderMainOnTimeline();
@@ -755,7 +767,6 @@ async function loadMainTasks() {
     return pb - pa;
   });
 
-  // Cache cho timeline
   mainTasksCache = items;
   renderMainOnTimeline();
 
@@ -776,7 +787,7 @@ async function loadMainTasks() {
     const minutesText =
       task._minutesLeft === Infinity
         ? "N/A"
-        : `${task._minutesLeft} phút`;
+        : `${task._minutesLeft} min`;
 
     const priorityText = isFinite(task._priority)
       ? task._priority.toFixed(3)
@@ -789,20 +800,20 @@ async function loadMainTasks() {
       <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
-        Importance: ${task.importance} · Duration: ${task.duration} phút
+        Importance: ${task.importance} · Duration: ${task.duration} min
       </p>
       <p class="task-meta">
-        Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
+        Deadline: ${deadlineText} · Remaining: ${minutesText}
       </p>
       <p class="task-meta">
         Created: ${createdText}
       </p>
       <p class="task-meta">
         Status: ${statusLabel} ·
-        Short-boost: ${task._isShortBoost ? "Có" : "Không"} ·
+        Short-boost: ${task._isShortBoost ? "Yes" : "No"} ·
         Priority: ${priorityText} ·
-        Parallel: ${task.isParallel ? "Có" : "Không"} ·
-        Pending: ${task.isPending ? "Có" : "Không"}
+        Parallel: ${task.isParallel ? "Yes" : "No"} ·
+        Pending: ${task.isPending ? "Yes" : "No"}
       </p>
     `;
 
@@ -846,7 +857,7 @@ async function loadMainTasks() {
 }
 
 // ===================================================
-// BACKGROUND TASKS – HELPER
+// BACKGROUND TASK HELPERS
 // ===================================================
 function parseTimeToMinutes(t) {
   if (!t) return null;
@@ -972,10 +983,12 @@ function renderBackgroundOnTimeline() {
 }
 
 // ===================================================
-// MAIN TASKS – RENDER LÊN TIMELINE (LANE MAIN)
+// MAIN TASKS – RENDER ON TIMELINE (LANE MAIN)
 // ===================================================
 function renderMainOnTimeline() {
   if (!laneMainContent) return;
+
+  hideTooltip();
   laneMainContent.innerHTML = "";
 
   if (!currentUid) return;
@@ -1001,7 +1014,6 @@ function renderMainOnTimeline() {
     }
 
     if (!endTime) {
-      // nếu không có deadline, cho block bắt đầu từ "bây giờ" nhưng clamp trong range
       const now = new Date();
       endTime = new Date(
         Math.min(
@@ -1012,7 +1024,6 @@ function renderMainOnTimeline() {
     }
 
     if (endTime < rangeStart) return;
-
     if (endTime > rangeEnd) {
       endTime = new Date(rangeEnd.getTime());
     }
@@ -1048,14 +1059,143 @@ function renderMainOnTimeline() {
 }
 
 // ===================================================
-// BACKGROUND TASKS – SUBMIT (CREATE)
+// STATIC TOOLTIP FOR MAIN TASK BLOCKS
+// ===================================================
+let currentTooltipTaskId = null;
+
+function buildTooltipContent(task) {
+  const deadlineText = task.deadlineAt
+    ? new Date(task.deadlineAt).toLocaleString()
+    : "N/A";
+
+  const remainingText =
+    task._minutesLeft === Infinity || task._minutesLeft == null
+      ? "N/A"
+      : `${task._minutesLeft} min`;
+
+  const priorityText = isFinite(task._priority)
+    ? task._priority.toFixed(3)
+    : "N/A";
+
+  const createdText = formatLocalDateTime(task.createdAtLocal);
+  const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+
+  const statusLabel = task.status === "done" ? "Mark active" : "Mark done";
+
+  return `
+    <div class="tooltip-header">${idText}${task.title || ""}</div>
+    <div class="tooltip-body">
+      <div class="tooltip-row">${task.description || ""}</div>
+      <div class="tooltip-row">Duration: ${task.duration} min</div>
+      <div class="tooltip-row">Deadline: ${deadlineText}</div>
+      <div class="tooltip-row">Remaining: ${remainingText}</div>
+      <div class="tooltip-row">Priority: ${priorityText}</div>
+      <div class="tooltip-row">
+        Parallel: ${task.isParallel ? "Yes" : "No"} ·
+        Pending: ${task.isPending ? "Yes" : "No"}
+      </div>
+      <div class="tooltip-row">Created: ${createdText}</div>
+    </div>
+    <div class="tooltip-actions">
+      <button class="tooltip-btn" data-action="edit">Edit</button>
+      <button class="tooltip-btn tooltip-btn-primary" data-action="toggleStatus">
+        ${statusLabel}
+      </button>
+      <button class="tooltip-btn tooltip-btn-danger" data-action="delete">
+        Delete
+      </button>
+    </div>
+  `;
+}
+
+function showTooltipForBlock(block) {
+  if (!timelineTooltip) return;
+
+  const taskId = block.dataset.taskId;
+  const task = mainTasksCache.find((t) => t.id === taskId);
+  if (!task) return;
+
+  currentTooltipTaskId = taskId;
+  timelineTooltip.innerHTML = buildTooltipContent(task);
+  timelineTooltip.classList.add("active");
+
+  const rect = block.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const above = rect.top > viewportHeight / 2;
+
+  const left = rect.left + rect.width / 2;
+  const top = above ? rect.top - 8 : rect.bottom + 8;
+
+  timelineTooltip.style.left = `${left}px`;
+  timelineTooltip.style.top = `${top}px`;
+  timelineTooltip.dataset.position = above ? "above" : "below";
+}
+
+// Event delegation on laneMainContent
+if (laneMainContent) {
+  laneMainContent.addEventListener("click", (e) => {
+    const block = e.target.closest(".timeline-main-block");
+    if (!block) return;
+    e.stopPropagation();
+
+    const taskId = block.dataset.taskId;
+    if (
+      currentTooltipTaskId === taskId &&
+      timelineTooltip &&
+      timelineTooltip.classList.contains("active")
+    ) {
+      hideTooltip();
+      return;
+    }
+
+    showTooltipForBlock(block);
+  });
+}
+
+// Actions inside tooltip
+if (timelineTooltip) {
+  timelineTooltip.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    e.stopPropagation();
+
+    const action = btn.dataset.action;
+    const task = mainTasksCache.find((t) => t.id === currentTooltipTaskId);
+    if (!task) {
+      hideTooltip();
+      return;
+    }
+
+    if (action === "edit") {
+      TaskActions.openEdit(task);
+    } else if (action === "toggleStatus") {
+      const newStatus = task.status === "done" ? "active" : "done";
+      TaskActions.setStatus(task, newStatus);
+    } else if (action === "delete") {
+      TaskActions.delete(task);
+    }
+
+    hideTooltip();
+  });
+}
+
+// Hide tooltip when clicking outside
+document.addEventListener("click", (e) => {
+  if (!timelineTooltip || !timelineTooltip.classList.contains("active")) return;
+  if (e.target.closest("#timelineTooltip")) return;
+  if (e.target.closest(".timeline-main-block")) return;
+  hideTooltip();
+});
+
+// ===================================================
+// BACKGROUND TASK CREATE
 // ===================================================
 document
   .getElementById("backgroundTaskForm")
   .addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!currentUid) {
-      alert("Vui lòng login trước khi thêm background task.");
+      alert("Please log in before adding background tasks.");
       return;
     }
 
@@ -1068,11 +1208,11 @@ document
     const isParallel = cbBgParallel.checked;
 
     if (!title) {
-      alert("Tên background task không được để trống.");
+      alert("Background task title cannot be empty.");
       return;
     }
     if (!startTime || !endTime) {
-      alert("Start/End time không hợp lệ.");
+      alert("Start/End time is invalid.");
       return;
     }
 
@@ -1088,7 +1228,7 @@ document
     if (repeatType === "none") {
       specificDate = bgSpecificDateInput.value;
       if (!specificDate) {
-        alert("Vui lòng chọn ngày cho background task (không lặp).");
+        alert("Please choose a date for this non-repeating background task.");
         return;
       }
     } else if (repeatType === "weekly") {
@@ -1097,15 +1237,13 @@ document
       );
       repeatDays = activePills.map((p) => p.getAttribute("data-day"));
       if (repeatDays.length === 0) {
-        alert(
-          "Vui lòng chọn ít nhất một thứ cho background task lặp tuần."
-        );
+        alert("Please select at least one weekday for weekly repeat.");
         return;
       }
     } else if (repeatType === "monthly") {
       repeatDate = Number(bgRepeatDateInput.value);
       if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
-        alert("Ngày trong tháng phải từ 1 đến 31.");
+        alert("Day of month must be between 1 and 31.");
         return;
       }
     }
@@ -1114,7 +1252,10 @@ document
     const createdAtLocal = now.toISOString();
 
     try {
-      const taskId = await getNextCounter("backgroundTaskCount", currentUid);
+      const taskId = await getNextCounter(
+        "backgroundTaskCount",
+        currentUid
+      );
 
       await addDoc(collection(db, "users", currentUid, "backgroundTasks"), {
         taskId,
@@ -1153,7 +1294,7 @@ document
       await loadBackgroundTasks();
     } catch (err) {
       console.error("Error adding background task:", err);
-      alert("Lỗi khi lưu background task. Kiểm tra console.");
+      alert("Failed to save background task. Check console for details.");
     }
   });
 
@@ -1221,7 +1362,7 @@ pillEditBgParallel.addEventListener("click", () => {
 
 function openBgEditModal(task) {
   if (!currentUid) {
-    alert("Vui lòng login.");
+    alert("Please log in.");
     return;
   }
 
@@ -1304,11 +1445,11 @@ editBgTaskForm.addEventListener("submit", async (e) => {
   const isParallel = cbEditBgParallel.checked;
 
   if (!title) {
-    alert("Tên background task không được để trống.");
+    alert("Background task title cannot be empty.");
     return;
   }
   if (!startTime || !endTime) {
-    alert("Start/End time không hợp lệ.");
+    alert("Start/End time is invalid.");
     return;
   }
 
@@ -1324,7 +1465,7 @@ editBgTaskForm.addEventListener("submit", async (e) => {
   if (repeatType === "none") {
     specificDate = editBgSpecificDateInput.value;
     if (!specificDate) {
-      alert("Vui lòng chọn ngày cho background task (không lặp).");
+      alert("Please choose a date for this non-repeating background task.");
       return;
     }
   } else if (repeatType === "weekly") {
@@ -1333,15 +1474,13 @@ editBgTaskForm.addEventListener("submit", async (e) => {
     );
     repeatDays = activePills.map((p) => p.getAttribute("data-day"));
     if (repeatDays.length === 0) {
-      alert(
-        "Vui lòng chọn ít nhất một thứ cho background task lặp tuần."
-      );
+      alert("Please select at least one weekday for weekly repeat.");
       return;
     }
   } else if (repeatType === "monthly") {
     repeatDate = Number(editBgRepeatDateInput.value);
     if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
-      alert("Ngày trong tháng phải từ 1 đến 31.");
+      alert("Day of month must be between 1 and 31.");
       return;
     }
   }
@@ -1372,25 +1511,28 @@ editBgTaskForm.addEventListener("submit", async (e) => {
     await loadBackgroundTasks();
   } catch (err) {
     console.error("Error updating background task:", err);
-    alert("Không lưu được thay đổi background task.");
+    alert("Failed to save background task changes.");
   }
 });
 
 // ===================================================
-// BACKGROUND TASK ACTIONS (Edit/Delete)
+// BACKGROUND TASK ACTIONS (EDIT/DELETE)
 // ===================================================
 const BackgroundActions = {
   openEdit(task) {
+    hideTooltip();
     openBgEditModal(task);
   },
 
   async delete(task) {
     if (!currentUid) {
-      alert("Vui lòng login.");
+      alert("Please log in.");
       return;
     }
 
-    if (!confirm("Xóa background task này? Không thể hoàn tác.")) return;
+    if (!confirm("Delete this background task? This cannot be undone.")) {
+      return;
+    }
 
     const docRef = doc(
       db,
@@ -1405,43 +1547,43 @@ const BackgroundActions = {
       await loadBackgroundTasks();
     } catch (err) {
       console.error("Error deleting background task:", err);
-      alert("Không xóa được background task.");
+      alert("Failed to delete background task.");
     }
   }
 };
 
 // ===================================================
-// BACKGROUND TASKS – LOAD
+// BACKGROUND TASK LOAD
 // ===================================================
 function formatRepeatSummary(task) {
   const type = task.repeatType || "none";
-  if (type === "daily") return "Lặp: hằng ngày";
+  if (type === "daily") return "Repeat: daily";
 
   if (type === "weekly") {
     const mapLabel = {
-      mon: "T2",
-      tue: "T3",
-      wed: "T4",
-      thu: "T5",
-      fri: "T6",
-      sat: "T7",
-      sun: "CN"
+      mon: "Mon",
+      tue: "Tue",
+      wed: "Wed",
+      thu: "Thu",
+      fri: "Fri",
+      sat: "Sat",
+      sun: "Sun"
     };
     const days = (task.repeatDays || [])
       .map((d) => mapLabel[d] || d)
       .join(", ");
-    return "Lặp: hằng tuần (" + (days || "không có") + ")";
+    return "Repeat: weekly (" + (days || "none") + ")";
   }
 
   if (type === "monthly") {
-    return `Lặp: ngày ${task.repeatDate} hằng tháng`;
+    return `Repeat: day ${task.repeatDate} of each month`;
   }
 
   if (task.specificDate) {
-    return "Không lặp – Ngày " + task.specificDate;
+    return "No repeat – " + task.specificDate;
   }
 
-  return "Không lặp";
+  return "No repeat";
 }
 
 async function loadBackgroundTasks() {
@@ -1449,7 +1591,7 @@ async function loadBackgroundTasks() {
   if (!currentUid) {
     if (list) {
       list.innerHTML =
-        '<p class="task-meta">Hãy login để xem background tasks.</p>';
+        '<p class="task-meta">Please log in to see your background tasks.</p>';
     }
     backgroundTasksCache = [];
     renderBackgroundOnTimeline();
@@ -1486,10 +1628,10 @@ async function loadBackgroundTasks() {
       <p>${task.description || ""}</p>
       <p class="task-meta">
         ${task.startTime} – ${task.endTime} ·
-        Parallel: ${task.isParallel ? "Có" : "Không"}
+        Parallel: ${task.isParallel ? "Yes" : "No"}
       </p>
       <p class="task-meta">${repeatText}</p>
-      <p class="task-meta">Tạo lúc: ${createdText}</p>
+      <p class="task-meta">Created: ${createdText}</p>
     `;
 
     const actionsDiv = document.createElement("div");
