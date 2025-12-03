@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.4.2 – Magnet Engine</title>
+  <title>DNM's Tasker v1.4.3 – Magnet Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!--
-    Version notes:
-    v1.4.2-firebase
-    - Magnet-from-NOW engine với trọng số w = durationMinutes / minutesLeft
-    - Short-task boost (<=10 phút, deadline <=48h) bằng k_short
-    - ONLY / PREFER nhân hệ số k vào w (hoặc 0 nếu ONLY ngoài window)
-    - Parallel / non-parallel dùng slice type 1/2/3
-    - Sắp xếp tuần tự từ nowSlice, cho phép split theo slice
-    - Dữ liệu main/background task lưu trên Firestore theo từng user Google
-    - Google Auth (sign in / sign out)
+    Version notes (v1.4.3):
+    - UI sáng, gần giống v1.3.3 (iOS-like)
+    - Magnet-from-NOW engine (w = duration / minutesLeft)
+    - Short task boost (<=10 min & deadline <=48h)
+    - ONLY/PREFER nhân hệ số k vào w (ONLY ngoài window -> w=0)
+    - Parallel / non-parallel qua slice type 1/2/3
+    - Sắp xếp tuần tự từ nowSlice, cho phép split task
+    - Firebase + Google login (project: dnmstasker)
+    - Dữ liệu lưu per user: users/{uid}/mainTasks, backgroundTasks
   -->
 
   <div class="app-shell">
@@ -26,7 +26,7 @@
         <div class="logo-dot"></div>
         <div class="title-texts">
           <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.4.2 · Magnet engine · Firebase</span>
+          <span class="title-sub">v1.4.3 · Magnet engine · Firebase</span>
         </div>
       </div>
 
