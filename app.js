@@ -1,4 +1,4 @@
-// DNM's Tasker v1.4.2 – Magnet-from-NOW + Firebase
+// DNM's Tasker v1.4.3 – Magnet-from-NOW + Firebase (project: dnmstasker)
 
 // =============================
 // Firebase init
@@ -12,7 +12,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
   deleteDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -39,7 +38,7 @@ const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
 // =============================
-// Global state
+// State
 // =============================
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -63,7 +62,7 @@ const state = {
 };
 
 // =============================
-// Utilities
+// Utils
 // =============================
 function startOfToday() {
   const d = new Date();
@@ -99,7 +98,6 @@ function formatHM(ms) {
   );
 }
 
-// Map ms to slice index
 function msToSliceIndex(ms) {
   const offset = ms - state.timelineStart;
   const sliceLenMs = state.settings.sliceMinutes * MINUTE_MS;
@@ -111,7 +109,6 @@ function sliceIndexToMs(sliceIndex) {
   return state.timelineStart + sliceIndex * sliceLenMs;
 }
 
-// Check NOW in ONLY/PREFER window
 function isNowWithinTaskWindow(task, nowMs) {
   if (task.onlyMode === "NONE") return false;
   const now = new Date(nowMs);
@@ -151,7 +148,6 @@ async function ensureUserInitialized(uid) {
   }
 }
 
-// Incremental shortId per user (giống counter trước đây )
 async function getNextCounter(fieldName, uid) {
   const countersRef = doc(db, "users", uid, "metadata", "counters");
   const snap = await getDoc(countersRef);
@@ -172,7 +168,7 @@ async function getNextCounter(fieldName, uid) {
 }
 
 // =============================
-// Scheduler core (Magnet engine)
+// Magnet-from-NOW scheduler
 // =============================
 function recomputeTimeline() {
   state.now = Date.now();
@@ -185,10 +181,9 @@ function recomputeTimeline() {
   const totalSlices =
     (state.settings.horizonDays * 24 * 60) / state.settings.sliceMinutes;
 
-  // sliceTypes: 1 = blank, 2 = parallel-bg, 3 = non-parallel-bg
-  state.sliceTypes = new Array(totalSlices).fill(1);
+  state.sliceTypes = new Array(totalSlices).fill(1); // 1 = blank
 
-  // Build sliceTypes from background tasks (absolute start/end)
+  // Background sliceTypes
   for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
@@ -234,7 +229,6 @@ function scheduleMainTasks(totalSlices) {
     let minutesLeft;
 
     if (!dlMs || isNaN(dlMs)) {
-      // fallback: infinity -> w cực nhỏ
       minutesLeft = 1e9;
     } else {
       const diff = dlMs - now;
@@ -317,11 +311,10 @@ function renderTimeline() {
   header.innerHTML = "";
   canvas.innerHTML = "";
 
-  const pxPerHour = 50;
+  const pxPerHour = 60;
   const totalHours = state.settings.horizonDays * 24;
   const totalWidth = totalHours * pxPerHour;
 
-  // Header
   const headerInner = document.createElement("div");
   headerInner.className = "timeline-header-inner";
   headerInner.style.width = totalWidth + "px";
@@ -355,8 +348,8 @@ function renderTimeline() {
 
     const isToday = d === 0;
     band.style.background = isToday
-      ? "rgba(148, 163, 184, 0.18)"
-      : "rgba(15, 23, 42, 0.9)";
+      ? "rgba(219, 234, 254, 0.9)"
+      : "rgba(241, 245, 249, 0.9)";
 
     band.textContent =
       String(date.getMonth() + 1).padStart(2, "0") +
@@ -367,7 +360,6 @@ function renderTimeline() {
 
   header.appendChild(headerInner);
 
-  // Canvas & lanes
   const inner = document.createElement("div");
   inner.className = "timeline-inner";
   inner.style.width = totalWidth + "px";
@@ -411,6 +403,9 @@ function renderTimeline() {
       "timeline-block " + (bg.isParallel ? "bg-parallel" : "bg-nonparallel");
     block.style.left = offsetHours * pxPerHour + "px";
     block.style.width = Math.max(durationHours * pxPerHour, 4) + "px";
+    block.title = `${bg.title}\n${formatHM(startClamped)}–${formatHM(
+      endClamped
+    )}`;
     block.innerHTML = `<div>${bg.title || "(BG)"}</div><div style="font-size:0.65rem;opacity:0.8">${formatHM(
       startClamped
     )}–${formatHM(endClamped)}</div>`;
@@ -452,6 +447,16 @@ function renderTimeline() {
         "timeline-block main" + (isOverdue ? " overdue" : "");
       block.style.left = offsetHours * pxPerHour + "px";
       block.style.width = Math.max(durationHours * pxPerHour, 4) + "px";
+      block.title =
+        `#${t.shortId ?? ""} ${t.title}\n` +
+        `${formatHM(startMs)}–${formatHM(endMs)}\n` +
+        `Duration: ${t.durationMinutes} min\n` +
+        `Deadline: ${
+          dlMs ? formatDateTimeShort(dlMs) : "No deadline"
+        }\n` +
+        `Mode: ${t.onlyMode}, Parallel: ${
+          t.isParallel ? "Yes" : "No"
+        }`;
       block.innerHTML = `
         <div style="font-weight:500">${t.title}</div>
         <div style="font-size:0.65rem;opacity:0.85">
@@ -462,17 +467,18 @@ function renderTimeline() {
     }
   }
 
-  // Pending lane: hiển thị dạng block đơn giản
+  // Pending
   for (const t of state.mainTasks.filter((t) => t.isPending)) {
     const block = document.createElement("div");
     block.className = "timeline-block main";
     block.style.left = "4px";
     block.style.width = "140px";
+    block.title = `${t.title}\n(Pending task - no timeline)`;
     block.innerHTML = `<div>${t.title}</div><div style="font-size:0.65rem;opacity:0.8">Pending (no timeline)</div>`;
     lanePending.appendChild(block);
   }
 
-  // Current time line
+  // Current time marker
   const offsetHoursNow =
     (state.now - state.timelineStart) / HOUR_MS;
   const line = document.createElement("div");
@@ -518,7 +524,7 @@ function renderMainTaskList() {
 
     const idSpan = document.createElement("span");
     idSpan.style.fontSize = "0.65rem";
-    idSpan.style.color = "#9ca3af";
+    idSpan.style.color = "#6b7280";
     idSpan.textContent = "#" + (t.shortId ?? "");
     titleRow.appendChild(idSpan);
     main.appendChild(titleRow);
@@ -894,7 +900,7 @@ function setupTimelineControls() {
   const canvas = document.getElementById("timelineCanvas");
 
   document.getElementById("jumpNowBtn").addEventListener("click", () => {
-    const pxPerHour = 50;
+    const pxPerHour = 60;
     const offsetHours =
       (state.now - state.timelineStart) / HOUR_MS;
     const x = offsetHours * pxPerHour;
@@ -908,7 +914,7 @@ function setupTimelineControls() {
     const dayStart = d.getTime();
     const offsetDays =
       (dayStart - state.timelineStart) / (24 * HOUR_MS);
-    const pxPerHour = 50;
+    const pxPerHour = 60;
     const x = offsetDays * 24 * pxPerHour;
     canvas.scrollTo({ left: Math.max(x - 200, 0), behavior: "smooth" });
   });
@@ -988,7 +994,6 @@ async function loadMainTasksFromFirestore() {
     items.push({ id: docSnap.id, ...docSnap.data() })
   );
 
-  // map schema cũ -> schema mới nếu cần 
   state.mainTasks = items.map((d, index) => {
     const durationMinutes =
       d.durationMinutes ??
@@ -1028,7 +1033,6 @@ async function loadBgTasksFromFirestore() {
     items.push({ id: docSnap.id, ...docSnap.data() })
   );
 
-  // chỉ hỗ trợ loại absolute start/end mới; các task cũ kiểu repeat sẽ không render trên engine magnet
   state.bgTasks = items
     .filter((d) => d.start && d.end)
     .map((d, index) => ({
@@ -1057,7 +1061,6 @@ async function loadAllData() {
   recomputeTimeline();
 }
 
-// Helper sau khi thêm / xóa: reload từ Firestore rồi recompute
 async function recomputeAfterReload() {
   await loadAllData();
 }
@@ -1073,7 +1076,6 @@ function init() {
   setupTimelineControls();
   setupDebugToggle();
 
-  // Auth state
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       setLoggedInUI(user);
@@ -1084,7 +1086,6 @@ function init() {
     }
   });
 
-  // lần đầu (chưa auth) vẫn render timeline trống
   state.now = Date.now();
   state.timelineStart = startOfToday();
   state.timelineEnd =
