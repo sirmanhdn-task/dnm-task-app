@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.3.1</title>
+  <title>DNM's Tasker v1.3.2</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
@@ -82,7 +82,7 @@
       <div class="section-header-row">
         <h2>Main tasks</h2>
         <span class="section-caption">
-          Capture high-value work and let the engine prioritize it.
+          Capture high-value work and let the engine prioritize and place it.
         </span>
       </div>
 
@@ -281,18 +281,52 @@
   <main class="tab-panel" id="tab-settings">
     <section class="panel-section">
       <div class="section-header-row">
-        <h2>Settings</h2>
+        <h2>Settings & debug</h2>
         <span class="section-caption">
-          Global preferences and weighting parameters (coming later).
+          Global preferences and internal availability map.
         </span>
       </div>
 
       <div class="card">
         <p class="body-text">
-          Settings and advanced tuning will be introduced in a later version.
-          The current focus is on a stable scheduling engine and a clean daily
-          experience.
+          This version introduces an availability engine with a 10-minute slot
+          resolution over the next 14 days. Main tasks are placed into the first
+          suitable continuous block of slots, respecting background blocks.
         </p>
+      </div>
+
+      <!-- Availability debug UI -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Availability debug</h3>
+          <span class="card-subtitle">
+            Inspect background-based slot types over the next 14 days (10-minute resolution).
+          </span>
+        </div>
+
+        <div class="debug-row">
+          <label class="inline-label">
+            <span>Day offset (0 = today)</span>
+            <input
+              type="number"
+              id="debugDayOffset"
+              min="0"
+              max="13"
+              value="0"
+            />
+          </label>
+          <button id="renderDebugBtn" class="secondary-btn">
+            Render availability
+          </button>
+        </div>
+
+        <div class="availability-legend">
+          <span class="legend-box legend-type1"></span> Free (type 1)
+          <span class="legend-box legend-type2"></span> Parallel BG (type 2)
+          <span class="legend-box legend-type3"></span> Blocked (type 3)
+        </div>
+
+        <div id="availabilityGrid" class="availability-grid"></div>
       </div>
     </section>
   </main>
@@ -409,27 +443,15 @@
               <span>Single date</span>
             </label>
             <label class="repeat-option">
-              <input
-                type="radio"
-                name="editBgRepeatType"
-                value="daily"
-              />
+              <input type="radio" name="editBgRepeatType" value="daily" />
               <span>Daily</span>
             </label>
             <label class="repeat-option">
-              <input
-                type="radio"
-                name="editBgRepeatType"
-                value="weekly"
-              />
+              <input type="radio" name="editBgRepeatType" value="weekly" />
               <span>Weekly</span>
             </label>
             <label class="repeat-option">
-              <input
-                type="radio"
-                name="editBgRepeatType"
-                value="monthly"
-              />
+              <input type="radio" name="editBgRepeatType" value="monthly" />
               <span>Monthly</span>
             </label>
           </div>
@@ -538,13 +560,21 @@
   ===========================================
   VERSION NOTES
   ===========================================
-  v1.3.1 – Premium Timeline Enhancement (Soft Ghost Background Blocks)
-  - Kept all business logic, priority engine, repeat engine, auth, and Firestore structure from v1.3.0.
-  - Updated timeline background blocks to a "soft ghost" style:
-    * Higher transparency, reduced shadow, softer contrast.
-    * Still visible for reference but no longer competing with main tasks.
-    * Subtle hover highlight to see the block without distracting by default.
-  - Maintained three-lane timeline structure (Main / Background / Pending).
+  v1.3.2 – Availability Engine + Main Lane Auto Placement (10-minute slots)
+  - Added a 10-minute slot-based availability engine for the next 14 days.
+  - Each slot is classified as:
+      Type 1: no background (fully free)
+      Type 2: parallel background present
+      Type 3: non-parallel background present (blocked)
+  - Each slot has an availability factor, used by the scheduler:
+      Type 1 → 1.0
+      Type 2 → 0.7
+      Type 3 → 0.0
+  - Main tasks (active & non-pending) are automatically placed into the first
+    suitable continuous block of slots that can cover their duration.
+    Tasks are not split into disjoint blocks; they form one contiguous block
+    on the main lane.
+  - Added a debug UI in Settings to inspect slot availability per day.
   ===========================================
   -->
 </body>
