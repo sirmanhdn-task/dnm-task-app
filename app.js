@@ -22,15 +22,16 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-// Your web app's Firebase configuration
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
-  authDomain: "dnmstasker-3b85f.firebaseapp.com",
-  projectId: "dnmstasker-3b85f",
-  storageBucket: "dnmstasker-3b85f.firebasestorage.app",
-  messagingSenderId: "1053072513804",
-  appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
+  apiKey: "AIzaSyDtF1mKOXncAyMSeEJsiBlEyEaKIKiJUbQ",
+  authDomain: "dnmstasker.firebaseapp.com",
+  projectId: "dnmstasker",
+  storageBucket: "dnmstasker.firebasestorage.app",
+  messagingSenderId: "98582966566",
+  appId: "1:98582966566:web:465036b33c45b5c8edd1e7"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -45,6 +46,11 @@ let currentEditingBgTaskId = null;
 let currentDuplicateTask = null;
 
 let backgroundTasksCache = [];
+let mainTasksCache = [];
+
+// Availability + scheduling
+let availabilitySlots = null; // [dayIndex][slotIndex]
+let slotAssignments = null; // [dayIndex][slotIndex] = { taskId, taskRef }
 
 // ===================================================
 // TABS
@@ -72,11 +78,15 @@ const timelineHeader = document.getElementById("timelineHeader");
 const nowMarker = document.getElementById("timelineNowMarker");
 
 const laneBackgroundContent = document.getElementById("laneBackgroundContent");
+const laneMainContent = document.getElementById("laneMainContent");
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
 const DAYS_TOTAL = 14;
-const HOURS_TOTAL = DAYS_TOTAL * 24;
+
+const SLOT_MINUTES = 10;
+const SLOTS_PER_DAY = (24 * 60) / SLOT_MINUTES;
+const TOTAL_SLOTS = DAYS_TOTAL * SLOTS_PER_DAY;
 
 let pixelsPerHour = 60;
 const MIN_PX = 24;
@@ -108,6 +118,7 @@ function formatLocalDateTime(isoString) {
 // RENDER TIMELINE
 // ===================================================
 function renderTimeline() {
+  const HOURS_TOTAL = DAYS_TOTAL * 24;
   const totalWidth = HOURS_TOTAL * pixelsPerHour;
   timelineHeader.innerHTML = "";
   timelineHeader.style.width = totalWidth + "px";
@@ -150,6 +161,7 @@ function renderTimeline() {
 
   updateNowMarker();
   renderBackgroundOnTimeline();
+  renderMainTasksOnTimeline();
 }
 
 function updateNowMarker() {
@@ -345,6 +357,12 @@ function setLoggedOutUI() {
   }
 
   laneBackgroundContent.innerHTML = "";
+  laneMainContent.innerHTML = "";
+  availabilitySlots = null;
+  slotAssignments = null;
+
+  const debugGrid = document.getElementById("availabilityDebugGrid");
+  if (debugGrid) debugGrid.innerHTML = "";
 }
 
 function setLoggedInUI(user) {
@@ -850,6 +868,44 @@ document
   });
 
 // ===================================================
+// BASE PRIORITY HELPER
+// ===================================================
+function computeBasePriorityForTask(task, nowMs) {
+  const now = nowMs || Date.now();
+
+  let minutesLeft;
+  if (task.deadlineAt) {
+    const d = new Date(task.deadlineAt);
+    const diffMs = d.getTime() - now;
+    minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
+  } else if (typeof task.deadline === "number") {
+    minutesLeft = Math.max(1, task.deadline);
+  } else {
+    minutesLeft = Infinity;
+  }
+
+  const duration = Number(task.duration) || 0;
+  const FORTY_EIGHT_HOURS_MIN = 48 * 60;
+
+  const isShortBoost =
+    duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
+
+  const ratio =
+    minutesLeft === Infinity || minutesLeft <= 0
+      ? 0
+      : duration / minutesLeft;
+
+  const boostedRatio = isShortBoost ? ratio * 2 : ratio;
+
+  task._minutesLeft = minutesLeft;
+  task._priority = ratio;
+  task._isShortBoost = isShortBoost;
+  task._basePriority = boostedRatio;
+
+  return boostedRatio;
+}
+
+// ===================================================
 // MAIN TASKS – LOAD & SORT
 // ===================================================
 async function loadMainTasks() {
@@ -859,6 +915,9 @@ async function loadMainTasks() {
       list.innerHTML =
         '<p class="task-meta">Sign in to see your main tasks.</p>';
     }
+    mainTasksCache = [];
+    slotAssignments = null;
+    renderMainTasksOnTimeline();
     return;
   }
 
@@ -868,33 +927,9 @@ async function loadMainTasks() {
   const items = [];
   snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
 
-  const now = Date.now();
-  const FORTY_EIGHT_HOURS_MIN = 48 * 60;
-
+  const nowMs = Date.now();
   items.forEach((task) => {
-    let minutesLeft;
-    if (task.deadlineAt) {
-      const d = new Date(task.deadlineAt);
-      const diffMs = d.getTime() - now;
-      minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
-    } else if (typeof task.deadline === "number") {
-      minutesLeft = Math.max(1, task.deadline);
-    } else {
-      minutesLeft = Infinity;
-    }
-
-    const duration = Number(task.duration) || 0;
-    const priority =
-      minutesLeft === Infinity || minutesLeft <= 0
-        ? 0
-        : duration / minutesLeft;
-
-    const isShortBoost =
-      duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
-
-    task._minutesLeft = minutesLeft;
-    task._priority = priority;
-    task._isShortBoost = isShortBoost;
+    computeBasePriorityForTask(task, nowMs);
     task.status = task.status || "active";
   });
 
@@ -909,6 +944,8 @@ async function loadMainTasks() {
     const pb = b._priority || 0;
     return pb - pa;
   });
+
+  mainTasksCache = items;
 
   list.innerHTML = "";
 
@@ -929,8 +966,11 @@ async function loadMainTasks() {
       task._minutesLeft === Infinity
         ? "N/A"
         : `${task._minutesLeft} minutes left`;
-    const priorityText = isFinite(task._priority)
+    const ratioText = isFinite(task._priority)
       ? task._priority.toFixed(3)
+      : "N/A";
+    const boostedText = isFinite(task._basePriority)
+      ? task._basePriority.toFixed(3)
       : "N/A";
 
     const statusLabel = task.status === "done" ? "DONE" : "ACTIVE";
@@ -951,7 +991,8 @@ async function loadMainTasks() {
       <p class="task-meta">
         Status: ${statusLabel} ·
         Short boost: ${task._isShortBoost ? "Yes" : "No"} ·
-        Priority ratio: ${priorityText} ·
+        Raw ratio: ${ratioText} ·
+        Base priority: ${boostedText} ·
         Parallel: ${task.isParallel ? "Yes" : "No"} ·
         Pending: ${task.isPending ? "Yes" : "No"}
       </p>
@@ -1004,6 +1045,8 @@ async function loadMainTasks() {
     div.appendChild(actionsDiv);
     list.appendChild(div);
   });
+
+  recomputeMainSchedule();
 }
 
 // ===================================================
@@ -1101,6 +1144,93 @@ function generateBackgroundInstances(task, rangeStart, rangeEnd) {
   return instances;
 }
 
+// ===================================================
+// AVAILABILITY ENGINE (10-MINUTE SLOTS)
+// ===================================================
+function buildAvailabilitySlots() {
+  availabilitySlots = [];
+  const slotMs = SLOT_MINUTES * 60000;
+
+  for (let d = 0; d < DAYS_TOTAL; d++) {
+    const daySlots = [];
+    for (let s = 0; s < SLOTS_PER_DAY; s++) {
+      const startTime = new Date(
+        startOfToday.getTime() + d * MS_PER_DAY + s * slotMs
+      );
+      const endTime = new Date(startTime.getTime() + slotMs);
+      daySlots.push({
+        startTime,
+        endTime,
+        hasParallelBg: false,
+        hasNonParallelBg: false,
+        type: 1,
+        availabilityFactor: 1.0
+      });
+    }
+    availabilitySlots.push(daySlots);
+  }
+
+  if (!backgroundTasksCache || backgroundTasksCache.length === 0) {
+    return;
+  }
+
+  const rangeStart = startOfToday;
+  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
+
+  backgroundTasksCache.forEach((task) => {
+    const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
+    const isParallel = !!task.isParallel;
+
+    segments.forEach((seg) => {
+      const dateObj = new Date(seg.date + "T00:00:00");
+      const diffDays = Math.round((dateObj - startOfToday) / MS_PER_DAY);
+      if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
+      const dayIndex = diffDays;
+
+      const startSlotIndex = Math.floor(seg.startMinutes / SLOT_MINUTES);
+      const endSlotIndex = Math.ceil(seg.endMinutes / SLOT_MINUTES);
+
+      for (
+        let s = startSlotIndex;
+        s < endSlotIndex && s < SLOTS_PER_DAY;
+        s++
+      ) {
+        const slot = availabilitySlots[dayIndex][s];
+        if (isParallel) slot.hasParallelBg = true;
+        else slot.hasNonParallelBg = true;
+      }
+    });
+  });
+
+  for (let d = 0; d < DAYS_TOTAL; d++) {
+    for (let s = 0; s < SLOTS_PER_DAY; s++) {
+      const slot = availabilitySlots[d][s];
+      if (slot.hasNonParallelBg) {
+        slot.type = 3;
+        slot.availabilityFactor = 0.0;
+      } else if (slot.hasParallelBg) {
+        slot.type = 2;
+        slot.availabilityFactor = 0.7;
+      } else {
+        slot.type = 1;
+        slot.availabilityFactor = 1.0;
+      }
+    }
+  }
+}
+
+// Placeholder for ONLY/PREFER factor (currently not wired to UI)
+function computeOnlyPreferFactor(task, slotStart) {
+  // When ONLY/PREFER fields are added to the task, implement:
+  // - ONLY: in-window => 1.5, out-of-window => 0
+  // - PREFER: in-window => 1.5, out-of-window => 1.0
+  // For now, neutral.
+  return 1.0;
+}
+
+// ===================================================
+// RENDER BACKGROUND BLOCKS ON TIMELINE
+// ===================================================
 function renderBackgroundOnTimeline() {
   if (!laneBackgroundContent) return;
   laneBackgroundContent.innerHTML = "";
@@ -1111,14 +1241,43 @@ function renderBackgroundOnTimeline() {
   const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
 
   backgroundTasksCache.forEach((task) => {
-    const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
+    const segments = generateBackgroundInstances(
+      task,
+      rangeStart,
+      rangeEnd
+    );
+    segments.forEach((seg) => {
+      const dateObj = new Date(seg.date + "T00:00:00");
+      const diffDays = (dateObj - startOfToday) / MS_PERDAY;
+    });
+  });
+}
+
+// (Fix small typo: MS_PERDAY) – re-implement correctly:
+
+function renderBackgroundOnTimeline() {
+  if (!laneBackgroundContent) return;
+  laneBackgroundContent.innerHTML = "";
+
+  if (!backgroundTasksCache || backgroundTasksCache.length === 0) return;
+
+  const rangeStart = startOfToday;
+  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
+
+  backgroundTasksCache.forEach((task) => {
+    const segments = generateBackgroundInstances(
+      task,
+      rangeStart,
+      rangeEnd
+    );
     segments.forEach((seg) => {
       const dateObj = new Date(seg.date + "T00:00:00");
       const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
       if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
 
+      const dayIndex = diffDays;
       const totalHoursOffset =
-        diffDays * 24 + seg.startMinutes / 60;
+        dayIndex * 24 + seg.startMinutes / 60;
       const hoursWidth = (seg.endMinutes - seg.startMinutes) / 60;
 
       if (hoursWidth <= 0) return;
@@ -1132,6 +1291,146 @@ function renderBackgroundOnTimeline() {
       laneBackgroundContent.appendChild(block);
     });
   });
+}
+
+// ===================================================
+// SIMPLE SCHEDULER FOR MAIN TASKS (AUTO-SPLIT)
+// ===================================================
+function recomputeMainSchedule() {
+  if (!availabilitySlots) {
+    buildAvailabilitySlots();
+  }
+  if (!availabilitySlots) return;
+
+  slotAssignments = [];
+  for (let d = 0; d < DAYS_TOTAL; d++) {
+    slotAssignments[d] = new Array(SLOTS_PER_DAY).fill(null);
+  }
+
+  if (!mainTasksCache || mainTasksCache.length === 0) {
+    renderMainTasksOnTimeline();
+    return;
+  }
+
+  const nowMs = Date.now();
+
+  const activeTasks = mainTasksCache.filter(
+    (t) => t.status === "active" && !t.isPending
+  );
+
+  // we assume mainTasksCache already sorted by priority
+  activeTasks.forEach((task) => {
+    let remainingMinutes = Number(task.duration) || 0;
+    if (remainingMinutes <= 0) return;
+
+    let deadlineMs = null;
+    if (task.deadlineAt) {
+      const d = new Date(task.deadlineAt);
+      if (!isNaN(d)) {
+        deadlineMs = d.getTime();
+      }
+    }
+
+    for (let d = 0; d < DAYS_TOTAL && remainingMinutes > 0; d++) {
+      for (
+        let s = 0;
+        s < SLOTS_PER_DAY && remainingMinutes > 0;
+        s++
+      ) {
+        const slot = availabilitySlots[d][s];
+        const slotStartMs = slot.startTime.getTime();
+
+        if (slotStartMs < nowMs) continue;
+        if (deadlineMs && slotStartMs > deadlineMs) continue;
+
+        if (slot.type === 3) continue;
+        if (slot.type === 2 && !task.isParallel) continue;
+
+        if (slotAssignments[d][s]) continue;
+
+        const onlyPreferFactor = computeOnlyPreferFactor(
+          task,
+          slot.startTime
+        );
+        if (onlyPreferFactor === 0) continue;
+
+        const allocMinutes = Math.min(SLOT_MINUTES, remainingMinutes);
+
+        slotAssignments[d][s] = {
+          taskId: task.id,
+          taskRef: task
+        };
+
+        remainingMinutes -= allocMinutes;
+      }
+    }
+  });
+
+  renderMainTasksOnTimeline();
+}
+
+function renderMainTasksOnTimeline() {
+  if (!laneMainContent) return;
+  laneMainContent.innerHTML = "";
+
+  if (!slotAssignments) return;
+
+  const HOURS_TOTAL = DAYS_TOTAL * 24;
+
+  const totalSlots = TOTAL_SLOTS;
+  let prevAssignment = null;
+  let blockStartGlobalIndex = null;
+
+  const createBlock = (task, startGlobalIndex, endGlobalIndex) => {
+    if (!task) return;
+    const slotsCount = endGlobalIndex - startGlobalIndex;
+    if (slotsCount <= 0) return;
+
+    const startDayIndex = Math.floor(startGlobalIndex / SLOTS_PER_DAY);
+    const startSlotIndex = startGlobalIndex % SLOTS_PER_DAY;
+
+    const hourOffset =
+      startDayIndex * 24 + (startSlotIndex * SLOT_MINUTES) / 60;
+    const hoursWidth = (slotsCount * SLOT_MINUTES) / 60;
+
+    const block = document.createElement("div");
+    block.className = "timeline-main-block";
+    block.style.left = hourOffset * pixelsPerHour + "px";
+    block.style.width = hoursWidth * pixelsPerHour + "px";
+    block.textContent = task.title;
+
+    laneMainContent.appendChild(block);
+  };
+
+  for (let globalIndex = 0; globalIndex <= totalSlots; globalIndex++) {
+    let current = null;
+    if (globalIndex < totalSlots) {
+      const dayIndex = Math.floor(globalIndex / SLOTS_PER_DAY);
+      const slotIndex = globalIndex % SLOTS_PER_DAY;
+      current = slotAssignments[dayIndex][slotIndex];
+    }
+
+    const sameTask =
+      prevAssignment &&
+      current &&
+      current.taskId === prevAssignment.taskId;
+
+    if (!sameTask) {
+      if (prevAssignment && blockStartGlobalIndex != null) {
+        createBlock(
+          prevAssignment.taskRef,
+          blockStartGlobalIndex,
+          globalIndex
+        );
+      }
+      if (current) {
+        blockStartGlobalIndex = globalIndex;
+      } else {
+        blockStartGlobalIndex = null;
+      }
+    }
+    prevAssignment = current;
+  }
 }
 
 // ===================================================
@@ -1552,7 +1851,9 @@ async function loadBackgroundTasks() {
         '<p class="task-meta">Sign in to see your background tasks.</p>';
     }
     backgroundTasksCache = [];
+    buildAvailabilitySlots();
     renderBackgroundOnTimeline();
+    recomputeMainSchedule();
     return;
   }
 
@@ -1567,7 +1868,9 @@ async function loadBackgroundTasks() {
   );
 
   backgroundTasksCache = items;
+  buildAvailabilitySlots();
   renderBackgroundOnTimeline();
+  recomputeMainSchedule();
 
   list.innerHTML = "";
 
@@ -1615,6 +1918,59 @@ async function loadBackgroundTasks() {
     div.appendChild(actionsDiv);
 
     list.appendChild(div);
+  });
+}
+
+// ===================================================
+// DEBUG AVAILABILITY UI
+// ===================================================
+const debugDaySelect = document.getElementById("debugDaySelect");
+const renderDebugBtn = document.getElementById("renderDebugBtn");
+const availabilityDebugGrid = document.getElementById(
+  "availabilityDebugGrid"
+);
+
+function renderAvailabilityDebug(dayIndex) {
+  if (!availabilityDebugGrid) return;
+
+  if (!availabilitySlots) {
+    availabilityDebugGrid.innerHTML =
+      '<p class="task-meta">No availability data yet. Add background tasks or reload.</p>';
+    return;
+  }
+
+  if (dayIndex < 0 || dayIndex >= DAYS_TOTAL) dayIndex = 0;
+
+  const slots = availabilitySlots[dayIndex];
+  availabilityDebugGrid.innerHTML = "";
+
+  for (let i = 0; i < SLOTS_PER_DAY; i++) {
+    const slot = slots[i];
+    const div = document.createElement("div");
+    div.classList.add("slot-debug");
+
+    if (slot.type === 1) div.classList.add("slot-type1");
+    else if (slot.type === 2) div.classList.add("slot-type2");
+    else if (slot.type === 3) div.classList.add("slot-type3");
+
+    if (i % 6 === 0) {
+      const hour = Math.floor((i * SLOT_MINUTES) / 60);
+      const minute = (i * SLOT_MINUTES) % 60;
+      const label = `${hour.toString().padStart(2, "0")}:${minute
+        .toString()
+        .padStart(2, "0")}`;
+      div.title = label;
+      div.classList.add("slot-debug-hour-label");
+    }
+
+    availabilityDebugGrid.appendChild(div);
+  }
+}
+
+if (renderDebugBtn && debugDaySelect) {
+  renderDebugBtn.addEventListener("click", () => {
+    const dayIndex = parseInt(debugDaySelect.value, 10) || 0;
+    renderAvailabilityDebug(dayIndex);
   });
 }
 
