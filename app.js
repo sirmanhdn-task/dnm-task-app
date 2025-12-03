@@ -44,21 +44,20 @@ const provider = new GoogleAuthProvider();
 let currentUid = null;
 let currentEditingTaskId = null;
 let currentEditingBgTaskId = null;
-let currentDuplicateTask = null;
 
+let mainTasksCache = [];
 let backgroundTasksCache = [];
-let availabilitySlots = null; // [dayIndex][slotIndex] for availability engine
 
 // ===================================================
-// TABS
+// TAB HANDLING
 // ===================================================
 document.querySelectorAll(".tab-button").forEach((btn) => {
   btn.addEventListener("click", () => {
     const id = btn.dataset.tabTarget;
 
-    document
-      .querySelectorAll(".tab-button")
-      .forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-button").forEach((b) =>
+      b.classList.remove("active")
+    );
     btn.classList.add("active");
 
     document.querySelectorAll(".tab-panel").forEach((panel) => {
@@ -72,17 +71,15 @@ document.querySelectorAll(".tab-button").forEach((btn) => {
 // ===================================================
 const timelineScroll = document.getElementById("timelineScroll");
 const timelineHeader = document.getElementById("timelineHeader");
-const nowMarker = document.getElementById("timelineNowMarker");
-
+const laneMainContent = document.getElementById("laneMainContent");
 const laneBackgroundContent = document.getElementById("laneBackgroundContent");
+const lanePendingContent = document.getElementById("lanePendingContent");
+const timelineNowMarker = document.getElementById("timelineNowMarker");
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
 const DAYS_TOTAL = 14;
-
-// Availability engine resolution
-const SLOT_MINUTES = 10; // 10 minutes per slot
-const SLOTS_PER_DAY = (24 * 60) / SLOT_MINUTES; // 144
+const HOURS_TOTAL = DAYS_TOTAL * 24;
 
 let pixelsPerHour = 60;
 const MIN_PX = 24;
@@ -94,7 +91,7 @@ const startOfToday = (() => {
 })();
 
 function formatDayLabel(date) {
-  const w = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const w = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   return `${w[date.getDay()]} ${date.getDate()}`;
 }
 
@@ -102,8 +99,8 @@ function formatLocalDateTime(isoString) {
   if (!isoString) return "N/A";
   const d = new Date(isoString);
   if (isNaN(d)) return "N/A";
-  const datePart = d.toLocaleDateString("en-GB");
-  const timePart = d.toLocaleTimeString("en-GB", {
+  const datePart = d.toLocaleDateString("vi-VN");
+  const timePart = d.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit"
   });
@@ -111,58 +108,9 @@ function formatLocalDateTime(isoString) {
 }
 
 // ===================================================
-// PRIORITY ENGINE HELPERS
-// ===================================================
-const FORTY_EIGHT_HOURS_MIN = 48 * 60;
-
-function computeMinutesLeft(task) {
-  const now = Date.now();
-  let minutesLeft;
-
-  if (task.deadlineAt) {
-    const d = new Date(task.deadlineAt);
-    const diffMs = d.getTime() - now;
-    if (diffMs <= 0) {
-      minutesLeft = 1;
-    } else {
-      minutesLeft = Math.max(1, Math.round(diffMs / 60000));
-    }
-  } else if (typeof task.deadline === "number") {
-    minutesLeft = Math.max(1, task.deadline);
-  } else {
-    minutesLeft = Infinity;
-  }
-
-  return minutesLeft;
-}
-
-function computeBasePriority(task) {
-  const minutesLeft = computeMinutesLeft(task);
-  const duration = Number(task.duration) || 0;
-
-  const base =
-    minutesLeft === Infinity || minutesLeft <= 0
-      ? 0
-      : duration / minutesLeft;
-
-  const isShortBoost =
-    duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
-
-  // Interpret short boost as a multiplier so those windows get higher scores.
-  const boosted = isShortBoost ? base * 2 : base;
-
-  return {
-    basePriority: boosted,
-    minutesLeft,
-    isShortBoost
-  };
-}
-
-// ===================================================
 // RENDER TIMELINE
 // ===================================================
 function renderTimeline() {
-  const HOURS_TOTAL = DAYS_TOTAL * 24;
   const totalWidth = HOURS_TOTAL * pixelsPerHour;
   timelineHeader.innerHTML = "";
   timelineHeader.style.width = totalWidth + "px";
@@ -205,6 +153,7 @@ function renderTimeline() {
 
   updateNowMarker();
   renderBackgroundOnTimeline();
+  renderMainOnTimeline();
 }
 
 function updateNowMarker() {
@@ -212,13 +161,13 @@ function updateNowMarker() {
   const diff = now - startOfToday;
 
   if (diff < 0 || diff >= DAYS_TOTAL * MS_PER_DAY) {
-    nowMarker.style.display = "none";
+    timelineNowMarker.style.display = "none";
     return;
   }
 
-  nowMarker.style.display = "block";
+  timelineNowMarker.style.display = "block";
   const hours = diff / MS_PER_HOUR;
-  nowMarker.style.left = hours * pixelsPerHour + "px";
+  timelineNowMarker.style.left = hours * pixelsPerHour + "px";
 }
 
 // ===================================================
@@ -229,10 +178,7 @@ function zoom(factor) {
     (timelineScroll.scrollLeft + timelineScroll.clientWidth / 2) /
     pixelsPerHour;
 
-  pixelsPerHour = Math.max(
-    MIN_PX,
-    Math.min(MAX_PX, pixelsPerHour * factor)
-  );
+  pixelsPerHour = Math.max(MIN_PX, Math.min(MAX_PX, pixelsPerHour * factor));
   renderTimeline();
 
   timelineScroll.scrollLeft =
@@ -260,7 +206,7 @@ document.getElementById("zoomOutBtn").addEventListener("click", () =>
 document.getElementById("jumpNowBtn").addEventListener("click", jumpNow);
 
 // ===================================================
-// CALENDAR MODAL – CLICK ONLY
+// CALENDAR MODAL
 // ===================================================
 const jumpDateButton = document.getElementById("jumpDateButton");
 const jumpDateModal = document.getElementById("jumpDateModal");
@@ -310,7 +256,7 @@ jumpDateModal.addEventListener("click", (e) => {
 });
 
 // ===================================================
-// PILL TOGGLE LOGIC – MAIN
+// PILL TOGGLES
 // ===================================================
 const pillMainPending = document.getElementById("pillMainPending");
 const pillMainParallel = document.getElementById("pillMainParallel");
@@ -327,7 +273,6 @@ pillMainParallel.addEventListener("click", () => {
   cbMainParallel.checked = pillMainParallel.classList.contains("active");
 });
 
-// BACKGROUND PARALLEL PILL
 const pillBgParallel = document.getElementById("pillBgParallel");
 const cbBgParallel = document.getElementById("bgIsParallel");
 
@@ -336,13 +281,11 @@ pillBgParallel.addEventListener("click", () => {
   cbBgParallel.checked = pillBgParallel.classList.contains("active");
 });
 
-// Background repeat UI (create form)
+// BACKGROUND REPEAT (CREATE FORM)
 const bgWeeklyRow = document.getElementById("bgWeeklyRow");
 const bgMonthlyRow = document.getElementById("bgMonthlyRow");
 const bgSpecificDateRow = document.getElementById("bgSpecificDateRow");
-const bgRepeatRadios = document.querySelectorAll(
-  'input[name="bgRepeatType"]'
-);
+const bgRepeatRadios = document.querySelectorAll('input[name="bgRepeatType"]');
 const bgWeeklyPillsContainer = document.getElementById("bgWeeklyPills");
 const bgRepeatDateInput = document.getElementById("bgRepeatDate");
 const bgSpecificDateInput = document.getElementById("bgSpecificDate");
@@ -366,13 +309,11 @@ bgRepeatRadios.forEach((r) => {
   });
 });
 
-bgWeeklyPillsContainer
-  .querySelectorAll(".pill-toggle")
-  .forEach((pill) => {
-    pill.addEventListener("click", () => {
-      pill.classList.toggle("active");
-    });
+bgWeeklyPillsContainer.querySelectorAll(".pill-toggle").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    pill.classList.toggle("active");
   });
+});
 
 // ===================================================
 // AUTH UI
@@ -392,15 +333,19 @@ function setLoggedOutUI() {
   const bgList = document.getElementById("backgroundTaskList");
   if (mainList) {
     mainList.innerHTML =
-      '<p class="task-meta">Sign in to see your main tasks.</p>';
+      '<p class="task-meta">Hãy login để xem main tasks.</p>';
   }
   if (bgList) {
     bgList.innerHTML =
-      '<p class="task-meta">Sign in to see your background tasks.</p>';
+      '<p class="task-meta">Hãy login để xem background tasks.</p>';
   }
 
-  laneBackgroundContent.innerHTML = "";
-  availabilitySlots = null;
+  if (laneMainContent) laneMainContent.innerHTML = "";
+  if (laneBackgroundContent) laneBackgroundContent.innerHTML = "";
+  if (lanePendingContent) lanePendingContent.innerHTML = "";
+
+  mainTasksCache = [];
+  backgroundTasksCache = [];
 }
 
 function setLoggedInUI(user) {
@@ -414,7 +359,7 @@ function setLoggedInUI(user) {
   } else {
     userAvatar.src =
       "https://ui-avatars.com/api/?name=" +
-      encodeURIComponent(user.email || "User");
+      encodeURIComponent(user.email || "U");
   }
 }
 
@@ -442,7 +387,7 @@ loginBtn.addEventListener("click", async () => {
     await signInWithPopup(auth, provider);
   } catch (err) {
     console.error("Login error:", err);
-    alert("Unable to sign in with Google. Please check the console.");
+    alert("Không login được với Google. Kiểm tra console.");
   }
 });
 
@@ -451,7 +396,7 @@ logoutBtn.addEventListener("click", async () => {
     await signOut(auth);
   } catch (err) {
     console.error("Logout error:", err);
-    alert("Unable to sign out. Please check the console.");
+    alert("Không logout được. Kiểm tra console.");
   }
 });
 
@@ -466,7 +411,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ===================================================
-// COUNTER HELPER – PER USER
+// COUNTER HELPER (taskId tự tăng)
 // ===================================================
 async function getNextCounter(fieldName, uid) {
   const countersRef = doc(db, "users", uid, "metadata", "counters");
@@ -478,8 +423,7 @@ async function getNextCounter(fieldName, uid) {
   } else {
     data = snap.data();
     if (data.mainTaskCount == null) data.mainTaskCount = 0;
-    if (data.backgroundTaskCount == null)
-      data.backgroundTaskCount = 0;
+    if (data.backgroundTaskCount == null) data.backgroundTaskCount = 0;
   }
 
   const newCount = (data[fieldName] || 0) + 1;
@@ -496,9 +440,7 @@ const editTaskModal = document.getElementById("editTaskModal");
 const editTaskForm = document.getElementById("editTaskForm");
 
 const editTitleInput = document.getElementById("editTitle");
-const editDescriptionInput = document.getElementById(
-  "editDescription"
-);
+const editDescriptionInput = document.getElementById("editDescription");
 const editImportanceInput = document.getElementById("editImportance");
 const editDurationInput = document.getElementById("editDuration");
 const editDeadlineInput = document.getElementById("editDeadline");
@@ -512,7 +454,7 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 
 function openEditModal(task) {
   if (!currentUid) {
-    alert("Please sign in first.");
+    alert("Vui lòng login.");
     return;
   }
 
@@ -525,9 +467,7 @@ function openEditModal(task) {
 
   if (task.deadlineAt) {
     const d = new Date(task.deadlineAt);
-    const isoLocal = new Date(
-      d.getTime() - d.getTimezoneOffset() * 60000
-    )
+    const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
     editDeadlineInput.value = isoLocal;
@@ -564,8 +504,7 @@ pillEditPending.addEventListener("click", () => {
 
 pillEditParallel.addEventListener("click", () => {
   pillEditParallel.classList.toggle("active");
-  cbEditParallel.checked =
-    pillEditParallel.classList.contains("active");
+  cbEditParallel.checked = pillEditParallel.classList.contains("active");
 });
 
 cancelEditBtn.addEventListener("click", () => {
@@ -583,22 +522,21 @@ editTaskForm.addEventListener("submit", async (e) => {
   if (!currentUid || !currentEditingTaskId) return;
 
   const title = editTitleInput.value.trim();
-  const description =
-    editDescriptionInput.value.trim();
+  const description = editDescriptionInput.value.trim();
   const importance = Number(editImportanceInput.value);
   const duration = Number(editDurationInput.value);
   const deadlineStr = editDeadlineInput.value;
 
   if (!title) {
-    alert("Task title cannot be empty.");
+    alert("Tên task không được để trống.");
     return;
   }
   if (!deadlineStr) {
-    alert("Please provide a valid deadline.");
+    alert("Deadline không hợp lệ.");
     return;
   }
   if (!duration || duration <= 0) {
-    alert("Duration must be greater than 0.");
+    alert("Duration phải > 0.");
     return;
   }
 
@@ -611,13 +549,7 @@ editTaskForm.addEventListener("submit", async (e) => {
   const isPending = cbEditPending.checked;
   const isParallel = cbEditParallel.checked;
 
-  const docRef = doc(
-    db,
-    "users",
-    currentUid,
-    "mainTasks",
-    currentEditingTaskId
-  );
+  const docRef = doc(db, "users", currentUid, "mainTasks", currentEditingTaskId);
 
   try {
     await updateDoc(docRef, {
@@ -635,152 +567,25 @@ editTaskForm.addEventListener("submit", async (e) => {
     await loadMainTasks();
   } catch (err) {
     console.error("Error saving edited task:", err);
-    alert("Unable to save changes. Please check the console.");
+    alert("Không lưu được thay đổi. Kiểm tra console.");
   }
 });
 
 // ===================================================
-// DUPLICATE MODAL & LOGIC
-// ===================================================
-const duplicateModal = document.getElementById("duplicateModal");
-const duplicateCancelBtn = document.getElementById(
-  "duplicateCancelBtn"
-);
-const duplicateOptionButtons = document.querySelectorAll(
-  ".duplicate-option-btn"
-);
-
-const DuplicateModal = {
-  open(task) {
-    if (!currentUid) {
-      alert("Please sign in first.");
-      return;
-    }
-    currentDuplicateTask = task;
-    duplicateModal.classList.add("active");
-  },
-  close() {
-    duplicateModal.classList.remove("active");
-    currentDuplicateTask = null;
-  }
-};
-
-duplicateCancelBtn.addEventListener("click", () => {
-  DuplicateModal.close();
-});
-
-duplicateModal.addEventListener("click", (e) => {
-  if (e.target === duplicateModal) {
-    DuplicateModal.close();
-  }
-});
-
-function computeNewDeadline(oldIso, mode) {
-  if (!oldIso) {
-    return null;
-  }
-
-  const d = new Date(oldIso);
-  if (isNaN(d)) return null;
-
-  if (mode === "keep") {
-    return oldIso;
-  }
-
-  if (mode === "plus7") {
-    d.setDate(d.getDate() + 7);
-    return d.toISOString();
-  }
-
-  if (mode === "plus1M") {
-    const day = d.getDate();
-    d.setMonth(d.getMonth() + 1);
-    if (d.getDate() < day) {
-      d.setDate(0);
-    }
-    return d.toISOString();
-  }
-
-  if (mode === "empty") {
-    return null;
-  }
-
-  return oldIso;
-}
-
-async function duplicateMainTask(task, mode) {
-  if (!currentUid) {
-    alert("Please sign in first.");
-    return;
-  }
-
-  const deadlineAt = computeNewDeadline(task.deadlineAt, mode);
-
-  const base = {
-    title: task.title || "",
-    description: task.description || "",
-    importance: task.importance ?? 0,
-    duration: task.duration ?? 0,
-    isPending: !!task.isPending,
-    isParallel: !!task.isParallel,
-    deadlineAt
-  };
-
-  const now = new Date();
-  const createdAtLocal = now.toISOString();
-  const taskId = await getNextCounter("mainTaskCount", currentUid);
-
-  const payload = {
-    ...base,
-    taskId,
-    status: "active",
-    createdAtLocal,
-    createdAt: serverTimestamp()
-  };
-
-  await addDoc(collection(db, "users", currentUid, "mainTasks"), payload);
-  await loadMainTasks();
-}
-
-duplicateOptionButtons.forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    const mode = btn.dataset.mode;
-    if (!currentDuplicateTask) {
-      DuplicateModal.close();
-      return;
-    }
-    try {
-      await duplicateMainTask(currentDuplicateTask, mode);
-    } catch (err) {
-      console.error("Error duplicating task:", err);
-      alert("Unable to duplicate this task.");
-    } finally {
-      DuplicateModal.close();
-    }
-  });
-});
-
-// ===================================================
-// MAIN TASK ACTIONS
+// TASK ACTIONS (MAIN)
 // ===================================================
 const TaskActions = {
   async setStatus(task, status) {
     if (!currentUid) {
-      alert("Please sign in first.");
+      alert("Vui lòng login.");
       return;
     }
-    const docRef = doc(
-      db,
-      "users",
-      currentUid,
-      "mainTasks",
-      task.id
-    );
+    const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
 
     const confirmMsg =
       status === "done"
-        ? "Mark this task as DONE?"
-        : "Move this task back to ACTIVE?";
+        ? "Đánh dấu task này là DONE?"
+        : "Chuyển task này về trạng thái ACTIVE?";
 
     if (!confirm(confirmMsg)) return;
 
@@ -789,146 +594,151 @@ const TaskActions = {
       await loadMainTasks();
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Unable to update task status.");
+      alert("Không cập nhật được trạng thái task.");
     }
   },
 
   async delete(task) {
     if (!currentUid) {
-      alert("Please sign in first.");
+      alert("Vui lòng login.");
       return;
     }
-    const docRef = doc(
-      db,
-      "users",
-      currentUid,
-      "mainTasks",
-      task.id
-    );
+    const docRef = doc(db, "users", currentUid, "mainTasks", task.id);
 
-    if (!confirm("Delete this task? This cannot be undone.")) return;
+    if (!confirm("Xóa task này? Không thể hoàn tác.")) return;
 
     try {
       await deleteDoc(docRef);
       await loadMainTasks();
     } catch (err) {
       console.error("Error deleting task:", err);
-      alert("Unable to delete this task.");
+      alert("Không xóa được task.");
     }
   },
 
   openEdit(task) {
     openEditModal(task);
-  },
-
-  openDuplicate(task) {
-    DuplicateModal.open(task);
   }
 };
 
 // ===================================================
-// MAIN TASKS – CREATE
+// MAIN TASKS – SUBMIT
 // ===================================================
-document
-  .getElementById("mainTaskForm")
-  .addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!currentUid) {
-      alert("Please sign in before adding tasks.");
-      return;
-    }
+document.getElementById("mainTaskForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUid) {
+    alert("Vui lòng login trước khi thêm task.");
+    return;
+  }
 
-    const title = document.getElementById("mainTitle").value.trim();
-    const description =
-      document.getElementById("mainDescription").value.trim();
-    const importance = Number(
-      document.getElementById("mainImportance").value
-    );
-    const duration = Number(
-      document.getElementById("mainDuration").value
-    );
-    const deadlineStr =
-      document.getElementById("mainDeadline").value;
+  const title = document.getElementById("mainTitle").value.trim();
+  const description = document.getElementById("mainDescription").value.trim();
+  const importance = Number(
+    document.getElementById("mainImportance").value
+  );
+  const duration = Number(document.getElementById("mainDuration").value);
+  const deadlineStr = document.getElementById("mainDeadline").value;
 
-    const isPending = cbMainPending.checked;
-    const isParallel = cbMainParallel.checked;
+  const isPending = cbMainPending.checked;
+  const isParallel = cbMainParallel.checked;
 
-    if (!title) {
-      alert("Task title cannot be empty.");
-      return;
-    }
-    if (!deadlineStr) {
-      alert("Please provide a valid deadline.");
-      return;
-    }
-    if (!duration || duration <= 0) {
-      alert("Duration must be greater than 0.");
-      return;
-    }
+  if (!title) {
+    alert("Tên task không được để trống.");
+    return;
+  }
+  if (!deadlineStr) {
+    alert("Deadline không hợp lệ.");
+    return;
+  }
+  if (!duration || duration <= 0) {
+    alert("Duration phải > 0.");
+    return;
+  }
 
-    let deadlineAt = null;
-    if (deadlineStr) {
-      const d = new Date(deadlineStr);
-      deadlineAt = d.toISOString();
-    }
+  let deadlineAt = null;
+  if (deadlineStr) {
+    const d = new Date(deadlineStr);
+    deadlineAt = d.toISOString();
+  }
 
-    const now = new Date();
-    const createdAtLocal = now.toISOString();
+  const now = new Date();
+  const createdAtLocal = now.toISOString();
 
-    try {
-      const taskId = await getNextCounter("mainTaskCount", currentUid);
+  try {
+    const taskId = await getNextCounter("mainTaskCount", currentUid);
 
-      await addDoc(collection(db, "users", currentUid, "mainTasks"), {
-        taskId,
-        title,
-        description,
-        importance,
-        duration,
-        deadlineAt,
-        isPending,
-        isParallel,
-        status: "active",
-        createdAtLocal,
-        createdAt: serverTimestamp()
-      });
+    await addDoc(collection(db, "users", currentUid, "mainTasks"), {
+      taskId,
+      title,
+      description,
+      importance,
+      duration,
+      deadlineAt,
+      isPending,
+      isParallel,
+      status: "active",
+      createdAtLocal,
+      createdAt: serverTimestamp()
+    });
 
-      e.target.reset();
-      pillMainPending.classList.remove("active");
-      pillMainParallel.classList.remove("active");
-      cbMainPending.checked = false;
-      cbMainParallel.checked = false;
+    e.target.reset();
+    pillMainPending.classList.remove("active");
+    pillMainParallel.classList.remove("active");
+    cbMainPending.checked = false;
+    cbMainParallel.checked = false;
 
-      await loadMainTasks();
-    } catch (err) {
-      console.error("Error adding main task:", err);
-      alert("Unable to create main task. Please check the console.");
-    }
-  });
+    await loadMainTasks();
+  } catch (err) {
+    console.error("Error adding main task:", err);
+    alert("Lỗi khi lưu main task. Kiểm tra console.");
+  }
+});
 
 // ===================================================
-// MAIN TASKS – LOAD & SORT
+// MAIN TASKS – LOAD & SORT + CACHE + TIMELINE
 // ===================================================
 async function loadMainTasks() {
   const list = document.getElementById("mainTaskList");
   if (!currentUid) {
     if (list) {
       list.innerHTML =
-        '<p class="task-meta">Sign in to see your main tasks.</p>';
+        '<p class="task-meta">Hãy login để xem main tasks.</p>';
     }
+    mainTasksCache = [];
+    renderMainOnTimeline();
     return;
   }
 
-  const snap = await getDocs(
-    collection(db, "users", currentUid, "mainTasks")
-  );
+  const snap = await getDocs(collection(db, "users", currentUid, "mainTasks"));
   const items = [];
   snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
 
+  const now = Date.now();
+  const FORTY_EIGHT_HOURS_MIN = 48 * 60;
+
   items.forEach((task) => {
-    const { basePriority, minutesLeft, isShortBoost } =
-      computeBasePriority(task);
+    let minutesLeft;
+    if (task.deadlineAt) {
+      const d = new Date(task.deadlineAt);
+      const diffMs = d.getTime() - now;
+      minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
+    } else if (typeof task.deadline === "number") {
+      minutesLeft = Math.max(1, task.deadline);
+    } else {
+      minutesLeft = Infinity;
+    }
+
+    const duration = Number(task.duration) || 0;
+    const priority =
+      minutesLeft === Infinity || minutesLeft <= 0
+        ? 0
+        : duration / minutesLeft;
+
+    const isShortBoost =
+      duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
+
     task._minutesLeft = minutesLeft;
-    task._priority = basePriority;
+    task._priority = priority;
     task._isShortBoost = isShortBoost;
     task.status = task.status || "active";
   });
@@ -945,6 +755,10 @@ async function loadMainTasks() {
     return pb - pa;
   });
 
+  // Cache cho timeline
+  mainTasksCache = items;
+  renderMainOnTimeline();
+
   list.innerHTML = "";
 
   items.forEach((task) => {
@@ -954,8 +768,7 @@ async function loadMainTasks() {
       div.classList.add("task-item-done");
     }
 
-    const idText =
-      typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+    const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
     const deadlineText = task.deadlineAt
       ? new Date(task.deadlineAt).toLocaleString()
       : "N/A";
@@ -963,7 +776,8 @@ async function loadMainTasks() {
     const minutesText =
       task._minutesLeft === Infinity
         ? "N/A"
-        : `${task._minutesLeft} minutes left`;
+        : `${task._minutesLeft} phút`;
+
     const priorityText = isFinite(task._priority)
       ? task._priority.toFixed(3)
       : "N/A";
@@ -975,20 +789,20 @@ async function loadMainTasks() {
       <h4>${idText}${task.title}</h4>
       <p>${task.description || ""}</p>
       <p class="task-meta">
-        Importance: ${task.importance} · Duration: ${task.duration} min
+        Importance: ${task.importance} · Duration: ${task.duration} phút
       </p>
       <p class="task-meta">
-        Deadline: ${deadlineText} · Time remaining: ${minutesText}
+        Deadline: ${deadlineText} · Còn khoảng: ${minutesText}
       </p>
       <p class="task-meta">
         Created: ${createdText}
       </p>
       <p class="task-meta">
         Status: ${statusLabel} ·
-        Short boost: ${task._isShortBoost ? "Yes" : "No"} ·
-        Priority ratio: ${priorityText} ·
-        Parallel: ${task.isParallel ? "Yes" : "No"} ·
-        Pending: ${task.isPending ? "Yes" : "No"}
+        Short-boost: ${task._isShortBoost ? "Có" : "Không"} ·
+        Priority: ${priorityText} ·
+        Parallel: ${task.isParallel ? "Có" : "Không"} ·
+        Pending: ${task.isPending ? "Có" : "Không"}
       </p>
     `;
 
@@ -1005,18 +819,9 @@ async function loadMainTasks() {
       TaskActions.openEdit(task);
     });
 
-    const duplicateBtn = document.createElement("button");
-    duplicateBtn.className = "task-btn";
-    duplicateBtn.textContent = "Duplicate";
-    duplicateBtn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      TaskActions.openDuplicate(task);
-    });
-
     const doneBtn = document.createElement("button");
     doneBtn.className = "task-btn task-btn-primary";
-    doneBtn.textContent =
-      task.status === "done" ? "Mark as active" : "Mark as done";
+    doneBtn.textContent = task.status === "done" ? "Undone" : "Done";
     doneBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const newStatus = task.status === "done" ? "active" : "done";
@@ -1031,19 +836,9 @@ async function loadMainTasks() {
       TaskActions.delete(task);
     });
 
-    const debugBtn = document.createElement("button");
-    debugBtn.className = "task-btn";
-    debugBtn.textContent = "Debug slots";
-    debugBtn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      debugTaskSlotsForToday(task);
-    });
-
     actionsDiv.appendChild(editBtn);
-    actionsDiv.appendChild(duplicateBtn);
     actionsDiv.appendChild(doneBtn);
     actionsDiv.appendChild(deleteBtn);
-    actionsDiv.appendChild(debugBtn);
 
     div.appendChild(actionsDiv);
     list.appendChild(div);
@@ -1051,7 +846,7 @@ async function loadMainTasks() {
 }
 
 // ===================================================
-// REPEAT ENGINE – BACKGROUND TASKS
+// BACKGROUND TASKS – HELPER
 // ===================================================
 function parseTimeToMinutes(t) {
   if (!t) return null;
@@ -1061,7 +856,7 @@ function parseTimeToMinutes(t) {
 }
 
 function getDayCode(date) {
-  const idx = date.getDay();
+  const idx = date.getDay(); // 0=Sun..6=Sat
   const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   return map[idx];
 }
@@ -1145,181 +940,6 @@ function generateBackgroundInstances(task, rangeStart, rangeEnd) {
   return instances;
 }
 
-// ===================================================
-// AVAILABILITY ENGINE – BUILD SLOTS
-// ===================================================
-function buildAvailabilitySlots() {
-  if (!currentUid) {
-    availabilitySlots = null;
-    return;
-  }
-
-  const days = DAYS_TOTAL;
-  availabilitySlots = [];
-
-  for (let d = 0; d < days; d++) {
-    const dayStart = new Date(startOfToday.getTime() + d * MS_PER_DAY);
-    const slotsForDay = [];
-    for (let s = 0; s < SLOTS_PER_DAY; s++) {
-      const slotStartMinutes = s * SLOT_MINUTES;
-      const slotEndMinutes = slotStartMinutes + SLOT_MINUTES;
-      const startTime = new Date(
-        dayStart.getTime() + slotStartMinutes * 60000
-      );
-      const endTime = new Date(
-        dayStart.getTime() + slotEndMinutes * 60000
-      );
-      slotsForDay.push({
-        startTime,
-        endTime,
-        hasParallelBg: false,
-        hasNonParallelBg: false,
-        type: 1, // default
-        availabilityFactor: 1.0
-      });
-    }
-    availabilitySlots.push(slotsForDay);
-  }
-
-  if (!backgroundTasksCache || backgroundTasksCache.length === 0) {
-    return;
-  }
-
-  const rangeStart = startOfToday;
-  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
-
-  backgroundTasksCache.forEach((task) => {
-    const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
-    segments.forEach((seg) => {
-      const dateObj = new Date(seg.date + "T00:00:00");
-      const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
-      const dayIndex = diffDays;
-      if (dayIndex < 0 || dayIndex >= DAYS_TOTAL) return;
-
-      const dIdx = Math.round(dayIndex);
-      const slots = availabilitySlots[dIdx];
-      if (!slots) return;
-
-      const segStart = seg.startMinutes;
-      const segEnd = seg.endMinutes;
-
-      for (let s = 0; s < slots.length; s++) {
-        const slotStartMin = s * SLOT_MINUTES;
-        const slotEndMin = slotStartMin + SLOT_MINUTES;
-
-        if (slotEndMin <= segStart || slotStartMin >= segEnd) {
-          continue;
-        }
-
-        if (task.isParallel) {
-          slots[s].hasParallelBg = true;
-        } else {
-          slots[s].hasNonParallelBg = true;
-        }
-      }
-    });
-  });
-
-  availabilitySlots.forEach((daySlots) => {
-    daySlots.forEach((slot) => {
-      if (slot.hasNonParallelBg) {
-        slot.type = 3;
-        slot.availabilityFactor = 0.0;
-      } else if (slot.hasParallelBg) {
-        slot.type = 2;
-        slot.availabilityFactor = 0.7;
-      } else {
-        slot.type = 1;
-        slot.availabilityFactor = 1.0;
-      }
-    });
-  });
-}
-
-// ===================================================
-// AVAILABILITY DEBUG UI
-// ===================================================
-const debugDaySelect = document.getElementById("debugDaySelect");
-const debugRebuildBtn = document.getElementById("debugRebuildBtn");
-const debugAvailabilityGrid = document.getElementById(
-  "debugAvailabilityGrid"
-);
-
-if (debugDaySelect) {
-  debugDaySelect.innerHTML = "";
-  for (let i = 0; i < DAYS_TOTAL; i++) {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = i.toString();
-    debugDaySelect.appendChild(opt);
-  }
-  debugDaySelect.value = "0";
-}
-
-function renderAvailabilityDebug(dayIndex) {
-  if (!debugAvailabilityGrid) return;
-  debugAvailabilityGrid.innerHTML = "";
-
-  if (!availabilitySlots) {
-    debugAvailabilityGrid.innerHTML =
-      '<p class="task-meta">No availability map. Build it first.</p>';
-    return;
-  }
-
-  const slots = availabilitySlots[dayIndex];
-  if (!slots) {
-    debugAvailabilityGrid.innerHTML =
-      '<p class="task-meta">Invalid day index.</p>';
-    return;
-  }
-
-  slots.forEach((slot, index) => {
-    const div = document.createElement("div");
-    div.classList.add("availability-slot", `type-${slot.type}`);
-
-    const minutesSinceMidnight = index * SLOT_MINUTES;
-    const h = Math.floor(minutesSinceMidnight / 60);
-    const m = minutesSinceMidnight % 60;
-    const label =
-      h.toString().padStart(2, "0") +
-      ":" +
-      m.toString().padStart(2, "0");
-
-    const typeLabel =
-      slot.type === 1
-        ? "Type 1 (free)"
-        : slot.type === 2
-        ? "Type 2 (parallel bg)"
-        : "Type 3 (blocked)";
-
-    div.title = `${label} · ${typeLabel}`;
-    debugAvailabilityGrid.appendChild(div);
-  });
-}
-
-if (debugRebuildBtn) {
-  debugRebuildBtn.addEventListener("click", () => {
-    if (!currentUid) {
-      alert("Sign in first to build availability map.");
-      return;
-    }
-    buildAvailabilitySlots();
-    const dayIndex = parseInt(debugDaySelect.value, 10) || 0;
-    renderAvailabilityDebug(dayIndex);
-  });
-}
-
-if (debugDaySelect) {
-  debugDaySelect.addEventListener("change", () => {
-    if (!availabilitySlots) return;
-    const dayIndex = parseInt(debugDaySelect.value, 10) || 0;
-    renderAvailabilityDebug(dayIndex);
-  });
-}
-
-// ===================================================
-// BACKGROUND ON TIMELINE
-// ===================================================
 function renderBackgroundOnTimeline() {
   if (!laneBackgroundContent) return;
   laneBackgroundContent.innerHTML = "";
@@ -1336,8 +956,7 @@ function renderBackgroundOnTimeline() {
       const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
       if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
 
-      const totalHoursOffset =
-        diffDays * 24 + seg.startMinutes / 60;
+      const totalHoursOffset = diffDays * 24 + seg.startMinutes / 60;
       const hoursWidth = (seg.endMinutes - seg.startMinutes) / 60;
       if (hoursWidth <= 0) return;
 
@@ -1345,7 +964,7 @@ function renderBackgroundOnTimeline() {
       block.className = "timeline-bg-block";
       block.style.left = totalHoursOffset * pixelsPerHour + "px";
       block.style.width = hoursWidth * pixelsPerHour + "px";
-      block.textContent = seg.title || "(background)";
+      block.textContent = seg.title || "(BG)";
 
       laneBackgroundContent.appendChild(block);
     });
@@ -1353,30 +972,107 @@ function renderBackgroundOnTimeline() {
 }
 
 // ===================================================
-// BACKGROUND TASKS – CREATE
+// MAIN TASKS – RENDER LÊN TIMELINE (LANE MAIN)
+// ===================================================
+function renderMainOnTimeline() {
+  if (!laneMainContent) return;
+  laneMainContent.innerHTML = "";
+
+  if (!currentUid) return;
+  if (!mainTasksCache || mainTasksCache.length === 0) return;
+
+  const rangeStart = startOfToday;
+  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
+
+  mainTasksCache.forEach((task) => {
+    const status = task.status || "active";
+    if (status !== "active") return;
+    if (task.isPending) return;
+
+    const durationMinutes = Number(task.duration) || 0;
+    if (!durationMinutes || durationMinutes <= 0) return;
+
+    let endTime = null;
+    if (task.deadlineAt) {
+      endTime = new Date(task.deadlineAt);
+      if (isNaN(endTime)) {
+        endTime = null;
+      }
+    }
+
+    if (!endTime) {
+      // nếu không có deadline, cho block bắt đầu từ "bây giờ" nhưng clamp trong range
+      const now = new Date();
+      endTime = new Date(
+        Math.min(
+          Math.max(now.getTime(), rangeStart.getTime()),
+          rangeEnd.getTime()
+        )
+      );
+    }
+
+    if (endTime < rangeStart) return;
+
+    if (endTime > rangeEnd) {
+      endTime = new Date(rangeEnd.getTime());
+    }
+
+    let startTime = new Date(endTime.getTime() - durationMinutes * 60000);
+    if (startTime < rangeStart) {
+      startTime = new Date(rangeStart.getTime());
+    }
+
+    const diffStart = startTime - rangeStart;
+    const diffEnd = endTime - rangeStart;
+
+    const startHours = diffStart / MS_PER_HOUR;
+    const endHours = diffEnd / MS_PER_HOUR;
+    const widthHours = endHours - startHours;
+
+    if (widthHours <= 0) return;
+
+    const block = document.createElement("div");
+    block.className = "timeline-main-block";
+
+    const idText =
+      typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+    block.textContent = `${idText}${task.title || ""}`;
+
+    block.style.left = startHours * pixelsPerHour + "px";
+    block.style.width = widthHours * pixelsPerHour + "px";
+
+    block.dataset.taskId = task.id;
+
+    laneMainContent.appendChild(block);
+  });
+}
+
+// ===================================================
+// BACKGROUND TASKS – SUBMIT (CREATE)
 // ===================================================
 document
   .getElementById("backgroundTaskForm")
   .addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!currentUid) {
-      alert("Please sign in before adding background tasks.");
+      alert("Vui lòng login trước khi thêm background task.");
       return;
     }
 
     const title = document.getElementById("bgTitle").value.trim();
-    const description =
-      document.getElementById("bgDescription").value.trim();
+    const description = document
+      .getElementById("bgDescription")
+      .value.trim();
     const startTime = document.getElementById("bgStartTime").value;
     const endTime = document.getElementById("bgEndTime").value;
     const isParallel = cbBgParallel.checked;
 
     if (!title) {
-      alert("Background task title cannot be empty.");
+      alert("Tên background task không được để trống.");
       return;
     }
     if (!startTime || !endTime) {
-      alert("Please provide valid start and end times.");
+      alert("Start/End time không hợp lệ.");
       return;
     }
 
@@ -1392,7 +1088,7 @@ document
     if (repeatType === "none") {
       specificDate = bgSpecificDateInput.value;
       if (!specificDate) {
-        alert("Please select an exact date for this non-repeating task.");
+        alert("Vui lòng chọn ngày cho background task (không lặp).");
         return;
       }
     } else if (repeatType === "weekly") {
@@ -1401,13 +1097,15 @@ document
       );
       repeatDays = activePills.map((p) => p.getAttribute("data-day"));
       if (repeatDays.length === 0) {
-        alert("Please choose at least one weekday for the weekly pattern.");
+        alert(
+          "Vui lòng chọn ít nhất một thứ cho background task lặp tuần."
+        );
         return;
       }
     } else if (repeatType === "monthly") {
       repeatDate = Number(bgRepeatDateInput.value);
       if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
-        alert("Day of month must be between 1 and 31.");
+        alert("Ngày trong tháng phải từ 1 đến 31.");
         return;
       }
     }
@@ -1416,33 +1114,26 @@ document
     const createdAtLocal = now.toISOString();
 
     try {
-      const taskId = await getNextCounter(
-        "backgroundTaskCount",
-        currentUid
-      );
+      const taskId = await getNextCounter("backgroundTaskCount", currentUid);
 
-      await addDoc(
-        collection(db, "users", currentUid, "backgroundTasks"),
-        {
-          taskId,
-          title,
-          description,
-          startTime,
-          endTime,
-          isParallel,
-          repeatType,
-          repeatDays,
-          repeatDate,
-          specificDate,
-          createdAtLocal,
-          createdAt: serverTimestamp()
-        }
-      );
+      await addDoc(collection(db, "users", currentUid, "backgroundTasks"), {
+        taskId,
+        title,
+        description,
+        startTime,
+        endTime,
+        isParallel,
+        repeatType,
+        repeatDays,
+        repeatDate,
+        specificDate,
+        createdAtLocal,
+        createdAt: serverTimestamp()
+      });
 
       e.target.reset();
       pillBgParallel.classList.remove("active");
       cbBgParallel.checked = false;
-
       bgRepeatRadios.forEach((r) => {
         r.checked = false;
       });
@@ -1462,7 +1153,7 @@ document
       await loadBackgroundTasks();
     } catch (err) {
       console.error("Error adding background task:", err);
-      alert("Unable to create background task. Please check the console.");
+      alert("Lỗi khi lưu background task. Kiểm tra console.");
     }
   });
 
@@ -1473,9 +1164,7 @@ const editBgTaskModal = document.getElementById("editBgTaskModal");
 const editBgTaskForm = document.getElementById("editBgTaskForm");
 
 const editBgTitleInput = document.getElementById("editBgTitle");
-const editBgDescriptionInput = document.getElementById(
-  "editBgDescription"
-);
+const editBgDescriptionInput = document.getElementById("editBgDescription");
 const editBgStartTimeInput = document.getElementById("editBgStartTime");
 const editBgEndTimeInput = document.getElementById("editBgEndTime");
 
@@ -1485,15 +1174,11 @@ const editBgSpecificDateRow = document.getElementById(
 const editBgWeeklyRow = document.getElementById("editBgWeeklyRow");
 const editBgMonthlyRow = document.getElementById("editBgMonthlyRow");
 
-const editBgSpecificDateInput = document.getElementById(
-  "editBgSpecificDate"
-);
+const editBgSpecificDateInput = document.getElementById("editBgSpecificDate");
 const editBgWeeklyPillsContainer = document.getElementById(
   "editBgWeeklyPills"
 );
-const editBgRepeatDateInput = document.getElementById(
-  "editBgRepeatDate"
-);
+const editBgRepeatDateInput = document.getElementById("editBgRepeatDate");
 const editBgRepeatRadios = document.querySelectorAll(
   'input[name="editBgRepeatType"]'
 );
@@ -1531,13 +1216,12 @@ editBgWeeklyPillsContainer
 
 pillEditBgParallel.addEventListener("click", () => {
   pillEditBgParallel.classList.toggle("active");
-  cbEditBgParallel.checked =
-    pillEditBgParallel.classList.contains("active");
+  cbEditBgParallel.checked = pillEditBgParallel.classList.contains("active");
 });
 
 function openBgEditModal(task) {
   if (!currentUid) {
-    alert("Please sign in first.");
+    alert("Vui lòng login.");
     return;
   }
 
@@ -1614,18 +1298,17 @@ editBgTaskForm.addEventListener("submit", async (e) => {
   if (!currentUid || !currentEditingBgTaskId) return;
 
   const title = editBgTitleInput.value.trim();
-  const description =
-    editBgDescriptionInput.value.trim();
+  const description = editBgDescriptionInput.value.trim();
   const startTime = editBgStartTimeInput.value;
   const endTime = editBgEndTimeInput.value;
   const isParallel = cbEditBgParallel.checked;
 
   if (!title) {
-    alert("Background task title cannot be empty.");
+    alert("Tên background task không được để trống.");
     return;
   }
   if (!startTime || !endTime) {
-    alert("Please provide valid start and end times.");
+    alert("Start/End time không hợp lệ.");
     return;
   }
 
@@ -1641,7 +1324,7 @@ editBgTaskForm.addEventListener("submit", async (e) => {
   if (repeatType === "none") {
     specificDate = editBgSpecificDateInput.value;
     if (!specificDate) {
-      alert("Please select an exact date for this non-repeating task.");
+      alert("Vui lòng chọn ngày cho background task (không lặp).");
       return;
     }
   } else if (repeatType === "weekly") {
@@ -1650,13 +1333,15 @@ editBgTaskForm.addEventListener("submit", async (e) => {
     );
     repeatDays = activePills.map((p) => p.getAttribute("data-day"));
     if (repeatDays.length === 0) {
-      alert("Please choose at least one weekday for the weekly pattern.");
+      alert(
+        "Vui lòng chọn ít nhất một thứ cho background task lặp tuần."
+      );
       return;
     }
   } else if (repeatType === "monthly") {
     repeatDate = Number(editBgRepeatDateInput.value);
     if (!repeatDate || repeatDate < 1 || repeatDate > 31) {
-      alert("Day of month must be between 1 and 31.");
+      alert("Ngày trong tháng phải từ 1 đến 31.");
       return;
     }
   }
@@ -1687,12 +1372,12 @@ editBgTaskForm.addEventListener("submit", async (e) => {
     await loadBackgroundTasks();
   } catch (err) {
     console.error("Error updating background task:", err);
-    alert("Unable to save changes for this background task.");
+    alert("Không lưu được thay đổi background task.");
   }
 });
 
 // ===================================================
-// BACKGROUND TASK ACTIONS
+// BACKGROUND TASK ACTIONS (Edit/Delete)
 // ===================================================
 const BackgroundActions = {
   openEdit(task) {
@@ -1701,14 +1386,11 @@ const BackgroundActions = {
 
   async delete(task) {
     if (!currentUid) {
-      alert("Please sign in first.");
+      alert("Vui lòng login.");
       return;
     }
 
-    if (
-      !confirm("Delete this background task? This cannot be undone.")
-    )
-      return;
+    if (!confirm("Xóa background task này? Không thể hoàn tác.")) return;
 
     const docRef = doc(
       db,
@@ -1723,55 +1405,55 @@ const BackgroundActions = {
       await loadBackgroundTasks();
     } catch (err) {
       console.error("Error deleting background task:", err);
-      alert("Unable to delete this background task.");
+      alert("Không xóa được background task.");
     }
   }
 };
 
+// ===================================================
+// BACKGROUND TASKS – LOAD
+// ===================================================
 function formatRepeatSummary(task) {
   const type = task.repeatType || "none";
-  if (type === "daily") return "Repeat: daily";
+  if (type === "daily") return "Lặp: hằng ngày";
 
   if (type === "weekly") {
     const mapLabel = {
-      mon: "Mon",
-      tue: "Tue",
-      wed: "Wed",
-      thu: "Thu",
-      fri: "Fri",
-      sat: "Sat",
-      sun: "Sun"
+      mon: "T2",
+      tue: "T3",
+      wed: "T4",
+      thu: "T5",
+      fri: "T6",
+      sat: "T7",
+      sun: "CN"
     };
     const days = (task.repeatDays || [])
       .map((d) => mapLabel[d] || d)
       .join(", ");
-    return "Repeat: weekly (" + (days || "no days") + ")";
+    return "Lặp: hằng tuần (" + (days || "không có") + ")";
   }
 
   if (type === "monthly") {
-    return `Repeat: day ${task.repeatDate} of every month`;
+    return `Lặp: ngày ${task.repeatDate} hằng tháng`;
   }
 
   if (task.specificDate) {
-    return "Single date: " + task.specificDate;
+    return "Không lặp – Ngày " + task.specificDate;
   }
 
-  return "No repeat pattern";
+  return "Không lặp";
 }
 
-// ===================================================
-// BACKGROUND TASKS – LOAD
-// ===================================================
 async function loadBackgroundTasks() {
   const list = document.getElementById("backgroundTaskList");
   if (!currentUid) {
     if (list) {
       list.innerHTML =
-        '<p class="task-meta">Sign in to see your background tasks.</p>';
+        '<p class="task-meta">Hãy login để xem background tasks.</p>';
     }
     backgroundTasksCache = [];
     renderBackgroundOnTimeline();
-    availabilitySlots = null;
+    renderMainOnTimeline();
     return;
   }
 
@@ -1787,7 +1469,7 @@ async function loadBackgroundTasks() {
 
   backgroundTasksCache = items;
   renderBackgroundOnTimeline();
-  availabilitySlots = null; // force rebuild after bg changes
+  renderMainOnTimeline();
 
   list.innerHTML = "";
 
@@ -1795,8 +1477,7 @@ async function loadBackgroundTasks() {
     const div = document.createElement("div");
     div.className = "task-item task-item-bg";
 
-    const idText =
-      typeof task.taskId === "number" ? `#${task.taskId} ` : "";
+    const idText = typeof task.taskId === "number" ? `#${task.taskId} ` : "";
     const repeatText = formatRepeatSummary(task);
     const createdText = formatLocalDateTime(task.createdAtLocal);
 
@@ -1805,10 +1486,10 @@ async function loadBackgroundTasks() {
       <p>${task.description || ""}</p>
       <p class="task-meta">
         ${task.startTime} – ${task.endTime} ·
-        Parallel: ${task.isParallel ? "Yes" : "No"}
+        Parallel: ${task.isParallel ? "Có" : "Không"}
       </p>
       <p class="task-meta">${repeatText}</p>
-      <p class="task-meta">Created: ${createdText}</p>
+      <p class="task-meta">Tạo lúc: ${createdText}</p>
     `;
 
     const actionsDiv = document.createElement("div");
@@ -1836,155 +1517,6 @@ async function loadBackgroundTasks() {
 
     list.appendChild(div);
   });
-}
-
-// ===================================================
-// ONLY / PREFER FACTOR (ENGINE-ONLY FOR NOW)
-// ===================================================
-function computeOnlyPreferFactor(task, slotStart) {
-  const mode = task.onlyOrPreferMode || "none";
-  const allowedDays = task.allowedDays || [];
-  const allowedTimeBlocks = task.allowedTimeBlocks || [];
-
-  if (mode === "none") {
-    return 1.0;
-  }
-
-  const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const dayCode = dayMap[slotStart.getDay()];
-
-  let dayOk = true;
-  if (allowedDays.length > 0) {
-    dayOk = allowedDays.includes(dayCode);
-  }
-
-  const hour = slotStart.getHours() + slotStart.getMinutes() / 60;
-  let timeOk = true;
-  if (allowedTimeBlocks.length > 0) {
-    timeOk = allowedTimeBlocks.some(
-      (block) => hour >= block.startHour && hour < block.endHour
-    );
-  }
-
-  const inWindow = dayOk && timeOk;
-
-  if (mode === "only") {
-    if (!inWindow) return 0;
-    return 1.5;
-  }
-
-  if (mode === "prefer") {
-    if (inWindow) return 1.5;
-    return 1.0;
-  }
-
-  return 1.0;
-}
-
-// ===================================================
-// DEBUG: TASK SLOT WINDOWS (TODAY ONLY)
-// Long tasks automatically span multiple slots
-// ===================================================
-function debugTaskSlotsForToday(task) {
-  if (!currentUid) {
-    alert("Sign in first.");
-    return;
-  }
-  if (!availabilitySlots) {
-    buildAvailabilitySlots();
-  }
-  if (!availabilitySlots) {
-    alert("No availability map. Rebuild in Settings > Availability debug.");
-    return;
-  }
-
-  const dayIndex = 0; // today for now
-  const daySlots = availabilitySlots[dayIndex];
-  if (!daySlots) {
-    alert("Invalid availability data for today.");
-    return;
-  }
-
-  const duration = Number(task.duration) || 0;
-  if (!duration || duration <= 0) {
-    alert("Task duration must be > 0.");
-    return;
-  }
-
-  const slotsNeeded = Math.ceil(duration / SLOT_MINUTES);
-  const { basePriority } = computeBasePriority(task);
-
-  if (basePriority <= 0) {
-    alert("Base priority is 0. This task may be past its deadline.");
-    return;
-  }
-
-  const windows = [];
-
-  for (
-    let startIndex = 0;
-    startIndex + slotsNeeded <= daySlots.length;
-    startIndex++
-  ) {
-    let cumulativeScore = 0;
-    let valid = true;
-
-    for (let k = 0; k < slotsNeeded; k++) {
-      const slot = daySlots[startIndex + k];
-      const availabilityFactor = slot.availabilityFactor;
-      if (availabilityFactor <= 0) {
-        valid = false;
-        break;
-      }
-      const onlyPreferFactor = computeOnlyPreferFactor(
-        task,
-        slot.startTime
-      );
-      if (onlyPreferFactor <= 0) {
-        valid = false;
-        break;
-      }
-      const slotScore =
-        basePriority * availabilityFactor * onlyPreferFactor;
-      cumulativeScore += slotScore;
-    }
-
-    if (valid) {
-      const firstSlot = daySlots[startIndex];
-      const lastSlot = daySlots[startIndex + slotsNeeded - 1];
-      windows.push({
-        startIndex,
-        endIndex: startIndex + slotsNeeded - 1,
-        score: cumulativeScore,
-        startTime: firstSlot.startTime,
-        endTime: lastSlot.endTime
-      });
-    }
-  }
-
-  if (windows.length === 0) {
-    alert(
-      `No suitable continuous window found for this task today.\n` +
-        `Try adjusting background blocks or duration.`
-    );
-    return;
-  }
-
-  windows.sort((a, b) => b.score - a.score);
-  const top = windows.slice(0, 5);
-
-  let msg = `Top windows for task "${task.title}" today (duration ${duration} min):\n\n`;
-  top.forEach((w, i) => {
-    msg += `${i + 1}. ${w.startTime.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit"
-    })} - ${w.endTime.toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit"
-    })} | Score: ${w.score.toFixed(3)}\n`;
-  });
-
-  alert(msg);
 }
 
 // ===================================================
