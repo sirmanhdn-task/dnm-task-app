@@ -47,11 +47,7 @@ let currentEditingBgTaskId = null;
 let currentDuplicateTask = null;
 
 let backgroundTasksCache = [];
-let mainTasksCache = [];
-
-// Availability + scheduling
-let availabilitySlots = null; // [dayIndex][slotIndex]
-let slotAssignments = null; // [dayIndex][slotIndex] = { taskId, taskRef }
+let availabilitySlots = null; // [dayIndex][slotIndex] for availability engine
 
 // ===================================================
 // TABS
@@ -79,15 +75,14 @@ const timelineHeader = document.getElementById("timelineHeader");
 const nowMarker = document.getElementById("timelineNowMarker");
 
 const laneBackgroundContent = document.getElementById("laneBackgroundContent");
-const laneMainContent = document.getElementById("laneMainContent");
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
 const DAYS_TOTAL = 14;
 
-const SLOT_MINUTES = 10;
-const SLOTS_PER_DAY = (24 * 60) / SLOT_MINUTES;
-const TOTAL_SLOTS = DAYS_TOTAL * SLOTS_PER_DAY;
+// Availability engine resolution
+const SLOT_MINUTES = 10; // 10 minutes per slot
+const SLOTS_PER_DAY = (24 * 60) / SLOT_MINUTES; // 144
 
 let pixelsPerHour = 60;
 const MIN_PX = 24;
@@ -113,6 +108,54 @@ function formatLocalDateTime(isoString) {
     minute: "2-digit"
   });
   return `${timePart} · ${datePart}`;
+}
+
+// ===================================================
+// PRIORITY ENGINE HELPERS
+// ===================================================
+const FORTY_EIGHT_HOURS_MIN = 48 * 60;
+
+function computeMinutesLeft(task) {
+  const now = Date.now();
+  let minutesLeft;
+
+  if (task.deadlineAt) {
+    const d = new Date(task.deadlineAt);
+    const diffMs = d.getTime() - now;
+    if (diffMs <= 0) {
+      minutesLeft = 1;
+    } else {
+      minutesLeft = Math.max(1, Math.round(diffMs / 60000));
+    }
+  } else if (typeof task.deadline === "number") {
+    minutesLeft = Math.max(1, task.deadline);
+  } else {
+    minutesLeft = Infinity;
+  }
+
+  return minutesLeft;
+}
+
+function computeBasePriority(task) {
+  const minutesLeft = computeMinutesLeft(task);
+  const duration = Number(task.duration) || 0;
+
+  const base =
+    minutesLeft === Infinity || minutesLeft <= 0
+      ? 0
+      : duration / minutesLeft;
+
+  const isShortBoost =
+    duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
+
+  // Interpret short boost as a multiplier so those windows get higher scores.
+  const boosted = isShortBoost ? base * 2 : base;
+
+  return {
+    basePriority: boosted,
+    minutesLeft,
+    isShortBoost
+  };
 }
 
 // ===================================================
@@ -162,7 +205,6 @@ function renderTimeline() {
 
   updateNowMarker();
   renderBackgroundOnTimeline();
-  renderMainTasksOnTimeline();
 }
 
 function updateNowMarker() {
@@ -358,12 +400,7 @@ function setLoggedOutUI() {
   }
 
   laneBackgroundContent.innerHTML = "";
-  laneMainContent.innerHTML = "";
   availabilitySlots = null;
-  slotAssignments = null;
-
-  const debugGrid = document.getElementById("availabilityDebugGrid");
-  if (debugGrid) debugGrid.innerHTML = "";
 }
 
 function setLoggedInUI(user) {
@@ -869,44 +906,6 @@ document
   });
 
 // ===================================================
-// BASE PRIORITY HELPER
-// ===================================================
-function computeBasePriorityForTask(task, nowMs) {
-  const now = nowMs || Date.now();
-
-  let minutesLeft;
-  if (task.deadlineAt) {
-    const d = new Date(task.deadlineAt);
-    const diffMs = d.getTime() - now;
-    minutesLeft = diffMs <= 0 ? 1 : Math.max(1, Math.round(diffMs / 60000));
-  } else if (typeof task.deadline === "number") {
-    minutesLeft = Math.max(1, task.deadline);
-  } else {
-    minutesLeft = Infinity;
-  }
-
-  const duration = Number(task.duration) || 0;
-  const FORTY_EIGHT_HOURS_MIN = 48 * 60;
-
-  const isShortBoost =
-    duration <= 10 && minutesLeft <= FORTY_EIGHT_HOURS_MIN;
-
-  const ratio =
-    minutesLeft === Infinity || minutesLeft <= 0
-      ? 0
-      : duration / minutesLeft;
-
-  const boostedRatio = isShortBoost ? ratio * 2 : ratio;
-
-  task._minutesLeft = minutesLeft;
-  task._priority = ratio;
-  task._isShortBoost = isShortBoost;
-  task._basePriority = boostedRatio;
-
-  return boostedRatio;
-}
-
-// ===================================================
 // MAIN TASKS – LOAD & SORT
 // ===================================================
 async function loadMainTasks() {
@@ -916,9 +915,6 @@ async function loadMainTasks() {
       list.innerHTML =
         '<p class="task-meta">Sign in to see your main tasks.</p>';
     }
-    mainTasksCache = [];
-    slotAssignments = null;
-    renderMainTasksOnTimeline();
     return;
   }
 
@@ -928,9 +924,12 @@ async function loadMainTasks() {
   const items = [];
   snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
 
-  const nowMs = Date.now();
   items.forEach((task) => {
-    computeBasePriorityForTask(task, nowMs);
+    const { basePriority, minutesLeft, isShortBoost } =
+      computeBasePriority(task);
+    task._minutesLeft = minutesLeft;
+    task._priority = basePriority;
+    task._isShortBoost = isShortBoost;
     task.status = task.status || "active";
   });
 
@@ -945,8 +944,6 @@ async function loadMainTasks() {
     const pb = b._priority || 0;
     return pb - pa;
   });
-
-  mainTasksCache = items;
 
   list.innerHTML = "";
 
@@ -967,11 +964,8 @@ async function loadMainTasks() {
       task._minutesLeft === Infinity
         ? "N/A"
         : `${task._minutesLeft} minutes left`;
-    const ratioText = isFinite(task._priority)
+    const priorityText = isFinite(task._priority)
       ? task._priority.toFixed(3)
-      : "N/A";
-    const boostedText = isFinite(task._basePriority)
-      ? task._basePriority.toFixed(3)
       : "N/A";
 
     const statusLabel = task.status === "done" ? "DONE" : "ACTIVE";
@@ -992,8 +986,7 @@ async function loadMainTasks() {
       <p class="task-meta">
         Status: ${statusLabel} ·
         Short boost: ${task._isShortBoost ? "Yes" : "No"} ·
-        Raw ratio: ${ratioText} ·
-        Base priority: ${boostedText} ·
+        Priority ratio: ${priorityText} ·
         Parallel: ${task.isParallel ? "Yes" : "No"} ·
         Pending: ${task.isPending ? "Yes" : "No"}
       </p>
@@ -1038,16 +1031,23 @@ async function loadMainTasks() {
       TaskActions.delete(task);
     });
 
+    const debugBtn = document.createElement("button");
+    debugBtn.className = "task-btn";
+    debugBtn.textContent = "Debug slots";
+    debugBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      debugTaskSlotsForToday(task);
+    });
+
     actionsDiv.appendChild(editBtn);
     actionsDiv.appendChild(duplicateBtn);
     actionsDiv.appendChild(doneBtn);
     actionsDiv.appendChild(deleteBtn);
+    actionsDiv.appendChild(debugBtn);
 
     div.appendChild(actionsDiv);
     list.appendChild(div);
   });
-
-  recomputeMainSchedule();
 }
 
 // ===================================================
@@ -1146,29 +1146,39 @@ function generateBackgroundInstances(task, rangeStart, rangeEnd) {
 }
 
 // ===================================================
-// AVAILABILITY ENGINE (10-MINUTE SLOTS)
+// AVAILABILITY ENGINE – BUILD SLOTS
 // ===================================================
 function buildAvailabilitySlots() {
-  availabilitySlots = [];
-  const slotMs = SLOT_MINUTES * 60000;
+  if (!currentUid) {
+    availabilitySlots = null;
+    return;
+  }
 
-  for (let d = 0; d < DAYS_TOTAL; d++) {
-    const daySlots = [];
+  const days = DAYS_TOTAL;
+  availabilitySlots = [];
+
+  for (let d = 0; d < days; d++) {
+    const dayStart = new Date(startOfToday.getTime() + d * MS_PER_DAY);
+    const slotsForDay = [];
     for (let s = 0; s < SLOTS_PER_DAY; s++) {
+      const slotStartMinutes = s * SLOT_MINUTES;
+      const slotEndMinutes = slotStartMinutes + SLOT_MINUTES;
       const startTime = new Date(
-        startOfToday.getTime() + d * MS_PER_DAY + s * slotMs
+        dayStart.getTime() + slotStartMinutes * 60000
       );
-      const endTime = new Date(startTime.getTime() + slotMs);
-      daySlots.push({
+      const endTime = new Date(
+        dayStart.getTime() + slotEndMinutes * 60000
+      );
+      slotsForDay.push({
         startTime,
         endTime,
         hasParallelBg: false,
         hasNonParallelBg: false,
-        type: 1,
+        type: 1, // default
         availabilityFactor: 1.0
       });
     }
-    availabilitySlots.push(daySlots);
+    availabilitySlots.push(slotsForDay);
   }
 
   if (!backgroundTasksCache || backgroundTasksCache.length === 0) {
@@ -1180,32 +1190,38 @@ function buildAvailabilitySlots() {
 
   backgroundTasksCache.forEach((task) => {
     const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
-    const isParallel = !!task.isParallel;
-
     segments.forEach((seg) => {
       const dateObj = new Date(seg.date + "T00:00:00");
-      const diffDays = Math.round((dateObj - startOfToday) / MS_PER_DAY);
-      if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
+      const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
       const dayIndex = diffDays;
+      if (dayIndex < 0 || dayIndex >= DAYS_TOTAL) return;
 
-      const startSlotIndex = Math.floor(seg.startMinutes / SLOT_MINUTES);
-      const endSlotIndex = Math.ceil(seg.endMinutes / SLOT_MINUTES);
+      const dIdx = Math.round(dayIndex);
+      const slots = availabilitySlots[dIdx];
+      if (!slots) return;
 
-      for (
-        let s = startSlotIndex;
-        s < endSlotIndex && s < SLOTS_PER_DAY;
-        s++
-      ) {
-        const slot = availabilitySlots[dayIndex][s];
-        if (isParallel) slot.hasParallelBg = true;
-        else slot.hasNonParallelBg = true;
+      const segStart = seg.startMinutes;
+      const segEnd = seg.endMinutes;
+
+      for (let s = 0; s < slots.length; s++) {
+        const slotStartMin = s * SLOT_MINUTES;
+        const slotEndMin = slotStartMin + SLOT_MINUTES;
+
+        if (slotEndMin <= segStart || slotStartMin >= segEnd) {
+          continue;
+        }
+
+        if (task.isParallel) {
+          slots[s].hasParallelBg = true;
+        } else {
+          slots[s].hasNonParallelBg = true;
+        }
       }
     });
   });
 
-  for (let d = 0; d < DAYS_TOTAL; d++) {
-    for (let s = 0; s < SLOTS_PER_DAY; s++) {
-      const slot = availabilitySlots[d][s];
+  availabilitySlots.forEach((daySlots) => {
+    daySlots.forEach((slot) => {
       if (slot.hasNonParallelBg) {
         slot.type = 3;
         slot.availabilityFactor = 0.0;
@@ -1216,46 +1232,94 @@ function buildAvailabilitySlots() {
         slot.type = 1;
         slot.availabilityFactor = 1.0;
       }
-    }
-  }
-}
-
-// Placeholder for ONLY/PREFER factor (currently not wired to UI)
-function computeOnlyPreferFactor(task, slotStart) {
-  // When ONLY/PREFER fields are added to the task, implement:
-  // - ONLY: in-window => 1.5, out-of-window => 0
-  // - PREFER: in-window => 1.5, out-of-window => 1.0
-  // For now, neutral.
-  return 1.0;
-}
-
-// ===================================================
-// RENDER BACKGROUND BLOCKS ON TIMELINE
-// ===================================================
-function renderBackgroundOnTimeline() {
-  if (!laneBackgroundContent) return;
-  laneBackgroundContent.innerHTML = "";
-
-  if (!backgroundTasksCache || backgroundTasksCache.length === 0) return;
-
-  const rangeStart = startOfToday;
-  const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
-
-  backgroundTasksCache.forEach((task) => {
-    const segments = generateBackgroundInstances(
-      task,
-      rangeStart,
-      rangeEnd
-    );
-    segments.forEach((seg) => {
-      const dateObj = new Date(seg.date + "T00:00:00");
-      const diffDays = (dateObj - startOfToday) / MS_PERDAY;
     });
   });
 }
 
-// (Fix small typo: MS_PERDAY) – re-implement correctly:
+// ===================================================
+// AVAILABILITY DEBUG UI
+// ===================================================
+const debugDaySelect = document.getElementById("debugDaySelect");
+const debugRebuildBtn = document.getElementById("debugRebuildBtn");
+const debugAvailabilityGrid = document.getElementById(
+  "debugAvailabilityGrid"
+);
 
+if (debugDaySelect) {
+  debugDaySelect.innerHTML = "";
+  for (let i = 0; i < DAYS_TOTAL; i++) {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = i.toString();
+    debugDaySelect.appendChild(opt);
+  }
+  debugDaySelect.value = "0";
+}
+
+function renderAvailabilityDebug(dayIndex) {
+  if (!debugAvailabilityGrid) return;
+  debugAvailabilityGrid.innerHTML = "";
+
+  if (!availabilitySlots) {
+    debugAvailabilityGrid.innerHTML =
+      '<p class="task-meta">No availability map. Build it first.</p>';
+    return;
+  }
+
+  const slots = availabilitySlots[dayIndex];
+  if (!slots) {
+    debugAvailabilityGrid.innerHTML =
+      '<p class="task-meta">Invalid day index.</p>';
+    return;
+  }
+
+  slots.forEach((slot, index) => {
+    const div = document.createElement("div");
+    div.classList.add("availability-slot", `type-${slot.type}`);
+
+    const minutesSinceMidnight = index * SLOT_MINUTES;
+    const h = Math.floor(minutesSinceMidnight / 60);
+    const m = minutesSinceMidnight % 60;
+    const label =
+      h.toString().padStart(2, "0") +
+      ":" +
+      m.toString().padStart(2, "0");
+
+    const typeLabel =
+      slot.type === 1
+        ? "Type 1 (free)"
+        : slot.type === 2
+        ? "Type 2 (parallel bg)"
+        : "Type 3 (blocked)";
+
+    div.title = `${label} · ${typeLabel}`;
+    debugAvailabilityGrid.appendChild(div);
+  });
+}
+
+if (debugRebuildBtn) {
+  debugRebuildBtn.addEventListener("click", () => {
+    if (!currentUid) {
+      alert("Sign in first to build availability map.");
+      return;
+    }
+    buildAvailabilitySlots();
+    const dayIndex = parseInt(debugDaySelect.value, 10) || 0;
+    renderAvailabilityDebug(dayIndex);
+  });
+}
+
+if (debugDaySelect) {
+  debugDaySelect.addEventListener("change", () => {
+    if (!availabilitySlots) return;
+    const dayIndex = parseInt(debugDaySelect.value, 10) || 0;
+    renderAvailabilityDebug(dayIndex);
+  });
+}
+
+// ===================================================
+// BACKGROUND ON TIMELINE
+// ===================================================
 function renderBackgroundOnTimeline() {
   if (!laneBackgroundContent) return;
   laneBackgroundContent.innerHTML = "";
@@ -1266,21 +1330,15 @@ function renderBackgroundOnTimeline() {
   const rangeEnd = new Date(startOfToday.getTime() + DAYS_TOTAL * MS_PER_DAY);
 
   backgroundTasksCache.forEach((task) => {
-    const segments = generateBackgroundInstances(
-      task,
-      rangeStart,
-      rangeEnd
-    );
+    const segments = generateBackgroundInstances(task, rangeStart, rangeEnd);
     segments.forEach((seg) => {
       const dateObj = new Date(seg.date + "T00:00:00");
       const diffDays = (dateObj - startOfToday) / MS_PER_DAY;
       if (diffDays < 0 || diffDays >= DAYS_TOTAL) return;
 
-      const dayIndex = diffDays;
       const totalHoursOffset =
-        dayIndex * 24 + seg.startMinutes / 60;
+        diffDays * 24 + seg.startMinutes / 60;
       const hoursWidth = (seg.endMinutes - seg.startMinutes) / 60;
-
       if (hoursWidth <= 0) return;
 
       const block = document.createElement("div");
@@ -1292,146 +1350,6 @@ function renderBackgroundOnTimeline() {
       laneBackgroundContent.appendChild(block);
     });
   });
-}
-
-// ===================================================
-// SIMPLE SCHEDULER FOR MAIN TASKS (AUTO-SPLIT)
-// ===================================================
-function recomputeMainSchedule() {
-  if (!availabilitySlots) {
-    buildAvailabilitySlots();
-  }
-  if (!availabilitySlots) return;
-
-  slotAssignments = [];
-  for (let d = 0; d < DAYS_TOTAL; d++) {
-    slotAssignments[d] = new Array(SLOTS_PER_DAY).fill(null);
-  }
-
-  if (!mainTasksCache || mainTasksCache.length === 0) {
-    renderMainTasksOnTimeline();
-    return;
-  }
-
-  const nowMs = Date.now();
-
-  const activeTasks = mainTasksCache.filter(
-    (t) => t.status === "active" && !t.isPending
-  );
-
-  // we assume mainTasksCache already sorted by priority
-  activeTasks.forEach((task) => {
-    let remainingMinutes = Number(task.duration) || 0;
-    if (remainingMinutes <= 0) return;
-
-    let deadlineMs = null;
-    if (task.deadlineAt) {
-      const d = new Date(task.deadlineAt);
-      if (!isNaN(d)) {
-        deadlineMs = d.getTime();
-      }
-    }
-
-    for (let d = 0; d < DAYS_TOTAL && remainingMinutes > 0; d++) {
-      for (
-        let s = 0;
-        s < SLOTS_PER_DAY && remainingMinutes > 0;
-        s++
-      ) {
-        const slot = availabilitySlots[d][s];
-        const slotStartMs = slot.startTime.getTime();
-
-        if (slotStartMs < nowMs) continue;
-        if (deadlineMs && slotStartMs > deadlineMs) continue;
-
-        if (slot.type === 3) continue;
-        if (slot.type === 2 && !task.isParallel) continue;
-
-        if (slotAssignments[d][s]) continue;
-
-        const onlyPreferFactor = computeOnlyPreferFactor(
-          task,
-          slot.startTime
-        );
-        if (onlyPreferFactor === 0) continue;
-
-        const allocMinutes = Math.min(SLOT_MINUTES, remainingMinutes);
-
-        slotAssignments[d][s] = {
-          taskId: task.id,
-          taskRef: task
-        };
-
-        remainingMinutes -= allocMinutes;
-      }
-    }
-  });
-
-  renderMainTasksOnTimeline();
-}
-
-function renderMainTasksOnTimeline() {
-  if (!laneMainContent) return;
-  laneMainContent.innerHTML = "";
-
-  if (!slotAssignments) return;
-
-  const HOURS_TOTAL = DAYS_TOTAL * 24;
-
-  const totalSlots = TOTAL_SLOTS;
-  let prevAssignment = null;
-  let blockStartGlobalIndex = null;
-
-  const createBlock = (task, startGlobalIndex, endGlobalIndex) => {
-    if (!task) return;
-    const slotsCount = endGlobalIndex - startGlobalIndex;
-    if (slotsCount <= 0) return;
-
-    const startDayIndex = Math.floor(startGlobalIndex / SLOTS_PER_DAY);
-    const startSlotIndex = startGlobalIndex % SLOTS_PER_DAY;
-
-    const hourOffset =
-      startDayIndex * 24 + (startSlotIndex * SLOT_MINUTES) / 60;
-    const hoursWidth = (slotsCount * SLOT_MINUTES) / 60;
-
-    const block = document.createElement("div");
-    block.className = "timeline-main-block";
-    block.style.left = hourOffset * pixelsPerHour + "px";
-    block.style.width = hoursWidth * pixelsPerHour + "px";
-    block.textContent = task.title;
-
-    laneMainContent.appendChild(block);
-  };
-
-  for (let globalIndex = 0; globalIndex <= totalSlots; globalIndex++) {
-    let current = null;
-    if (globalIndex < totalSlots) {
-      const dayIndex = Math.floor(globalIndex / SLOTS_PER_DAY);
-      const slotIndex = globalIndex % SLOTS_PER_DAY;
-      current = slotAssignments[dayIndex][slotIndex];
-    }
-
-    const sameTask =
-      prevAssignment &&
-      current &&
-      current.taskId === prevAssignment.taskId;
-
-    if (!sameTask) {
-      if (prevAssignment && blockStartGlobalIndex != null) {
-        createBlock(
-          prevAssignment.taskRef,
-          blockStartGlobalIndex,
-          globalIndex
-        );
-      }
-      if (current) {
-        blockStartGlobalIndex = globalIndex;
-      } else {
-        blockStartGlobalIndex = null;
-      }
-    }
-    prevAssignment = current;
-  }
 }
 
 // ===================================================
@@ -1852,9 +1770,8 @@ async function loadBackgroundTasks() {
         '<p class="task-meta">Sign in to see your background tasks.</p>';
     }
     backgroundTasksCache = [];
-    buildAvailabilitySlots();
     renderBackgroundOnTimeline();
-    recomputeMainSchedule();
+    availabilitySlots = null;
     return;
   }
 
@@ -1869,9 +1786,8 @@ async function loadBackgroundTasks() {
   );
 
   backgroundTasksCache = items;
-  buildAvailabilitySlots();
   renderBackgroundOnTimeline();
-  recomputeMainSchedule();
+  availabilitySlots = null; // force rebuild after bg changes
 
   list.innerHTML = "";
 
@@ -1923,56 +1839,152 @@ async function loadBackgroundTasks() {
 }
 
 // ===================================================
-// DEBUG AVAILABILITY UI
+// ONLY / PREFER FACTOR (ENGINE-ONLY FOR NOW)
 // ===================================================
-const debugDaySelect = document.getElementById("debugDaySelect");
-const renderDebugBtn = document.getElementById("renderDebugBtn");
-const availabilityDebugGrid = document.getElementById(
-  "availabilityDebugGrid"
-);
+function computeOnlyPreferFactor(task, slotStart) {
+  const mode = task.onlyOrPreferMode || "none";
+  const allowedDays = task.allowedDays || [];
+  const allowedTimeBlocks = task.allowedTimeBlocks || [];
 
-function renderAvailabilityDebug(dayIndex) {
-  if (!availabilityDebugGrid) return;
+  if (mode === "none") {
+    return 1.0;
+  }
 
+  const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const dayCode = dayMap[slotStart.getDay()];
+
+  let dayOk = true;
+  if (allowedDays.length > 0) {
+    dayOk = allowedDays.includes(dayCode);
+  }
+
+  const hour = slotStart.getHours() + slotStart.getMinutes() / 60;
+  let timeOk = true;
+  if (allowedTimeBlocks.length > 0) {
+    timeOk = allowedTimeBlocks.some(
+      (block) => hour >= block.startHour && hour < block.endHour
+    );
+  }
+
+  const inWindow = dayOk && timeOk;
+
+  if (mode === "only") {
+    if (!inWindow) return 0;
+    return 1.5;
+  }
+
+  if (mode === "prefer") {
+    if (inWindow) return 1.5;
+    return 1.0;
+  }
+
+  return 1.0;
+}
+
+// ===================================================
+// DEBUG: TASK SLOT WINDOWS (TODAY ONLY)
+// Long tasks automatically span multiple slots
+// ===================================================
+function debugTaskSlotsForToday(task) {
+  if (!currentUid) {
+    alert("Sign in first.");
+    return;
+  }
   if (!availabilitySlots) {
-    availabilityDebugGrid.innerHTML =
-      '<p class="task-meta">No availability data yet. Add background tasks or reload.</p>';
+    buildAvailabilitySlots();
+  }
+  if (!availabilitySlots) {
+    alert("No availability map. Rebuild in Settings > Availability debug.");
     return;
   }
 
-  if (dayIndex < 0 || dayIndex >= DAYS_TOTAL) dayIndex = 0;
+  const dayIndex = 0; // today for now
+  const daySlots = availabilitySlots[dayIndex];
+  if (!daySlots) {
+    alert("Invalid availability data for today.");
+    return;
+  }
 
-  const slots = availabilitySlots[dayIndex];
-  availabilityDebugGrid.innerHTML = "";
+  const duration = Number(task.duration) || 0;
+  if (!duration || duration <= 0) {
+    alert("Task duration must be > 0.");
+    return;
+  }
 
-  for (let i = 0; i < SLOTS_PER_DAY; i++) {
-    const slot = slots[i];
-    const div = document.createElement("div");
-    div.classList.add("slot-debug");
+  const slotsNeeded = Math.ceil(duration / SLOT_MINUTES);
+  const { basePriority } = computeBasePriority(task);
 
-    if (slot.type === 1) div.classList.add("slot-type1");
-    else if (slot.type === 2) div.classList.add("slot-type2");
-    else if (slot.type === 3) div.classList.add("slot-type3");
+  if (basePriority <= 0) {
+    alert("Base priority is 0. This task may be past its deadline.");
+    return;
+  }
 
-    if (i % 6 === 0) {
-      const hour = Math.floor((i * SLOT_MINUTES) / 60);
-      const minute = (i * SLOT_MINUTES) % 60;
-      const label = `${hour.toString().padStart(2, "0")}:${minute
-        .toString()
-        .padStart(2, "0")}`;
-      div.title = label;
-      div.classList.add("slot-debug-hour-label");
+  const windows = [];
+
+  for (
+    let startIndex = 0;
+    startIndex + slotsNeeded <= daySlots.length;
+    startIndex++
+  ) {
+    let cumulativeScore = 0;
+    let valid = true;
+
+    for (let k = 0; k < slotsNeeded; k++) {
+      const slot = daySlots[startIndex + k];
+      const availabilityFactor = slot.availabilityFactor;
+      if (availabilityFactor <= 0) {
+        valid = false;
+        break;
+      }
+      const onlyPreferFactor = computeOnlyPreferFactor(
+        task,
+        slot.startTime
+      );
+      if (onlyPreferFactor <= 0) {
+        valid = false;
+        break;
+      }
+      const slotScore =
+        basePriority * availabilityFactor * onlyPreferFactor;
+      cumulativeScore += slotScore;
     }
 
-    availabilityDebugGrid.appendChild(div);
+    if (valid) {
+      const firstSlot = daySlots[startIndex];
+      const lastSlot = daySlots[startIndex + slotsNeeded - 1];
+      windows.push({
+        startIndex,
+        endIndex: startIndex + slotsNeeded - 1,
+        score: cumulativeScore,
+        startTime: firstSlot.startTime,
+        endTime: lastSlot.endTime
+      });
+    }
   }
-}
 
-if (renderDebugBtn && debugDaySelect) {
-  renderDebugBtn.addEventListener("click", () => {
-    const dayIndex = parseInt(debugDaySelect.value, 10) || 0;
-    renderAvailabilityDebug(dayIndex);
+  if (windows.length === 0) {
+    alert(
+      `No suitable continuous window found for this task today.\n` +
+        `Try adjusting background blocks or duration.`
+    );
+    return;
+  }
+
+  windows.sort((a, b) => b.score - a.score);
+  const top = windows.slice(0, 5);
+
+  let msg = `Top windows for task "${task.title}" today (duration ${duration} min):\n\n`;
+  top.forEach((w, i) => {
+    msg += `${i + 1}. ${w.startTime.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit"
+    })} - ${w.endTime.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit"
+    })} | Score: ${w.score.toFixed(3)}\n`;
   });
+
+  alert(msg);
 }
 
 // ===================================================
