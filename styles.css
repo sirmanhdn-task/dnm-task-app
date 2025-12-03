@@ -1,19 +1,12 @@
 :root {
-  --bg-app: #f4f5f7;
-  --bg-page: #f9fafb;
-  --bg-surface: #ffffff;
-  --border-subtle: #e1e4ec;
-  --border-strong: #cbd0dd;
-  --accent: #2563eb;
-  --accent-soft: rgba(37, 99, 235, 0.08);
-  --accent-soft-strong: rgba(37, 99, 235, 0.16);
+  --bg-main: #f5f6fa;
+  --bg-card: #ffffff;
+  --border-subtle: #dde1eb;
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.1);
   --text-main: #111827;
   --text-muted: #6b7280;
-  --text-subtle: #9ca3af;
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.08);
-  --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
-  --radius-card: 18px;
+  --danger: #ff3b30;
 }
 
 * {
@@ -23,9 +16,8 @@
 body {
   margin: 0;
   padding: 0 16px 24px;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top left, #ffffff, #f3f4f6);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text";
+  background: radial-gradient(circle at top left, #fdfefe, #f2f3f7);
   color: var(--text-main);
 }
 
@@ -50,20 +42,19 @@ body {
 }
 
 .app-title {
-  font-family: "SF Pro Display", system-ui, sans-serif;
+  font-family: "SF Pro Display";
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.3px;
   margin: 0;
-  color: #0f172a;
 }
 
 .app-subtitle {
   font-size: 12px;
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
-/* USER INFO ---------------------------------------------- */
+/* USER INFO --------------------------------------------- */
 
 .user-info {
   display: flex;
@@ -88,11 +79,11 @@ body {
   text-overflow: ellipsis;
 }
 
-/* TABS --------------------------------------------------- */
+/* TABS -------------------------------------------------- */
 
 .tabs {
   display: flex;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 999px;
   padding: 4px;
   backdrop-filter: blur(12px);
@@ -100,7 +91,6 @@ body {
   position: sticky;
   top: 0;
   z-index: 40;
-  margin-top: 4px;
 }
 
 .tab-button {
@@ -110,8 +100,6 @@ body {
   padding: 8px 4px;
   border-radius: 999px;
   color: var(--text-muted);
-  font-size: 13px;
-  cursor: pointer;
 }
 
 .tab-button.active {
@@ -122,14 +110,14 @@ body {
 
 .tab-panel {
   display: none;
-  margin-top: 14px;
 }
 
 .tab-panel.active {
   display: block;
+  margin-top: 12px;
 }
 
-/* SECTION HEADERS ---------------------------------------- */
+/* FORMS + CARDS ----------------------------------------- */
 
 .panel-section {
   display: flex;
@@ -137,59 +125,17 @@ body {
   gap: 12px;
 }
 
-.section-header-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.section-header-row h2 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.section-caption {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* CARDS & FORMS ------------------------------------------ */
-
 .card {
-  background: var(--bg-surface);
-  border-radius: var(--radius-card);
+  background: #fff;
+  border-radius: 18px;
   padding: 12px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-soft);
-}
-
-.card-header {
-  margin-bottom: 8px;
-}
-
-.card-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.card-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
 .list-card {
-  max-height: 340px;
+  max-height: 320px;
   overflow-y: auto;
-}
-
-.body-text {
-  font-size: 13px;
-  color: var(--text-main);
-  margin: 0;
 }
 
 form input,
@@ -200,12 +146,11 @@ form textarea {
   border: 1px solid var(--border-subtle);
   background: #f9fafb;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 form textarea {
   min-height: 60px;
-  resize: vertical;
 }
 
 form input:focus,
@@ -226,12 +171,13 @@ form textarea:focus {
   color: var(--text-muted);
 }
 
-/* Force 24h style on WebKit time input (visual only) */
+/* 24H TIME PICKER HACK ---------------------------------- */
+
 input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
 }
 
-/* BUTTONS ------------------------------------------------ */
+/* BUTTONS ----------------------------------------------- */
 
 .primary-btn,
 .secondary-btn,
@@ -240,19 +186,19 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   border: none;
   cursor: pointer;
   border-radius: 999px;
-  font-size: 13px;
 }
 
 .primary-btn {
   background: var(--accent);
-  color: #ffffff;
+  color: #fff;
   padding: 8px 16px;
+  font-size: 13px;
 }
 
 .secondary-btn {
   background: #e5e7eb;
-  color: #111827;
   padding: 8px 16px;
+  font-size: 13px;
 }
 
 .secondary-btn-small {
@@ -264,20 +210,16 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   width: 30px;
   height: 30px;
   background: #e5e7eb;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .full-width {
   width: 100%;
 }
 
-/* PILL TOGGLES ------------------------------------------- */
+/* PILL TOGGLE ------------------------------------------- */
 
 .pill-row {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
   margin: 8px 0 12px;
 }
@@ -285,46 +227,37 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 .pill-toggle {
   padding: 6px 14px;
   border-radius: 999px;
-  background: #eef0f4;
-  border: 1px solid var(--border-subtle);
-  color: #111827;
+  background: #e5e7eb;
+  border: 1px solid #d1d5db;
+  color: #111;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   user-select: none;
-  transition: background 0.15s ease, border-color 0.15s ease,
-    color 0.15s ease, box-shadow 0.15s ease;
+  transition: 0.15s;
 }
 
 .pill-toggle.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
 }
 
-/* TIMELINE ----------------------------------------------- */
+/* TIMELINE --------------------------------------------- */
 
 .timeline-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 6px;
-}
-
-.left-controls,
-.right-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .timeline-wrapper {
-  background: var(--bg-surface);
-  border-radius: var(--radius-card);
+  background: #fff;
+  border-radius: 18px;
   padding: 8px 0;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   margin-bottom: 12px;
 }
 
@@ -336,7 +269,7 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 
 .timeline-header {
   display: flex;
-  height: 44px;
+  height: 40px;
   border-bottom: 1px solid var(--border-subtle);
   background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
 }
@@ -346,52 +279,32 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
 }
 
 .timeline-day-label {
-  padding: 2px 6px;
+  padding: 2px 4px;
   font-size: 11px;
   font-weight: 500;
-  color: #111827;
 }
 
 .timeline-day-hours {
   display: flex;
   font-size: 10px;
-  color: var(--text-subtle);
 }
 
 .timeline-hour {
-  border-left: 1px dashed rgba(148, 163, 184, 0.7);
+  border-left: 1px dashed rgba(148, 163, 184, 0.6);
   text-align: center;
   padding-top: 2px;
 }
 
-/* Lanes -------------------------------------------------- */
-
 .timeline-lane {
-  position: relative;
-  min-height: 46px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
-  display: grid;
-  grid-template-columns: 68px 1fr;
-  align-items: stretch;
-}
-
-.lane-label {
-  font-size: 11px;
-  color: var(--text-subtle);
-  border-right: 1px solid var(--border-subtle);
-  padding: 6px 8px;
-  background: #f9fafb;
-}
-
-.lane-main .lane-label {
-  font-weight: 600;
+  min-height: 40px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .lane-content {
   position: relative;
 }
 
-/* Now marker -------------------------------------------- */
+/* NOW MARKER ------------------------------------------- */
 
 .timeline-now-marker {
   position: absolute;
@@ -400,53 +313,76 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   width: 2px;
   background: var(--danger);
   pointer-events: none;
-  opacity: 0.8;
 }
 
-/* BACKGROUND BLOCKS (SOFT GHOST) ------------------------ */
+/* BACKGROUND BLOCKS ------------------------------------ */
 
 .timeline-bg-block {
   position: absolute;
   top: 8px;
   height: 24px;
-  border-radius: 8px;
-  background: rgba(55, 65, 81, 0.18);
-  color: rgba(249, 250, 251, 0.7);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.25);
+  border: 1px dashed rgba(148, 163, 184, 0.7);
   font-size: 10px;
-  padding: 3px 9px;
+  color: #4b5563;
+  padding: 2px 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: none;
-  transition: background 0.15s ease, transform 0.15s ease,
-    border-color 0.15s ease, color 0.15s ease;
 }
 
-.timeline-bg-block:hover {
-  background: rgba(55, 65, 81, 0.28);
-  border-color: rgba(15, 23, 42, 0.18);
-  color: rgba(249, 250, 251, 0.92);
+/* MAIN TASK BLOCKS ------------------------------------- */
+
+.timeline-main-block {
+  position: absolute;
+  top: 6px;
+  height: 32px;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #f9fafb;
+  font-size: 11px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid rgba(15, 23, 42, 0.25);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.28);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    background 0.15s ease, border-color 0.15s ease;
+}
+
+.timeline-main-block:hover {
   transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.35);
+  background: #1d4ed8;
 }
 
-/* TASK ITEMS (LIST) ------------------------------------- */
+.timeline-main-block-done {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+/* TASK LIST ITEMS -------------------------------------- */
 
 .task-item {
   padding: 8px;
   margin-bottom: 6px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.55);
-  background: #f9fafb;
+  border: 1px solid rgba(148, 163, 184, 0.4);
 }
 
 .task-item-main {
-  background: #eef2ff;
-  border-color: #c7d2fe;
+  background: #e0ecff;
+  border-color: #bfdbfe;
 }
 
 .task-item-bg {
-  background: #f3f4f6;
+  background: #e5e7eb;
   border-color: #d1d5db;
 }
 
@@ -465,19 +401,19 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   color: var(--text-muted);
 }
 
-/* DONE STATE -------------------------------------------- */
+/* DONE STATE ------------------------------------------- */
 
 .task-item-done {
-  background: #f3f4f6;
+  background: #e5e7eb;
   border-style: dashed;
-  opacity: 0.75;
+  opacity: 0.7;
 }
 
 .task-item-done h4 {
   text-decoration: line-through;
 }
 
-/* TASK ACTIONS ----------------------------------------- */
+/* TASK ACTIONS ---------------------------------------- */
 
 .task-actions {
   display: flex;
@@ -490,27 +426,24 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   background: #e5e7eb;
   padding: 4px 10px;
   font-size: 11px;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
 }
 
 .task-btn-primary {
   background: #22c55e;
-  color: #ffffff;
+  color: #fff;
 }
 
 .task-btn-danger {
-  background: var(--danger-soft);
+  background: #fee2e2;
   color: #b91c1c;
 }
 
-/* MODAL ------------------------------------------------- */
+/* MODAL ------------------------------------------------ */
 
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(0, 0, 0, 0.35);
   display: none;
   justify-content: center;
   align-items: center;
@@ -523,40 +456,30 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   animation: fadeIn 0.15s;
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .modal-content {
-  background: #ffffff;
+  background: #fff;
   padding: 16px;
   border-radius: 16px;
   width: 92%;
   max-width: 380px;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
   animation: fadeUp 0.2s ease;
 }
 
 .modal-content h3 {
   margin-top: 0;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 16px;
 }
-
-.modal-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 0;
-  margin-bottom: 8px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Edit modal extra -------------------------------------- */
 
 .edit-form .form-row {
   margin-top: 4px;
@@ -569,29 +492,16 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   margin-top: 4px;
 }
 
-/* Option buttons (duplicate modal) --------------------- */
-
-.option-btn {
-  width: 100%;
-  margin-bottom: 6px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #f3f4f6;
-  font-size: 13px;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s ease, border-color 0.15s ease,
-    color 0.15s ease;
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-
-.option-btn:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-/* Calendar ---------------------------------------------- */
 
 .calendar-grid {
   display: grid;
@@ -608,23 +518,21 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   cursor: pointer;
   user-select: none;
   border: 1px solid #e5e7eb;
-  font-size: 12px;
-  color: #111827;
 }
 
 .calendar-day.today {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: #fff;
 }
 
 .calendar-day:hover {
-  background: var(--accent-soft-strong);
+  background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
 }
 
-/* REPEAT GROUP ------------------------------------------ */
+/* REPEAT GROUP ---------------------------------------- */
 
 .repeat-group {
   margin-top: 4px;
@@ -674,121 +582,19 @@ input[type="time"]::-webkit-datetime-edit-ampm-field {
   display: none;
 }
 
-/* DEBUG AVAILABILITY UI -------------------------------- */
-
-.debug-controls-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.debug-inline {
-  flex: 1;
-}
-
-.availability-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.legend-box {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  border: 1px solid #d1d5db;
-}
-
-.legend-box.type-1 {
-  background: #e0f2fe;
-  border-color: #bae6fd;
-}
-
-.legend-box.type-2 {
-  background: #fef3c7;
-  border-color: #fde68a;
-}
-
-.legend-box.type-3 {
-  background: #fee2e2;
-  border-color: #fecaca;
-}
-
-.availability-grid {
-  display: grid;
-  grid-template-columns: repeat(24, 1fr);
-  gap: 2px;
-  border-radius: 10px;
-  padding: 6px;
-  background: #f9fafb;
-  border: 1px dashed #e5e7eb;
-  max-height: 260px;
-  overflow: auto;
-}
-
-.availability-slot {
-  width: 100%;
-  padding-top: 40%;
-  border-radius: 3px;
-  border: 1px solid transparent;
-}
-
-.availability-slot.type-1 {
-  background: #e0f2fe;
-  border-color: #bae6fd;
-}
-
-.availability-slot.type-2 {
-  background: #fef3c7;
-  border-color: #fde68a;
-}
-
-.availability-slot.type-3 {
-  background: #fee2e2;
-  border-color: #fecaca;
-}
-
-.debug-note {
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-/* RESPONSIVE -------------------------------------------- */
+/* RESPONSIVE ------------------------------------------ */
 
 @media (max-width: 768px) {
   body {
     padding: 0 10px 16px;
   }
-
   .form-row {
     flex-direction: column;
   }
-
   .app-title {
     font-size: 20px;
   }
-
   .user-email {
     max-width: 100px;
-  }
-
-  .timeline-lane {
-    grid-template-columns: 62px 1fr;
-  }
-
-  .availability-grid {
-    grid-template-columns: repeat(16, 1fr);
   }
 }
