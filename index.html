@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.3.4</title>
+  <title>DNM's Tasker v1.4.0</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
@@ -450,27 +450,26 @@
   ===========================================
   VERSION NOTES
   ===========================================
-  v1.3.4
-  - Language switched fully to English for UI.
-  - Keeps all v1.3.3 features:
-    + Google login and per-user data separation.
-    + Auto-increment counters for main/background taskId.
-    + createdAtLocal stored for both main and background tasks.
-    + Main task priority engine (duration / minutes-left, with short-task boost).
-    + Background repeat engine: none / daily / weekly / monthly.
+  v1.4.0
+  - Keeps all v1.3.x features:
+    + Google login & per-user Firestore data.
+    + Auto counters for main/background taskId.
+    + createdAtLocal for both main & background tasks.
+    + Main task priority engine (duration / minutes-left + short-task boost).
+    + Background repeat engine: none / daily / weekly / monthly using weekly pills.
     + Edit / Delete / Done / Undone for main tasks.
     + Edit / Delete for background tasks.
-    + Main tasks rendered on lane 1 (Main lane) between start-of-today and deadline.
-    + Background tasks rendered as ghost blocks on lane 2.
-    + 14-day horizontal timeline with zoom, Jump to now, Jump to date, and now marker.
-  - NEW:
-    + Static tooltip (popover) when clicking a main task block on the timeline:
-      * Shows title, description, duration, deadline, remaining, priority,
-        parallel/pending flags, created time.
-      * Includes actions: Edit, Mark done/active, Delete.
-      * Tooltip is Apple-style small card, positioned near the block.
-      * Clicking the block again toggles the tooltip.
-      * Clicking outside the tooltip and blocks closes the tooltip.
+    + Static tooltip (popover) when clicking main block on timeline.
+    + 14-day horizontal timeline with zoom, Jump to now/date, and now marker.
+  - NEW (Best Window Placement Engine – phase 1):
+    + Builds a 14-day time grid with 10-minute slices.
+    + Generates background-block matrix from non-parallel background tasks.
+    + Schedules each ACTIVE, non-pending main task into the best available window:
+      * Window between now and its deadline (clamped into 14-day range).
+      * Greedy backward search: place as late as possible before deadline.
+      * Uses the background-block matrix to avoid collisions with non-parallel tasks.
+      * Prevents overlap between main tasks by marking their slots as busy.
+    + Scheduling happens in-memory only; no changes are written back to Firestore.
   ===========================================
   -->
 </body>
