@@ -2,22 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.4.3 – Magnet Engine</title>
+  <title>DNM's Tasker v1.4.4a – Magnet Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!--
-    Version notes (v1.4.3):
-    - UI sáng, gần giống v1.3.3 (iOS-like)
+    Version notes (v1.4.4a):
     - Magnet-from-NOW engine (w = duration / minutesLeft)
-    - Short task boost (<=10 min & deadline <=48h)
-    - ONLY/PREFER nhân hệ số k vào w (ONLY ngoài window -> w=0)
-    - Parallel / non-parallel qua slice type 1/2/3
-    - Sắp xếp tuần tự từ nowSlice, cho phép split task
+    - ONLY/PREFER multiplier, short-task boost, parallel/non-parallel
+    - Slice-based placement (type 1/2/3)
     - Firebase + Google login (project: dnmstasker)
-    - Dữ liệu lưu per user: users/{uid}/mainTasks, backgroundTasks
+    - NEW: Done / Undone for main tasks (Option 1 checklist)
+    - NEW: Delete main tasks
+    - NEW: Tooltip đơn giản (title) cho block trên timeline
   -->
 
   <div class="app-shell">
@@ -26,13 +25,12 @@
         <div class="logo-dot"></div>
         <div class="title-texts">
           <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.4.3 · Magnet engine · Firebase</span>
+          <span class="title-sub">v1.4.4a · Magnet engine · Firebase</span>
         </div>
       </div>
 
       <div class="header-right">
         <button id="loginBtn" class="secondary-btn">Sign in with Google</button>
-
         <div id="userInfo" class="user-info" style="display:none">
           <img id="userAvatar" class="user-avatar" alt="avatar" />
           <span id="userEmail" class="user-email"></span>
