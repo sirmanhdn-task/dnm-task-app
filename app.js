@@ -1,4 +1,4 @@
-// DNM's Tasker v1.4.3 – Magnet-from-NOW + Firebase (project: dnmstasker)
+// DNM's Tasker v1.4.4a – Magnet-from-NOW + Firebase (project: dnmstasker)
 
 // =============================
 // Firebase init
@@ -13,7 +13,8 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
-  serverTimestamp
+  serverTimestamp,
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import {
   getAuth,
@@ -22,6 +23,7 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -218,7 +220,10 @@ function scheduleMainTasks(totalSlices) {
   const nowSliceRaw = msToSliceIndex(now);
   state.nowSlice = clamp(nowSliceRaw, 0, totalSlices - 1);
 
-  const tasks = state.mainTasks.filter((t) => !t.isPending);
+  // Only schedule main tasks that are not pending and not done
+  const tasks = state.mainTasks.filter(
+    (t) => !t.isPending && !t.isDone
+  );
 
   const decorated = [];
   const k = state.settings.kOnlyPrefer;
@@ -242,6 +247,7 @@ function scheduleMainTasks(totalSlices) {
 
     let w = baseW;
 
+    // Short task boost
     if (
       t.durationMinutes <= 10 &&
       minutesLeft <= 48 * 60
@@ -249,6 +255,7 @@ function scheduleMainTasks(totalSlices) {
       w *= kShort;
     }
 
+    // ONLY / PREFER multiplier
     let timeFactor = 1;
     if (t.onlyMode === "ONLY" || t.onlyMode === "PREFER") {
       const within = isNowWithinTaskWindow(t, now);
@@ -412,7 +419,7 @@ function renderTimeline() {
     laneBg.appendChild(block);
   }
 
-  // Main blocks
+  // Main blocks (only for NOT DONE tasks)
   const now = state.now;
   for (const entry of state.scheduledMain) {
     const t = entry.task;
@@ -467,7 +474,7 @@ function renderTimeline() {
     }
   }
 
-  // Pending
+  // Pending main tasks (nếu có)
   for (const t of state.mainTasks.filter((t) => t.isPending)) {
     const block = document.createElement("div");
     block.className = "timeline-block main";
@@ -507,79 +514,179 @@ function renderMainTaskList() {
     return;
   }
 
-  for (const entry of state.scheduledMain) {
+  // Chia 2 nhóm: active (not done) + done
+  const activeEntries = state.scheduledMain; // sorted by w
+  const activeIds = new Set(activeEntries.map((e) => e.task.id));
+
+  const doneTasks = state.mainTasks.filter((t) => t.isDone);
+  const pendingOrNotScheduled = state.mainTasks.filter(
+    (t) =>
+      !t.isPending &&
+      !t.isDone &&
+      !activeIds.has(t.id)
+  );
+
+  // 1. Active tasks (có trong engine)
+  for (const entry of activeEntries) {
     const t = entry.task;
-    const row = document.createElement("div");
-    row.className = "task-item";
-
-    const main = document.createElement("div");
-    main.className = "task-main";
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "task-title-row";
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "task-title";
-    titleSpan.textContent = t.title || "(untitled)";
-    titleRow.appendChild(titleSpan);
-
-    const idSpan = document.createElement("span");
-    idSpan.style.fontSize = "0.65rem";
-    idSpan.style.color = "#6b7280";
-    idSpan.textContent = "#" + (t.shortId ?? "");
-    titleRow.appendChild(idSpan);
-    main.appendChild(titleRow);
-
-    const meta = document.createElement("div");
-    meta.className = "task-meta";
-    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-    meta.innerHTML = `
-      <span>${dlMs ? formatDateTimeShort(dlMs) : "No deadline"}</span>
-      <span>${t.durationMinutes} min</span>
-      <span>mode: ${t.onlyMode}</span>
-    `;
-    main.appendChild(meta);
-
-    const badges = document.createElement("div");
-    badges.className = "task-meta";
-    const bMain = document.createElement("span");
-    bMain.className = "badge badge-main";
-    bMain.textContent = "MAIN";
-    badges.appendChild(bMain);
-
-    const bPar = document.createElement("span");
-    bPar.className =
-      "badge " + (t.isParallel ? "badge-parallel" : "badge-nonparallel");
-    bPar.textContent = t.isParallel ? "Parallel" : "Non-parallel";
-    badges.appendChild(bPar);
-
-    if (t.onlyMode !== "NONE") {
-      const bMode = document.createElement("span");
-      bMode.className = "badge badge-mode";
-      bMode.textContent = t.onlyMode;
-      badges.appendChild(bMode);
-    }
-
-    main.appendChild(badges);
-
-    const actions = document.createElement("div");
-    actions.className = "task-actions";
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "icon-btn";
-    delBtn.textContent = "Delete";
-    delBtn.onclick = async () => {
-      if (!confirm("Delete this task?")) return;
-      await deleteDoc(
-        doc(db, "users", state.currentUid, "mainTasks", t.id)
-      );
-      await loadAllData();
-    };
-    actions.appendChild(delBtn);
-
-    row.appendChild(main);
-    row.appendChild(actions);
+    const row = buildMainTaskRow(t, entry);
     list.appendChild(row);
   }
+
+  // 2. Tasks chưa schedule (không done, không pending, nhưng w=0 hoặc slice không đủ)
+  for (const t of pendingOrNotScheduled) {
+    const pseudoEntry = {
+      task: t,
+      baseW: 0,
+      w: 0,
+      timeFactor: 0,
+      minutesLeft: 0,
+      assignedSlices: []
+    };
+    const row = buildMainTaskRow(t, pseudoEntry);
+    list.appendChild(row);
+  }
+
+  // 3. Done tasks
+  for (const t of doneTasks) {
+    const pseudoEntry = {
+      task: t,
+      baseW: 0,
+      w: 0,
+      timeFactor: 0,
+      minutesLeft: 0,
+      assignedSlices: []
+    };
+    const row = buildMainTaskRow(t, pseudoEntry, true);
+    list.appendChild(row);
+  }
+
+  if (
+    activeEntries.length === 0 &&
+    pendingOrNotScheduled.length === 0 &&
+    doneTasks.length === 0
+  ) {
+    const p = document.createElement("p");
+    p.className = "task-meta";
+    p.textContent = "No main tasks yet.";
+    list.appendChild(p);
+  }
+}
+
+function buildMainTaskRow(t, entry, isDoneGroup = false) {
+  const row = document.createElement("div");
+  row.className = "task-item";
+  if (t.isDone) row.classList.add("done");
+
+  const main = document.createElement("div");
+  main.className = "task-main";
+
+  const titleRow = document.createElement("div");
+  titleRow.className = "task-title-row";
+  const titleSpan = document.createElement("span");
+  titleSpan.className = "task-title";
+  if (t.isDone) titleSpan.classList.add("done");
+  titleSpan.textContent = t.title || "(untitled)";
+  titleRow.appendChild(titleSpan);
+
+  const idSpan = document.createElement("span");
+  idSpan.style.fontSize = "0.65rem";
+  idSpan.style.color = "#6b7280";
+  idSpan.textContent = "#" + (t.shortId ?? "");
+  titleRow.appendChild(idSpan);
+
+  if (t.isDone) {
+    const doneBadge = document.createElement("span");
+    doneBadge.className = "badge badge-done";
+    doneBadge.textContent = "DONE";
+    titleRow.appendChild(doneBadge);
+  }
+
+  main.appendChild(titleRow);
+
+  const meta = document.createElement("div");
+  meta.className = "task-meta";
+  const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+  const minutesLeft =
+    dlMs && !isNaN(dlMs)
+      ? Math.max(0, (dlMs - state.now) / MINUTE_MS)
+      : null;
+
+  meta.innerHTML = `
+    <span>${dlMs ? formatDateTimeShort(dlMs) : "No deadline"}</span>
+    <span>${t.durationMinutes} min</span>
+    ${
+      minutesLeft != null
+        ? `<span>${minutesLeft.toFixed(1)} min left</span>`
+        : ""
+    }
+  `;
+  main.appendChild(meta);
+
+  const badges = document.createElement("div");
+  badges.className = "task-meta";
+  const bMain = document.createElement("span");
+  bMain.className = "badge badge-main";
+  bMain.textContent = "MAIN";
+  badges.appendChild(bMain);
+
+  const bPar = document.createElement("span");
+  bPar.className =
+    "badge " + (t.isParallel ? "badge-parallel" : "badge-nonparallel");
+  bPar.textContent = t.isParallel ? "Parallel" : "Non-parallel";
+  badges.appendChild(bPar);
+
+  if (t.onlyMode !== "NONE") {
+    const bMode = document.createElement("span");
+    bMode.className = "badge badge-mode";
+    bMode.textContent = t.onlyMode;
+    badges.appendChild(bMode);
+  }
+
+  main.appendChild(badges);
+
+  const actions = document.createElement("div");
+  actions.className = "task-actions";
+
+  // Done / Undone
+  const doneBtn = document.createElement("button");
+  doneBtn.className = "icon-btn";
+  doneBtn.textContent = t.isDone ? "Undone" : "Done";
+  doneBtn.onclick = async () => {
+    if (t.isDone) {
+      // Undone
+      await updateDoc(
+        doc(db, "users", state.currentUid, "mainTasks", t.id),
+        { isDone: false }
+      );
+    } else {
+      // Done (confirm)
+      if (!confirm("Mark this task as DONE?")) return;
+      await updateDoc(
+        doc(db, "users", state.currentUid, "mainTasks", t.id),
+        { isDone: true }
+      );
+    }
+    await loadAllData();
+  };
+  actions.appendChild(doneBtn);
+
+  // Delete
+  const delBtn = document.createElement("button");
+  delBtn.className = "icon-btn";
+  delBtn.textContent = "Delete";
+  delBtn.onclick = async () => {
+    if (!confirm("Delete this task permanently?")) return;
+    await deleteDoc(
+      doc(db, "users", state.currentUid, "mainTasks", t.id)
+    );
+    await loadAllData();
+  };
+  actions.appendChild(delBtn);
+
+  row.appendChild(main);
+  row.appendChild(actions);
+  return row;
 }
 
 function renderBgTaskList() {
@@ -638,6 +745,13 @@ function renderBgTaskList() {
     row.appendChild(actions);
     list.appendChild(row);
   }
+
+  if (state.bgTasks.length === 0) {
+    const p = document.createElement("p");
+    p.className = "task-meta";
+    p.textContent = "No background tasks.";
+    list.appendChild(p);
+  }
 }
 
 function renderDebugPanel() {
@@ -649,8 +763,15 @@ function renderDebugPanel() {
   const scheduled = state.scheduledMain.filter(
     (e) => e.assignedSlices.length > 0
   ).length;
+  const doneCount = state.mainTasks.filter((t) => t.isDone).length;
 
-  summary.textContent = `Main tasks: ${totalMain}, scheduled: ${scheduled}. SliceMinutes=${state.settings.sliceMinutes}, HorizonDays=${state.settings.horizonDays}, k=${state.settings.kOnlyPrefer}, k_short=${state.settings.kShort}, nowSlice=${state.nowSlice}`;
+  summary.textContent = `Main tasks: ${totalMain} (active: ${
+    totalMain - doneCount
+  }, done: ${doneCount}), scheduled: ${scheduled}. SliceMinutes=${
+    state.settings.sliceMinutes
+  }, HorizonDays=${state.settings.horizonDays}, k=${
+    state.settings.kOnlyPrefer
+  }, k_short=${state.settings.kShort}, nowSlice=${state.nowSlice}`;
 
   const table = document.createElement("table");
   table.className = "debug-table";
@@ -804,6 +925,7 @@ function setupMainTaskForm() {
       deadline: new Date(dlMs).toISOString(),
       isParallel: parallelGetter() === "parallel",
       isPending: false,
+      isDone: false,
       onlyMode: modeGetter(),
       dayPills: getActiveDayPills(),
       slotPills: getActiveSlotPills(),
@@ -1012,6 +1134,7 @@ async function loadMainTasksFromFirestore() {
       deadline,
       isParallel: !!d.isParallel,
       isPending: !!d.isPending,
+      isDone: !!d.isDone,
       onlyMode: d.onlyMode ?? "NONE",
       dayPills: Array.isArray(d.dayPills) ? d.dayPills : [],
       slotPills: Array.isArray(d.slotPills) ? d.slotPills : [],
