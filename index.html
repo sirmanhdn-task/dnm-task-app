@@ -2,21 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.4.4a – Magnet Engine</title>
+  <title>DNM's Tasker v1.4.4b – Magnet Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!--
-    Version notes (v1.4.4a):
+    Version notes (v1.4.4b):
     - Magnet-from-NOW engine (w = duration / minutesLeft)
     - ONLY/PREFER multiplier, short-task boost, parallel/non-parallel
     - Slice-based placement (type 1/2/3)
     - Firebase + Google login (project: dnmstasker)
-    - NEW: Done / Undone for main tasks (Option 1 checklist)
-    - NEW: Delete main tasks
-    - NEW: Tooltip đơn giản (title) cho block trên timeline
+    - v1.4.4a: Done / Undone, Delete, tooltip đơn giản
+    - v1.4.4b: Edit modal (iOS sheet), Duplicate, click block mở Edit
   -->
 
   <div class="app-shell">
@@ -25,7 +24,7 @@
         <div class="logo-dot"></div>
         <div class="title-texts">
           <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.4.4a · Magnet engine · Firebase</span>
+          <span class="title-sub">v1.4.4b · Magnet engine · Firebase</span>
         </div>
       </div>
 
@@ -255,6 +254,104 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- EDIT MODAL (iOS sheet style) -->
+  <div id="editModalBackdrop" class="modal-backdrop" style="display:none">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="editModalTitle">Edit task</div>
+          <div class="modal-subtitle" id="editModalSubtitle"></div>
+        </div>
+        <button id="editModalCloseBtn" class="modal-close-btn">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Title</label>
+          <input type="text" id="editTitle" />
+        </div>
+        <div class="form-row">
+          <label>Description</label>
+          <textarea id="editDescription" rows="2"></textarea>
+        </div>
+        <div class="form-row inline">
+          <div>
+            <label>Duration (minutes)</label>
+            <input type="number" id="editDuration" min="1" step="1" />
+          </div>
+          <div>
+            <label>Deadline</label>
+            <input type="datetime-local" id="editDeadline" />
+          </div>
+        </div>
+
+        <div class="form-row inline">
+          <div>
+            <label class="pill-label">Type</label>
+            <div class="pill-group" id="editParallelGroup">
+              <button type="button" data-value="nonparallel" class="pill">
+                Non-parallel
+              </button>
+              <button type="button" data-value="parallel" class="pill">
+                Parallel
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="pill-label">Mode</label>
+            <div class="pill-group" id="editModeGroup">
+              <button type="button" data-value="NONE" class="pill">
+                Normal
+              </button>
+              <button type="button" data-value="ONLY" class="pill">
+                ONLY
+              </button>
+              <button type="button" data-value="PREFER" class="pill">
+                PREFER
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Day pills (ONLY/PREFER)</label>
+          <div class="pill-group" id="editDayPills">
+            <button type="button" data-day="0" class="pill">Sun</button>
+            <button type="button" data-day="1" class="pill">Mon</button>
+            <button type="button" data-day="2" class="pill">Tue</button>
+            <button type="button" data-day="3" class="pill">Wed</button>
+            <button type="button" data-day="4" class="pill">Thu</button>
+            <button type="button" data-day="5" class="pill">Fri</button>
+            <button type="button" data-day="6" class="pill">Sat</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Time window pills (3h)</label>
+          <div class="pill-group wrap" id="editSlotPills">
+            <button type="button" data-slot="0" class="pill">00–03</button>
+            <button type="button" data-slot="1" class="pill">03–06</button>
+            <button type="button" data-slot="2" class="pill">06–09</button>
+            <button type="button" data-slot="3" class="pill">09–12</button>
+            <button type="button" data-slot="4" class="pill">12–15</button>
+            <button type="button" data-slot="5" class="pill">15–18</button>
+            <button type="button" data-slot="6" class="pill">18–21</button>
+            <button type="button" data-slot="7" class="pill">21–24</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="editModalCancelBtn" class="secondary-btn">
+          Cancel
+        </button>
+        <button id="editModalSaveBtn" class="primary-btn">
+          Save changes
+        </button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>
