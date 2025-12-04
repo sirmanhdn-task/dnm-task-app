@@ -1,4 +1,5 @@
-// DNM's Tasker v1.4.4b – Magnet-from-NOW + Firebase (project: dnmstasker)
+// DNM's Tasker v1.4.5 – Magnet-from-NOW + Firebase (project: dnmstasker)
+// Premium UI version: logic unchanged from v1.4.4a
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -29,6 +30,7 @@ const firebaseConfig = {
   messagingSenderId: "1053072513804",
   appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -55,11 +57,6 @@ const state = {
   currentUid: null
 };
 
-let currentEditTask = null;
-
-// =============================
-// Utils
-// =============================
 function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -70,28 +67,28 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
 function formatDateTimeShort(ms) {
   const d = new Date(ms);
   return (
     d.getFullYear().toString().slice(2) +
     "-" +
-    pad2(d.getMonth() + 1) +
+    String(d.getMonth() + 1).padStart(2, "0") +
     "-" +
-    pad2(d.getDate()) +
+    String(d.getDate()).padStart(2, "0") +
     " " +
-    pad2(d.getHours()) +
+    String(d.getHours()).padStart(2, "0") +
     ":" +
-    pad2(d.getMinutes())
+    String(d.getMinutes()).padStart(2, "0")
   );
 }
 
 function formatHM(ms) {
   const d = new Date(ms);
-  return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  return (
+    String(d.getHours()).padStart(2, "0") +
+    ":" +
+    String(d.getMinutes()).padStart(2, "0")
+  );
 }
 
 function msToSliceIndex(ms) {
@@ -122,33 +119,7 @@ function isNowWithinTaskWindow(task, nowMs) {
   return dayOk && slotOk;
 }
 
-function toLocalDatetimeInputValue(isoStr) {
-  if (!isoStr) return "";
-  const d = new Date(isoStr);
-  if (Number.isNaN(d.getTime())) return "";
-  return (
-    d.getFullYear() +
-    "-" +
-    pad2(d.getMonth() + 1) +
-    "-" +
-    pad2(d.getDate()) +
-    "T" +
-    pad2(d.getHours()) +
-    ":" +
-    pad2(d.getMinutes())
-  );
-}
-
-function fromDatetimeLocalInputValue(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-}
-
-// =============================
 // Firebase helpers
-// =============================
 async function ensureUserInitialized(uid) {
   const userRef = doc(db, "users", uid);
   const snap = await getDoc(userRef);
@@ -187,9 +158,7 @@ async function getNextCounter(fieldName, uid) {
   return newCount;
 }
 
-// =============================
-// Magnet-from-NOW scheduler
-// =============================
+// Magnet scheduler
 function recomputeTimeline() {
   state.now = Date.now();
   state.timelineStart = startOfToday();
@@ -200,6 +169,7 @@ function recomputeTimeline() {
 
   const totalSlices =
     (state.settings.horizonDays * 24 * 60) / state.settings.sliceMinutes;
+
   state.sliceTypes = new Array(totalSlices).fill(1);
 
   for (const bg of state.bgTasks) {
@@ -322,16 +292,14 @@ function scheduleMainTasks(totalSlices) {
   return decorated;
 }
 
-// =============================
 // Render timeline
-// =============================
 function renderTimeline() {
   const header = document.getElementById("timelineHeader");
   const canvas = document.getElementById("timelineCanvas");
   header.innerHTML = "";
   canvas.innerHTML = "";
 
-  const pxPerHour = 60;
+  const pxPerHour = 64;
   const totalHours = state.settings.horizonDays * 24;
   const totalWidth = totalHours * pxPerHour;
 
@@ -352,7 +320,7 @@ function renderTimeline() {
       label.className = "timeline-hour-label";
       label.style.left = x + "px";
       const hour = h % 24;
-      label.textContent = pad2(hour) + ":00";
+      label.textContent = String(hour).padStart(2, "0") + ":00";
       headerInner.appendChild(label);
     }
   }
@@ -368,11 +336,13 @@ function renderTimeline() {
 
     const isToday = d === 0;
     band.style.background = isToday
-      ? "rgba(219, 234, 254, 0.9)"
-      : "rgba(241, 245, 249, 0.9)";
+      ? "rgba(239, 246, 255, 0.95)"
+      : "rgba(249, 250, 251, 0.95)";
 
     band.textContent =
-      pad2(date.getMonth() + 1) + "/" + pad2(date.getDate());
+      String(date.getMonth() + 1).padStart(2, "0") +
+      "/" +
+      String(date.getDate()).padStart(2, "0");
     headerInner.appendChild(band);
   }
 
@@ -430,7 +400,6 @@ function renderTimeline() {
     laneBg.appendChild(block);
   }
 
-  // Main blocks
   const now = state.now;
   for (const entry of state.scheduledMain) {
     const t = entry.task;
@@ -481,16 +450,10 @@ function renderTimeline() {
           #${t.shortId ?? ""} ${formatHM(startMs)}–${formatHM(endMs)}
         </div>
       `;
-      block.dataset.taskId = t.id;
-      block.addEventListener("click", () => {
-        const task = state.mainTasks.find((x) => x.id === t.id);
-        if (task) openEditModal(task);
-      });
       laneMain.appendChild(block);
     }
   }
 
-  // Pending main tasks
   for (const t of state.mainTasks.filter((t) => t.isPending)) {
     const block = document.createElement("div");
     block.className = "timeline-block main";
@@ -501,7 +464,6 @@ function renderTimeline() {
     lanePending.appendChild(block);
   }
 
-  // Current time marker
   const offsetHoursNow =
     (state.now - state.timelineStart) / HOUR_MS;
   const line = document.createElement("div");
@@ -515,9 +477,7 @@ function renderTimeline() {
   canvas.appendChild(inner);
 }
 
-// =============================
 // Render lists + debug
-// =============================
 function renderMainTaskList() {
   const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
@@ -660,7 +620,6 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   const actions = document.createElement("div");
   actions.className = "task-actions";
 
-  // Done / Undone
   const doneBtn = document.createElement("button");
   doneBtn.className = "icon-btn";
   doneBtn.textContent = t.isDone ? "Undone" : "Done";
@@ -682,48 +641,6 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   };
   actions.appendChild(doneBtn);
 
-  // Edit
-  const editBtn = document.createElement("button");
-  editBtn.className = "icon-btn";
-  editBtn.textContent = "Edit";
-  editBtn.onclick = () => {
-    openEditModal(t);
-  };
-  actions.appendChild(editBtn);
-
-  // Duplicate
-  const dupBtn = document.createElement("button");
-  dupBtn.className = "icon-btn";
-  dupBtn.textContent = "Duplicate";
-  dupBtn.onclick = async () => {
-    if (!state.currentUid) return;
-    const shortId = await getNextCounter(
-      "mainTaskCount",
-      state.currentUid
-    );
-    const dlIso = t.deadline || null;
-    await addDoc(
-      collection(db, "users", state.currentUid, "mainTasks"),
-      {
-        shortId,
-        title: t.title,
-        description: t.description,
-        durationMinutes: t.durationMinutes,
-        deadline: dlIso,
-        isParallel: t.isParallel,
-        isPending: t.isPending,
-        isDone: false,
-        onlyMode: t.onlyMode,
-        dayPills: Array.isArray(t.dayPills) ? t.dayPills : [],
-        slotPills: Array.isArray(t.slotPills) ? t.slotPills : [],
-        createdAt: serverTimestamp()
-      }
-    );
-    await loadAllData();
-  };
-  actions.appendChild(dupBtn);
-
-  // Delete
   const delBtn = document.createElement("button");
   delBtn.className = "icon-btn";
   delBtn.textContent = "Delete";
@@ -756,7 +673,7 @@ function renderBgTaskList() {
 
   for (const t of state.bgTasks) {
     const row = document.createElement("div");
-    row.className = "task-item task-item-bg";
+    row.className = "task-item";
 
     const main = document.createElement("div");
     main.className = "task-main";
@@ -868,9 +785,7 @@ function renderDebugPanel() {
   wrapper.appendChild(table);
 }
 
-// =============================
-// UI helpers / pills
-// =============================
+// UI wiring
 function setupTabs() {
   const buttons = document.querySelectorAll(".tab-button");
   const tabs = document.querySelectorAll(".tab-content");
@@ -896,14 +811,6 @@ function setupPillGroupSingle(groupEl, defaultVal) {
       current = pill.getAttribute("data-value");
     });
   });
-  if (defaultVal) {
-    pills.forEach((p) => {
-      if (p.getAttribute("data-value") === defaultVal) {
-        p.classList.add("active");
-        current = defaultVal;
-      }
-    });
-  }
   return () => current;
 }
 
@@ -916,51 +823,26 @@ function setupTogglePills(groupEl) {
   });
 }
 
-// Generic getters/setters for edit modal pills
-function setSinglePillValue(groupEl, value) {
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((p) => {
-    const v = p.getAttribute("data-value");
-    p.classList.toggle("active", v === value);
-  });
-}
-
-function getSinglePillValue(groupEl) {
-  const active = groupEl.querySelector(".pill.active");
-  return active ? active.getAttribute("data-value") : null;
-}
-
-function setMultiPillValues(groupEl, attr, values) {
-  const set = new Set(values || []);
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((p) => {
-    const v = parseInt(p.getAttribute(attr), 10);
-    p.classList.toggle("active", set.has(v));
-  });
-}
-
-function getMultiPillValues(groupEl, attr) {
-  const vals = [];
-  const actives = groupEl.querySelectorAll(".pill.active");
-  actives.forEach((p) => {
-    vals.push(parseInt(p.getAttribute(attr), 10));
-  });
-  return vals;
-}
-
 function getActiveDayPills() {
   const group = document.getElementById("mtDayPills");
-  return getMultiPillValues(group, "data-day");
+  const actives = group.querySelectorAll(".pill.active");
+  const days = [];
+  actives.forEach((p) => {
+    days.push(parseInt(p.getAttribute("data-day"), 10));
+  });
+  return days;
 }
 
 function getActiveSlotPills() {
   const group = document.getElementById("mtSlotPills");
-  return getMultiPillValues(group, "data-slot");
+  const actives = group.querySelectorAll(".pill.active");
+  const slots = [];
+  actives.forEach((p) => {
+    slots.push(parseInt(p.getAttribute("data-slot"), 10));
+  });
+  return slots;
 }
 
-// =============================
-// Main task form
-// =============================
 function setupMainTaskForm() {
   const form = document.getElementById("mainTaskForm");
   const parallelGetter = setupPillGroupSingle(
@@ -989,41 +871,41 @@ function setupMainTaskForm() {
       10
     );
     const dlStr = document.getElementById("mtDeadline").value;
-    const dlDate = fromDatetimeLocalInputValue(dlStr);
+    const dlMs = new Date(dlStr).getTime();
 
-    if (!title || !dur || !dlDate) return;
+    if (!title || !dur || isNaN(dlMs)) return;
 
     const shortId = await getNextCounter(
       "mainTaskCount",
       state.currentUid
     );
 
-    await addDoc(
-      collection(db, "users", state.currentUid, "mainTasks"),
-      {
-        shortId,
-        title,
-        description: desc,
-        durationMinutes: dur,
-        deadline: dlDate.toISOString(),
-        isParallel: parallelGetter() === "parallel",
-        isPending: false,
-        isDone: false,
-        onlyMode: modeGetter() || "NONE",
-        dayPills: getActiveDayPills(),
-        slotPills: getActiveSlotPills(),
-        createdAt: serverTimestamp()
-      }
+    const docRef = collection(
+      db,
+      "users",
+      state.currentUid,
+      "mainTasks"
     );
+    await addDoc(docRef, {
+      shortId,
+      title,
+      description: desc,
+      durationMinutes: dur,
+      deadline: new Date(dlMs).toISOString(),
+      isParallel: parallelGetter() === "parallel",
+      isPending: false,
+      isDone: false,
+      onlyMode: modeGetter(),
+      dayPills: getActiveDayPills(),
+      slotPills: getActiveSlotPills(),
+      createdAt: serverTimestamp()
+    });
 
     form.reset();
     recomputeAfterReload();
   });
 }
 
-// =============================
-// Background form
-// =============================
 function setupBgTaskForm() {
   const form = document.getElementById("bgTaskForm");
   const parallelGetter = setupPillGroupSingle(
@@ -1043,9 +925,9 @@ function setupBgTaskForm() {
     const startStr = document.getElementById("bgStart").value;
     const endStr = document.getElementById("bgEnd").value;
 
-    const sDate = fromDatetimeLocalInputValue(startStr);
-    const eDate = fromDatetimeLocalInputValue(endStr);
-    if (!title || !sDate || !eDate || eDate <= sDate) {
+    const sMs = new Date(startStr).getTime();
+    const eMs = new Date(endStr).getTime();
+    if (!title || isNaN(sMs) || isNaN(eMs) || eMs <= sMs) {
       alert("Invalid background task times.");
       return;
     }
@@ -1061,8 +943,8 @@ function setupBgTaskForm() {
         shortId,
         title,
         description: desc,
-        start: sDate.toISOString(),
-        end: eDate.toISOString(),
+        start: new Date(sMs).toISOString(),
+        end: new Date(eMs).toISOString(),
         isParallel: parallelGetter() === "parallel",
         createdAt: serverTimestamp()
       }
@@ -1073,9 +955,6 @@ function setupBgTaskForm() {
   });
 }
 
-// =============================
-// Settings
-// =============================
 function setupSettings() {
   const s = state.settings;
   document.getElementById("setSliceMinutes").value = s.sliceMinutes;
@@ -1108,14 +987,11 @@ function setupSettings() {
     });
 }
 
-// =============================
-// Timeline controls / debug
-// =============================
 function setupTimelineControls() {
   const canvas = document.getElementById("timelineCanvas");
 
   document.getElementById("jumpNowBtn").addEventListener("click", () => {
-    const pxPerHour = 60;
+    const pxPerHour = 64;
     const offsetHours =
       (state.now - state.timelineStart) / HOUR_MS;
     const x = offsetHours * pxPerHour;
@@ -1129,7 +1005,7 @@ function setupTimelineControls() {
     const dayStart = d.getTime();
     const offsetDays =
       (dayStart - state.timelineStart) / (24 * HOUR_MS);
-    const pxPerHour = 60;
+    const pxPerHour = 64;
     const x = offsetDays * 24 * pxPerHour;
     canvas.scrollTo({ left: Math.max(x - 200, 0), behavior: "smooth" });
   });
@@ -1145,156 +1021,7 @@ function setupDebugToggle() {
   });
 }
 
-// =============================
-// Edit modal
-// =============================
-function setupEditModal() {
-  const backdrop = document.getElementById("editModalBackdrop");
-  const closeBtn = document.getElementById("editModalCloseBtn");
-  const cancelBtn = document.getElementById("editModalCancelBtn");
-  const saveBtn = document.getElementById("editModalSaveBtn");
-
-  // Pills in modal
-  setupEditModalPills();
-
-  function close() {
-    backdrop.style.display = "none";
-    currentEditTask = null;
-  }
-
-  closeBtn.addEventListener("click", close);
-  cancelBtn.addEventListener("click", close);
-
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) {
-      close();
-    }
-  });
-
-  saveBtn.addEventListener("click", async () => {
-    if (!currentEditTask || !state.currentUid) {
-      close();
-      return;
-    }
-
-    const title = document.getElementById("editTitle").value.trim();
-    const desc = document.getElementById("editDescription").value.trim();
-    const dur = parseInt(
-      document.getElementById("editDuration").value,
-      10
-    );
-    const dlStr = document.getElementById("editDeadline").value;
-    const dlDate = fromDatetimeLocalInputValue(dlStr);
-
-    if (!title || !dur || !dlDate) {
-      alert("Please fill title, duration, deadline.");
-      return;
-    }
-
-    const parallel =
-      getSinglePillValue(document.getElementById("editParallelGroup")) ===
-      "parallel";
-    const mode =
-      getSinglePillValue(document.getElementById("editModeGroup")) ||
-      "NONE";
-    const dayPills = getMultiPillValues(
-      document.getElementById("editDayPills"),
-      "data-day"
-    );
-    const slotPills = getMultiPillValues(
-      document.getElementById("editSlotPills"),
-      "data-slot"
-    );
-
-    await updateDoc(
-      doc(db, "users", state.currentUid, "mainTasks", currentEditTask.id),
-      {
-        title,
-        description: desc,
-        durationMinutes: dur,
-        deadline: dlDate.toISOString(),
-        isParallel: parallel,
-        onlyMode: mode,
-        dayPills,
-        slotPills
-      }
-    );
-
-    close();
-    await loadAllData();
-  });
-}
-
-function setupEditModalPills() {
-  const parallelGroup = document.getElementById("editParallelGroup");
-  const modeGroup = document.getElementById("editModeGroup");
-  const dayGroup = document.getElementById("editDayPills");
-  const slotGroup = document.getElementById("editSlotPills");
-
-  const parallelPills = parallelGroup.querySelectorAll(".pill");
-  parallelPills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      parallelPills.forEach((p) => p.classList.remove("active"));
-      pill.classList.add("active");
-    });
-  });
-
-  const modePills = modeGroup.querySelectorAll(".pill");
-  modePills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      modePills.forEach((p) => p.classList.remove("active"));
-      pill.classList.add("active");
-    });
-  });
-
-  setupTogglePills(dayGroup);
-  setupTogglePills(slotGroup);
-}
-
-function openEditModal(task) {
-  currentEditTask = task;
-
-  const backdrop = document.getElementById("editModalBackdrop");
-  const titleEl = document.getElementById("editTitle");
-  const descEl = document.getElementById("editDescription");
-  const durEl = document.getElementById("editDuration");
-  const dlEl = document.getElementById("editDeadline");
-  const titleLabel = document.getElementById("editModalTitle");
-  const subtitleLabel = document.getElementById("editModalSubtitle");
-
-  titleEl.value = task.title || "";
-  descEl.value = task.description || "";
-  durEl.value = task.durationMinutes || 30;
-  dlEl.value = toLocalDatetimeInputValue(task.deadline);
-
-  titleLabel.textContent = "Edit task #" + (task.shortId ?? "");
-  subtitleLabel.textContent = task.title || "(untitled)";
-
-  setSinglePillValue(
-    document.getElementById("editParallelGroup"),
-    task.isParallel ? "parallel" : "nonparallel"
-  );
-  setSinglePillValue(
-    document.getElementById("editModeGroup"),
-    task.onlyMode || "NONE"
-  );
-  setMultiPillValues(
-    document.getElementById("editDayPills"),
-    "data-day",
-    Array.isArray(task.dayPills) ? task.dayPills : []
-  );
-  setMultiPillValues(
-    document.getElementById("editSlotPills"),
-    "data-slot",
-    Array.isArray(task.slotPills) ? task.slotPills : []
-  );
-
-  backdrop.style.display = "flex";
-}
-
-// =============================
 // Auth UI
-// =============================
 function setLoggedOutUI() {
   state.currentUid = null;
   document.getElementById("loginBtn").style.display = "inline-flex";
@@ -1340,9 +1067,7 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
   }
 });
 
-// =============================
-// Load data from Firestore
-// =============================
+// Load data
 async function loadMainTasksFromFirestore() {
   if (!state.currentUid) {
     state.mainTasks = [];
@@ -1428,9 +1153,7 @@ async function recomputeAfterReload() {
   await loadAllData();
 }
 
-// =============================
 // Init
-// =============================
 function init() {
   setupTabs();
   setupMainTaskForm();
@@ -1438,7 +1161,6 @@ function init() {
   setupSettings();
   setupTimelineControls();
   setupDebugToggle();
-  setupEditModal();
 
   onAuthStateChanged(auth, async (user) => {
     if (user) {
