@@ -540,6 +540,10 @@ textarea {
   font-weight: 500;
 }
 
+.task-title.done {
+  text-decoration: line-through;
+}
+
 .task-meta {
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -573,6 +577,16 @@ textarea {
 .badge-mode {
   border-color: rgba(129, 140, 248, 0.8);
   color: #4f46e5;
+}
+
+.badge-done {
+  border-color: rgba(34, 197, 94, 0.9);
+  color: #15803d;
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.task-item.done {
+  opacity: 0.55;
 }
 
 .task-actions {
