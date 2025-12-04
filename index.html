@@ -11,10 +11,12 @@
   <!--
     Version notes (v1.4.6 – Premium UI + Duplicate + BG auto-expire):
     - Keep all logic from v1.4.5 (Magnet engine, ONLY/PREFER, parallel, Done/Undone, Delete, Firebase)
-    - Background tasks auto-expire: if end <= now, they are ignored by engine and hidden from UI
-    - Add Duplicate feature for main tasks:
-      + iOS-style action sheet to choose deadline shift (0, +1, +3, +7 days)
-      + Custom date picker modal (A2) for selecting a specific new date
+    - Add background auto-expire:
+      + Background tasks with end < now do not affect slices, are not rendered on timeline or list.
+    - Add Duplicate main task feature:
+      + Per-task "Duplicate" button in main task list
+      + iOS-style action sheet: same deadline, +1d, +3d, +7d, custom date
+      + Custom date modal with datetime-local picker
   -->
 
   <div class="page-bg"></div>
@@ -272,7 +274,7 @@
             <header class="panel-header">
               <div>
                 <h2>Background task list</h2>
-                <p>Active background constraints (expired blocks are auto-removed).</p>
+                <p>All background constraints that affect your slices.</p>
               </div>
             </header>
             <div id="bgTaskList" class="task-list"></div>
@@ -322,37 +324,55 @@
     </main>
   </div>
 
-  <!-- Duplicate Action Sheet -->
-  <div id="duplicateSheet" class="action-sheet-backdrop hidden">
-    <div class="action-sheet-panel card-glass">
-      <div class="sheet-title">Duplicate task</div>
-      <div class="sheet-subtitle">Move deadline by:</div>
-      <button class="sheet-option" data-offset="0">Same day (0 days)</button>
-      <button class="sheet-option" data-offset="1">+1 day</button>
-      <button class="sheet-option" data-offset="3">+3 days</button>
-      <button class="sheet-option" data-offset="7">+7 days (1 week)</button>
-      <button id="sheetCustomDateBtn" class="sheet-option strong">
-        Custom date…
+  <!-- Duplicate action sheet -->
+  <div id="duplicateSheetBackdrop" class="overlay">
+    <div class="action-sheet">
+      <div class="sheet-header">
+        <div class="sheet-title">Duplicate task</div>
+        <div id="dupTaskLabel" class="sheet-subtitle"></div>
+      </div>
+      <div class="sheet-options">
+        <button type="button" class="sheet-option" data-dup-shift="same">
+          Keep same deadline
+        </button>
+        <button type="button" class="sheet-option" data-dup-shift="1">
+          Move +1 day
+        </button>
+        <button type="button" class="sheet-option" data-dup-shift="3">
+          Move +3 days
+        </button>
+        <button type="button" class="sheet-option" data-dup-shift="7">
+          Move +7 days
+        </button>
+        <button type="button" class="sheet-option strong" data-dup-shift="custom">
+          Custom date…
+        </button>
+      </div>
+      <button type="button" id="dupCancelBtn" class="sheet-cancel">
+        Cancel
       </button>
-      <button id="sheetCancelBtn" class="sheet-cancel">Cancel</button>
     </div>
   </div>
 
-  <!-- Duplicate Custom Date Modal -->
-  <div id="duplicateDateModal" class="modal-backdrop hidden">
-    <div class="modal-panel card-soft ios-picker-modal">
+  <!-- Custom date modal -->
+  <div id="duplicateDateModalBackdrop" class="overlay center">
+    <div class="modal-card">
       <div class="modal-header">
-        <div class="modal-title">Select new deadline</div>
-        <div class="modal-subtitle">Choose date for the duplicated task.</div>
+        <div class="modal-title">Pick new deadline</div>
+        <p class="modal-subtitle">
+          Choose the exact date & time for the duplicated task.
+        </p>
       </div>
-      <div class="ios-date-wheel">
-        <select id="dupYearSelect" class="wheel-column"></select>
-        <select id="dupMonthSelect" class="wheel-column"></select>
-        <select id="dupDaySelect" class="wheel-column"></select>
+      <div class="modal-body">
+        <input type="datetime-local" id="dupDateInput" />
       </div>
       <div class="modal-actions">
-        <button id="dupDateCancelBtn" class="btn subtle-btn">Cancel</button>
-        <button id="dupDateConfirmBtn" class="btn primary-btn">Duplicate</button>
+        <button type="button" id="dupDateCancelBtn" class="btn subtle-btn small">
+          Cancel
+        </button>
+        <button type="button" id="dupDateConfirmBtn" class="btn primary-btn small">
+          Duplicate
+        </button>
       </div>
     </div>
   </div>
