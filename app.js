@@ -1,8 +1,5 @@
-// DNM's Tasker v1.4.4a – Magnet-from-NOW + Firebase (project: dnmstasker)
+// DNM's Tasker v1.4.4b – Magnet-from-NOW + Firebase (project: dnmstasker)
 
-// =============================
-// Firebase init
-// =============================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
   getFirestore,
@@ -23,7 +20,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -33,15 +29,11 @@ const firebaseConfig = {
   messagingSenderId: "1053072513804",
   appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// =============================
-// State
-// =============================
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 
@@ -63,6 +55,8 @@ const state = {
   currentUid: null
 };
 
+let currentEditTask = null;
+
 // =============================
 // Utils
 // =============================
@@ -76,28 +70,28 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
 function formatDateTimeShort(ms) {
   const d = new Date(ms);
   return (
     d.getFullYear().toString().slice(2) +
     "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
+    pad2(d.getMonth() + 1) +
     "-" +
-    String(d.getDate()).padStart(2, "0") +
+    pad2(d.getDate()) +
     " " +
-    String(d.getHours()).padStart(2, "0") +
+    pad2(d.getHours()) +
     ":" +
-    String(d.getMinutes()).padStart(2, "0")
+    pad2(d.getMinutes())
   );
 }
 
 function formatHM(ms) {
   const d = new Date(ms);
-  return (
-    String(d.getHours()).padStart(2, "0") +
-    ":" +
-    String(d.getMinutes()).padStart(2, "0")
-  );
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
 
 function msToSliceIndex(ms) {
@@ -126,6 +120,30 @@ function isNowWithinTaskWindow(task, nowMs) {
   const slotOk = !hasSlots || task.slotPills.includes(slot);
 
   return dayOk && slotOk;
+}
+
+function toLocalDatetimeInputValue(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return "";
+  return (
+    d.getFullYear() +
+    "-" +
+    pad2(d.getMonth() + 1) +
+    "-" +
+    pad2(d.getDate()) +
+    "T" +
+    pad2(d.getHours()) +
+    ":" +
+    pad2(d.getMinutes())
+  );
+}
+
+function fromDatetimeLocalInputValue(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
 }
 
 // =============================
@@ -182,10 +200,8 @@ function recomputeTimeline() {
 
   const totalSlices =
     (state.settings.horizonDays * 24 * 60) / state.settings.sliceMinutes;
+  state.sliceTypes = new Array(totalSlices).fill(1);
 
-  state.sliceTypes = new Array(totalSlices).fill(1); // 1 = blank
-
-  // Background sliceTypes
   for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
@@ -220,7 +236,6 @@ function scheduleMainTasks(totalSlices) {
   const nowSliceRaw = msToSliceIndex(now);
   state.nowSlice = clamp(nowSliceRaw, 0, totalSlices - 1);
 
-  // Only schedule main tasks that are not pending and not done
   const tasks = state.mainTasks.filter(
     (t) => !t.isPending && !t.isDone
   );
@@ -247,7 +262,6 @@ function scheduleMainTasks(totalSlices) {
 
     let w = baseW;
 
-    // Short task boost
     if (
       t.durationMinutes <= 10 &&
       minutesLeft <= 48 * 60
@@ -255,7 +269,6 @@ function scheduleMainTasks(totalSlices) {
       w *= kShort;
     }
 
-    // ONLY / PREFER multiplier
     let timeFactor = 1;
     if (t.onlyMode === "ONLY" || t.onlyMode === "PREFER") {
       const within = isNowWithinTaskWindow(t, now);
@@ -339,7 +352,7 @@ function renderTimeline() {
       label.className = "timeline-hour-label";
       label.style.left = x + "px";
       const hour = h % 24;
-      label.textContent = String(hour).padStart(2, "0") + ":00";
+      label.textContent = pad2(hour) + ":00";
       headerInner.appendChild(label);
     }
   }
@@ -359,9 +372,7 @@ function renderTimeline() {
       : "rgba(241, 245, 249, 0.9)";
 
     band.textContent =
-      String(date.getMonth() + 1).padStart(2, "0") +
-      "/" +
-      String(date.getDate()).padStart(2, "0");
+      pad2(date.getMonth() + 1) + "/" + pad2(date.getDate());
     headerInner.appendChild(band);
   }
 
@@ -419,7 +430,7 @@ function renderTimeline() {
     laneBg.appendChild(block);
   }
 
-  // Main blocks (only for NOT DONE tasks)
+  // Main blocks
   const now = state.now;
   for (const entry of state.scheduledMain) {
     const t = entry.task;
@@ -470,11 +481,16 @@ function renderTimeline() {
           #${t.shortId ?? ""} ${formatHM(startMs)}–${formatHM(endMs)}
         </div>
       `;
+      block.dataset.taskId = t.id;
+      block.addEventListener("click", () => {
+        const task = state.mainTasks.find((x) => x.id === t.id);
+        if (task) openEditModal(task);
+      });
       laneMain.appendChild(block);
     }
   }
 
-  // Pending main tasks (nếu có)
+  // Pending main tasks
   for (const t of state.mainTasks.filter((t) => t.isPending)) {
     const block = document.createElement("div");
     block.className = "timeline-block main";
@@ -514,8 +530,7 @@ function renderMainTaskList() {
     return;
   }
 
-  // Chia 2 nhóm: active (not done) + done
-  const activeEntries = state.scheduledMain; // sorted by w
+  const activeEntries = state.scheduledMain;
   const activeIds = new Set(activeEntries.map((e) => e.task.id));
 
   const doneTasks = state.mainTasks.filter((t) => t.isDone);
@@ -526,14 +541,12 @@ function renderMainTaskList() {
       !activeIds.has(t.id)
   );
 
-  // 1. Active tasks (có trong engine)
   for (const entry of activeEntries) {
     const t = entry.task;
     const row = buildMainTaskRow(t, entry);
     list.appendChild(row);
   }
 
-  // 2. Tasks chưa schedule (không done, không pending, nhưng w=0 hoặc slice không đủ)
   for (const t of pendingOrNotScheduled) {
     const pseudoEntry = {
       task: t,
@@ -547,7 +560,6 @@ function renderMainTaskList() {
     list.appendChild(row);
   }
 
-  // 3. Done tasks
   for (const t of doneTasks) {
     const pseudoEntry = {
       task: t,
@@ -653,14 +665,13 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   doneBtn.className = "icon-btn";
   doneBtn.textContent = t.isDone ? "Undone" : "Done";
   doneBtn.onclick = async () => {
+    if (!state.currentUid) return;
     if (t.isDone) {
-      // Undone
       await updateDoc(
         doc(db, "users", state.currentUid, "mainTasks", t.id),
         { isDone: false }
       );
     } else {
-      // Done (confirm)
       if (!confirm("Mark this task as DONE?")) return;
       await updateDoc(
         doc(db, "users", state.currentUid, "mainTasks", t.id),
@@ -671,11 +682,53 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   };
   actions.appendChild(doneBtn);
 
+  // Edit
+  const editBtn = document.createElement("button");
+  editBtn.className = "icon-btn";
+  editBtn.textContent = "Edit";
+  editBtn.onclick = () => {
+    openEditModal(t);
+  };
+  actions.appendChild(editBtn);
+
+  // Duplicate
+  const dupBtn = document.createElement("button");
+  dupBtn.className = "icon-btn";
+  dupBtn.textContent = "Duplicate";
+  dupBtn.onclick = async () => {
+    if (!state.currentUid) return;
+    const shortId = await getNextCounter(
+      "mainTaskCount",
+      state.currentUid
+    );
+    const dlIso = t.deadline || null;
+    await addDoc(
+      collection(db, "users", state.currentUid, "mainTasks"),
+      {
+        shortId,
+        title: t.title,
+        description: t.description,
+        durationMinutes: t.durationMinutes,
+        deadline: dlIso,
+        isParallel: t.isParallel,
+        isPending: t.isPending,
+        isDone: false,
+        onlyMode: t.onlyMode,
+        dayPills: Array.isArray(t.dayPills) ? t.dayPills : [],
+        slotPills: Array.isArray(t.slotPills) ? t.slotPills : [],
+        createdAt: serverTimestamp()
+      }
+    );
+    await loadAllData();
+  };
+  actions.appendChild(dupBtn);
+
   // Delete
   const delBtn = document.createElement("button");
   delBtn.className = "icon-btn";
   delBtn.textContent = "Delete";
   delBtn.onclick = async () => {
+    if (!state.currentUid) return;
     if (!confirm("Delete this task permanently?")) return;
     await deleteDoc(
       doc(db, "users", state.currentUid, "mainTasks", t.id)
@@ -733,6 +786,7 @@ function renderBgTaskList() {
     delBtn.className = "icon-btn";
     delBtn.textContent = "Delete";
     delBtn.onclick = async () => {
+      if (!state.currentUid) return;
       if (!confirm("Delete this background task?")) return;
       await deleteDoc(
         doc(db, "users", state.currentUid, "backgroundTasks", t.id)
@@ -815,7 +869,7 @@ function renderDebugPanel() {
 }
 
 // =============================
-// UI wiring
+// UI helpers / pills
 // =============================
 function setupTabs() {
   const buttons = document.querySelectorAll(".tab-button");
@@ -842,6 +896,14 @@ function setupPillGroupSingle(groupEl, defaultVal) {
       current = pill.getAttribute("data-value");
     });
   });
+  if (defaultVal) {
+    pills.forEach((p) => {
+      if (p.getAttribute("data-value") === defaultVal) {
+        p.classList.add("active");
+        current = defaultVal;
+      }
+    });
+  }
   return () => current;
 }
 
@@ -854,26 +916,51 @@ function setupTogglePills(groupEl) {
   });
 }
 
+// Generic getters/setters for edit modal pills
+function setSinglePillValue(groupEl, value) {
+  const pills = groupEl.querySelectorAll(".pill");
+  pills.forEach((p) => {
+    const v = p.getAttribute("data-value");
+    p.classList.toggle("active", v === value);
+  });
+}
+
+function getSinglePillValue(groupEl) {
+  const active = groupEl.querySelector(".pill.active");
+  return active ? active.getAttribute("data-value") : null;
+}
+
+function setMultiPillValues(groupEl, attr, values) {
+  const set = new Set(values || []);
+  const pills = groupEl.querySelectorAll(".pill");
+  pills.forEach((p) => {
+    const v = parseInt(p.getAttribute(attr), 10);
+    p.classList.toggle("active", set.has(v));
+  });
+}
+
+function getMultiPillValues(groupEl, attr) {
+  const vals = [];
+  const actives = groupEl.querySelectorAll(".pill.active");
+  actives.forEach((p) => {
+    vals.push(parseInt(p.getAttribute(attr), 10));
+  });
+  return vals;
+}
+
 function getActiveDayPills() {
   const group = document.getElementById("mtDayPills");
-  const actives = group.querySelectorAll(".pill.active");
-  const days = [];
-  actives.forEach((p) => {
-    days.push(parseInt(p.getAttribute("data-day"), 10));
-  });
-  return days;
+  return getMultiPillValues(group, "data-day");
 }
 
 function getActiveSlotPills() {
   const group = document.getElementById("mtSlotPills");
-  const actives = group.querySelectorAll(".pill.active");
-  const slots = [];
-  actives.forEach((p) => {
-    slots.push(parseInt(p.getAttribute("data-slot"), 10));
-  });
-  return slots;
+  return getMultiPillValues(group, "data-slot");
 }
 
+// =============================
+// Main task form
+// =============================
 function setupMainTaskForm() {
   const form = document.getElementById("mainTaskForm");
   const parallelGetter = setupPillGroupSingle(
@@ -902,41 +989,41 @@ function setupMainTaskForm() {
       10
     );
     const dlStr = document.getElementById("mtDeadline").value;
-    const dlMs = new Date(dlStr).getTime();
+    const dlDate = fromDatetimeLocalInputValue(dlStr);
 
-    if (!title || !dur || isNaN(dlMs)) return;
+    if (!title || !dur || !dlDate) return;
 
     const shortId = await getNextCounter(
       "mainTaskCount",
       state.currentUid
     );
 
-    const docRef = collection(
-      db,
-      "users",
-      state.currentUid,
-      "mainTasks"
+    await addDoc(
+      collection(db, "users", state.currentUid, "mainTasks"),
+      {
+        shortId,
+        title,
+        description: desc,
+        durationMinutes: dur,
+        deadline: dlDate.toISOString(),
+        isParallel: parallelGetter() === "parallel",
+        isPending: false,
+        isDone: false,
+        onlyMode: modeGetter() || "NONE",
+        dayPills: getActiveDayPills(),
+        slotPills: getActiveSlotPills(),
+        createdAt: serverTimestamp()
+      }
     );
-    await addDoc(docRef, {
-      shortId,
-      title,
-      description: desc,
-      durationMinutes: dur,
-      deadline: new Date(dlMs).toISOString(),
-      isParallel: parallelGetter() === "parallel",
-      isPending: false,
-      isDone: false,
-      onlyMode: modeGetter(),
-      dayPills: getActiveDayPills(),
-      slotPills: getActiveSlotPills(),
-      createdAt: serverTimestamp()
-    });
 
     form.reset();
     recomputeAfterReload();
   });
 }
 
+// =============================
+// Background form
+// =============================
 function setupBgTaskForm() {
   const form = document.getElementById("bgTaskForm");
   const parallelGetter = setupPillGroupSingle(
@@ -956,9 +1043,9 @@ function setupBgTaskForm() {
     const startStr = document.getElementById("bgStart").value;
     const endStr = document.getElementById("bgEnd").value;
 
-    const sMs = new Date(startStr).getTime();
-    const eMs = new Date(endStr).getTime();
-    if (!title || isNaN(sMs) || isNaN(eMs) || eMs <= sMs) {
+    const sDate = fromDatetimeLocalInputValue(startStr);
+    const eDate = fromDatetimeLocalInputValue(endStr);
+    if (!title || !sDate || !eDate || eDate <= sDate) {
       alert("Invalid background task times.");
       return;
     }
@@ -974,8 +1061,8 @@ function setupBgTaskForm() {
         shortId,
         title,
         description: desc,
-        start: new Date(sMs).toISOString(),
-        end: new Date(eMs).toISOString(),
+        start: sDate.toISOString(),
+        end: eDate.toISOString(),
         isParallel: parallelGetter() === "parallel",
         createdAt: serverTimestamp()
       }
@@ -986,6 +1073,9 @@ function setupBgTaskForm() {
   });
 }
 
+// =============================
+// Settings
+// =============================
 function setupSettings() {
   const s = state.settings;
   document.getElementById("setSliceMinutes").value = s.sliceMinutes;
@@ -1018,6 +1108,9 @@ function setupSettings() {
     });
 }
 
+// =============================
+// Timeline controls / debug
+// =============================
 function setupTimelineControls() {
   const canvas = document.getElementById("timelineCanvas");
 
@@ -1050,6 +1143,153 @@ function setupDebugToggle() {
     body.style.display = hidden ? "block" : "none";
     btn.textContent = hidden ? "Collapse" : "Expand";
   });
+}
+
+// =============================
+// Edit modal
+// =============================
+function setupEditModal() {
+  const backdrop = document.getElementById("editModalBackdrop");
+  const closeBtn = document.getElementById("editModalCloseBtn");
+  const cancelBtn = document.getElementById("editModalCancelBtn");
+  const saveBtn = document.getElementById("editModalSaveBtn");
+
+  // Pills in modal
+  setupEditModalPills();
+
+  function close() {
+    backdrop.style.display = "none";
+    currentEditTask = null;
+  }
+
+  closeBtn.addEventListener("click", close);
+  cancelBtn.addEventListener("click", close);
+
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) {
+      close();
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    if (!currentEditTask || !state.currentUid) {
+      close();
+      return;
+    }
+
+    const title = document.getElementById("editTitle").value.trim();
+    const desc = document.getElementById("editDescription").value.trim();
+    const dur = parseInt(
+      document.getElementById("editDuration").value,
+      10
+    );
+    const dlStr = document.getElementById("editDeadline").value;
+    const dlDate = fromDatetimeLocalInputValue(dlStr);
+
+    if (!title || !dur || !dlDate) {
+      alert("Please fill title, duration, deadline.");
+      return;
+    }
+
+    const parallel =
+      getSinglePillValue(document.getElementById("editParallelGroup")) ===
+      "parallel";
+    const mode =
+      getSinglePillValue(document.getElementById("editModeGroup")) ||
+      "NONE";
+    const dayPills = getMultiPillValues(
+      document.getElementById("editDayPills"),
+      "data-day"
+    );
+    const slotPills = getMultiPillValues(
+      document.getElementById("editSlotPills"),
+      "data-slot"
+    );
+
+    await updateDoc(
+      doc(db, "users", state.currentUid, "mainTasks", currentEditTask.id),
+      {
+        title,
+        description: desc,
+        durationMinutes: dur,
+        deadline: dlDate.toISOString(),
+        isParallel: parallel,
+        onlyMode: mode,
+        dayPills,
+        slotPills
+      }
+    );
+
+    close();
+    await loadAllData();
+  });
+}
+
+function setupEditModalPills() {
+  const parallelGroup = document.getElementById("editParallelGroup");
+  const modeGroup = document.getElementById("editModeGroup");
+  const dayGroup = document.getElementById("editDayPills");
+  const slotGroup = document.getElementById("editSlotPills");
+
+  const parallelPills = parallelGroup.querySelectorAll(".pill");
+  parallelPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      parallelPills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+    });
+  });
+
+  const modePills = modeGroup.querySelectorAll(".pill");
+  modePills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      modePills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+    });
+  });
+
+  setupTogglePills(dayGroup);
+  setupTogglePills(slotGroup);
+}
+
+function openEditModal(task) {
+  currentEditTask = task;
+
+  const backdrop = document.getElementById("editModalBackdrop");
+  const titleEl = document.getElementById("editTitle");
+  const descEl = document.getElementById("editDescription");
+  const durEl = document.getElementById("editDuration");
+  const dlEl = document.getElementById("editDeadline");
+  const titleLabel = document.getElementById("editModalTitle");
+  const subtitleLabel = document.getElementById("editModalSubtitle");
+
+  titleEl.value = task.title || "";
+  descEl.value = task.description || "";
+  durEl.value = task.durationMinutes || 30;
+  dlEl.value = toLocalDatetimeInputValue(task.deadline);
+
+  titleLabel.textContent = "Edit task #" + (task.shortId ?? "");
+  subtitleLabel.textContent = task.title || "(untitled)";
+
+  setSinglePillValue(
+    document.getElementById("editParallelGroup"),
+    task.isParallel ? "parallel" : "nonparallel"
+  );
+  setSinglePillValue(
+    document.getElementById("editModeGroup"),
+    task.onlyMode || "NONE"
+  );
+  setMultiPillValues(
+    document.getElementById("editDayPills"),
+    "data-day",
+    Array.isArray(task.dayPills) ? task.dayPills : []
+  );
+  setMultiPillValues(
+    document.getElementById("editSlotPills"),
+    "data-slot",
+    Array.isArray(task.slotPills) ? task.slotPills : []
+  );
+
+  backdrop.style.display = "flex";
 }
 
 // =============================
@@ -1198,6 +1438,7 @@ function init() {
   setupSettings();
   setupTimelineControls();
   setupDebugToggle();
+  setupEditModal();
 
   onAuthStateChanged(auth, async (user) => {
     if (user) {
