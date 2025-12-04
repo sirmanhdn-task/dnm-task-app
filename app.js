@@ -1,7 +1,7 @@
 // DNM's Tasker v1.4.6 – Magnet-from-NOW + Firebase (project: dnmstasker)
-// - Logic from v1.4.5 preserved
-// - New: Background auto-expire (end <= now → ignored & hidden)
-// - New: Duplicate main task with iOS-style action sheet + custom date picker
+// Premium UI version: logic unchanged from v1.4.4a, plus:
+// - Background tasks auto-expire (end < now)
+// - Duplicate main task with action sheet + custom date
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -23,6 +23,7 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -57,7 +58,7 @@ const state = {
   now: null,
   nowSlice: 0,
   currentUid: null,
-  duplicateContext: null
+  duplicateTarget: null
 };
 
 function startOfToday() {
@@ -122,14 +123,6 @@ function isNowWithinTaskWindow(task, nowMs) {
   return dayOk && slotOk;
 }
 
-function getActiveBgTasks() {
-  const now = state.now || Date.now();
-  return state.bgTasks.filter((bg) => {
-    const endMs = new Date(bg.end).getTime();
-    return !isNaN(endMs) && endMs > now;
-  });
-}
-
 // Firebase helpers
 async function ensureUserInitialized(uid) {
   const userRef = doc(db, "users", uid);
@@ -183,12 +176,14 @@ function recomputeTimeline() {
 
   state.sliceTypes = new Array(totalSlices).fill(1);
 
-  const activeBg = getActiveBgTasks();
+  const now = state.now;
 
-  for (const bg of activeBg) {
+  // Background slices with auto-expire: BG with end < now are ignored
+  for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
     if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) continue;
+    if (endMs <= now) continue;
 
     const startClamped = clamp(startMs, state.timelineStart, state.timelineEnd);
     const endClamped = clamp(endMs, state.timelineStart, state.timelineEnd);
@@ -387,12 +382,12 @@ function renderTimeline() {
   lblPending.textContent = "Pending";
   lanePending.appendChild(lblPending);
 
-  // Background blocks (only active BG)
-  const activeBg = getActiveBgTasks();
-  for (const bg of activeBg) {
+  // Background blocks (skip expired)
+  for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
     if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) continue;
+    if (endMs <= state.now) continue;
 
     const startClamped = clamp(startMs, state.timelineStart, state.timelineEnd);
     const endClamped = clamp(endMs, state.timelineStart, state.timelineEnd);
@@ -694,9 +689,13 @@ function renderBgTaskList() {
     return;
   }
 
-  const activeBg = getActiveBgTasks();
+  let anyShown = false;
+  for (const t of state.bgTasks) {
+    const sMs = new Date(t.start).getTime();
+    const eMs = new Date(t.end).getTime();
+    if (isNaN(sMs) || isNaN(eMs) || eMs <= sMs) continue;
+    if (eMs <= state.now) continue; // auto-expire in list
 
-  for (const t of activeBg) {
     const row = document.createElement("div");
     row.className = "task-item";
 
@@ -713,8 +712,6 @@ function renderBgTaskList() {
 
     const meta = document.createElement("div");
     meta.className = "task-meta";
-    const sMs = new Date(t.start).getTime();
-    const eMs = new Date(t.end).getTime();
     meta.innerHTML = `
       <span>${formatDateTimeShort(sMs)} → ${formatDateTimeShort(eMs)}</span>
       <span>${t.isParallel ? "Parallel" : "Non-parallel"}</span>
@@ -740,12 +737,13 @@ function renderBgTaskList() {
     row.appendChild(main);
     row.appendChild(actions);
     list.appendChild(row);
+    anyShown = true;
   }
 
-  if (activeBg.length === 0) {
+  if (!anyShown) {
     const p = document.createElement("p");
     p.className = "task-meta";
-    p.textContent = "No active background tasks. Expired blocks are automatically removed from view.";
+    p.textContent = "No background tasks.";
     list.appendChild(p);
   }
 }
@@ -810,151 +808,172 @@ function renderDebugPanel() {
   wrapper.appendChild(table);
 }
 
-// Duplicate UI & logic
+// Duplicate UI + logic
+
 function openDuplicateSheet(task) {
-  state.duplicateContext = { task };
-  const sheet = document.getElementById("duplicateSheet");
-  sheet.classList.remove("hidden");
+  state.duplicateTarget = task;
+  const backdrop = document.getElementById("duplicateSheetBackdrop");
+  const label = document.getElementById("dupTaskLabel");
+  if (label) {
+    label.textContent = `#${task.shortId ?? ""} ${task.title || ""}`;
+  }
+  if (backdrop) {
+    backdrop.style.display = "flex";
+  }
 }
 
 function closeDuplicateSheet() {
-  const sheet = document.getElementById("duplicateSheet");
-  sheet.classList.add("hidden");
-  state.duplicateContext = state.duplicateContext || null;
+  const backdrop = document.getElementById("duplicateSheetBackdrop");
+  if (backdrop) {
+    backdrop.style.display = "none";
+  }
 }
 
 function openDuplicateDateModal() {
-  const modal = document.getElementById("duplicateDateModal");
-  modal.classList.remove("hidden");
-  initDateWheelFromTask();
+  const backdrop = document.getElementById("duplicateDateModalBackdrop");
+  const input = document.getElementById("dupDateInput");
+  if (input) input.value = "";
+  if (backdrop) backdrop.style.display = "flex";
 }
 
 function closeDuplicateDateModal() {
-  const modal = document.getElementById("duplicateDateModal");
-  modal.classList.add("hidden");
-}
-
-function initDateWheelFromTask() {
-  const ctx = state.duplicateContext;
-  const yearSel = document.getElementById("dupYearSelect");
-  const monthSel = document.getElementById("dupMonthSelect");
-  const daySel = document.getElementById("dupDaySelect");
-
-  yearSel.innerHTML = "";
-  monthSel.innerHTML = "";
-  daySel.innerHTML = "";
-
-  const baseMs = (() => {
-    if (!ctx || !ctx.task || !ctx.task.deadline) return Date.now();
-    const v = new Date(ctx.task.deadline).getTime();
-    return isNaN(v) ? Date.now() : v;
-  })();
-  const dBase = new Date(baseMs);
-  const baseYear = dBase.getFullYear();
-  const baseMonth = dBase.getMonth() + 1;
-  const baseDay = dBase.getDate();
-
-  // Years: current year to +2
-  for (let y = baseYear; y <= baseYear + 2; y++) {
-    const opt = document.createElement("option");
-    opt.value = y;
-    opt.textContent = y;
-    if (y === baseYear) opt.selected = true;
-    yearSel.appendChild(opt);
+  const backdrop = document.getElementById("duplicateDateModalBackdrop");
+  if (backdrop) {
+    backdrop.style.display = "none";
   }
-
-  // Months 1..12
-  for (let m = 1; m <= 12; m++) {
-    const opt = document.createElement("option");
-    opt.value = m;
-    opt.textContent = String(m).padStart(2, "0");
-    if (m === baseMonth) opt.selected = true;
-    monthSel.appendChild(opt);
-  }
-
-  function refreshDays() {
-    const y = parseInt(yearSel.value, 10);
-    const m = parseInt(monthSel.value, 10);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const prevDay = parseInt(daySel.value || baseDay, 10);
-
-    daySel.innerHTML = "";
-    for (let d = 1; d <= daysInMonth; d++) {
-      const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = String(d).padStart(2, "0");
-      if (d === Math.min(prevDay, daysInMonth)) opt.selected = true;
-      daySel.appendChild(opt);
-    }
-  }
-
-  yearSel.addEventListener("change", refreshDays);
-  monthSel.addEventListener("change", refreshDays);
-  refreshDays();
 }
 
-async function handleDuplicateWithOffset(offsetDays) {
-  const ctx = state.duplicateContext;
-  if (!ctx || !state.currentUid) return;
-  const t = ctx.task;
-  const baseMs = (() => {
-    if (!t.deadline) return Date.now();
-    const v = new Date(t.deadline).getTime();
-    return isNaN(v) ? Date.now() : v;
-  })();
-  const newMs = baseMs + offsetDays * 24 * HOUR_MS;
-  await createDuplicateTask(t, newMs);
-  closeDuplicateSheet();
-}
+async function performDuplicateBase(newDeadlineIso) {
+  const src = state.duplicateTarget;
+  if (!src || !state.currentUid) return;
 
-async function handleDuplicateWithCustomDate() {
-  const ctx = state.duplicateContext;
-  if (!ctx || !state.currentUid) return;
-  const t = ctx.task;
-
-  const yearSel = document.getElementById("dupYearSelect");
-  const monthSel = document.getElementById("dupMonthSelect");
-  const daySel = document.getElementById("dupDaySelect");
-
-  const y = parseInt(yearSel.value, 10);
-  const m = parseInt(monthSel.value, 10);
-  const d = parseInt(daySel.value, 10);
-
-  const baseMs = (() => {
-    if (!t.deadline) return Date.now();
-    const v = new Date(t.deadline).getTime();
-    return isNaN(v) ? Date.now() : v;
-  })();
-  const base = new Date(baseMs);
-  const hours = base.getHours();
-  const minutes = base.getMinutes();
-
-  const newMs = new Date(y, m - 1, d, hours, minutes, 0, 0).getTime();
-  await createDuplicateTask(t, newMs);
-  closeDuplicateDateModal();
-  closeDuplicateSheet();
-}
-
-async function createDuplicateTask(origTask, newDeadlineMs) {
-  const shortId = await getNextCounter("mainTaskCount", state.currentUid);
-  await addDoc(
-    collection(db, "users", state.currentUid, "mainTasks"),
-    {
-      shortId,
-      title: origTask.title,
-      description: origTask.description || "",
-      durationMinutes: origTask.durationMinutes || 30,
-      deadline: new Date(newDeadlineMs).toISOString(),
-      isParallel: !!origTask.isParallel,
-      isPending: false,
-      isDone: false,
-      onlyMode: origTask.onlyMode || "NONE",
-      dayPills: Array.isArray(origTask.dayPills) ? origTask.dayPills : [],
-      slotPills: Array.isArray(origTask.slotPills) ? origTask.slotPills : [],
-      createdAt: serverTimestamp()
-    }
+  const shortId = await getNextCounter(
+    "mainTaskCount",
+    state.currentUid
   );
-  await loadAllData();
+
+  const docRef = collection(
+    db,
+    "users",
+    state.currentUid,
+    "mainTasks"
+  );
+  await addDoc(docRef, {
+    shortId,
+    title: src.title,
+    description: src.description || "",
+    durationMinutes: src.durationMinutes,
+    deadline: newDeadlineIso,
+    isParallel: !!src.isParallel,
+    isPending: false,
+    isDone: false,
+    onlyMode: src.onlyMode ?? "NONE",
+    dayPills: Array.isArray(src.dayPills) ? src.dayPills : [],
+    slotPills: Array.isArray(src.slotPills) ? src.slotPills : [],
+    createdAt: serverTimestamp()
+  });
+
+  state.duplicateTarget = null;
+  await recomputeAfterReload();
+}
+
+async function performDuplicateWithShift(shift) {
+  const src = state.duplicateTarget;
+  if (!src) return;
+
+  const dlMs = src.deadline ? new Date(src.deadline).getTime() : NaN;
+  if (!dlMs || isNaN(dlMs)) {
+    alert("Source task has no valid deadline.");
+    return;
+  }
+
+  let newMs = dlMs;
+  if (shift !== "same") {
+    const days = parseInt(shift, 10);
+    if (!isNaN(days)) {
+      newMs = dlMs + days * 24 * HOUR_MS;
+    }
+  }
+
+  const iso = new Date(newMs).toISOString();
+  await performDuplicateBase(iso);
+}
+
+async function performDuplicateWithCustomDate(dateStr) {
+  const ms = new Date(dateStr).getTime();
+  if (isNaN(ms)) {
+    alert("Invalid deadline.");
+    return;
+  }
+  const iso = new Date(ms).toISOString();
+  await performDuplicateBase(iso);
+}
+
+function setupDuplicateUI() {
+  const sheetBackdrop = document.getElementById("duplicateSheetBackdrop");
+  const dateBackdrop = document.getElementById("duplicateDateModalBackdrop");
+  const cancelBtn = document.getElementById("dupCancelBtn");
+  const dateInput = document.getElementById("dupDateInput");
+  const dateCancelBtn = document.getElementById("dupDateCancelBtn");
+  const dateConfirmBtn = document.getElementById("dupDateConfirmBtn");
+
+  const optionButtons = document.querySelectorAll("[data-dup-shift]");
+  optionButtons.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const shift = btn.getAttribute("data-dup-shift");
+      if (!state.duplicateTarget || !state.currentUid) {
+        closeDuplicateSheet();
+        return;
+      }
+      if (shift === "custom") {
+        closeDuplicateSheet();
+        openDuplicateDateModal();
+        return;
+      }
+      await performDuplicateWithShift(shift);
+      closeDuplicateSheet();
+    });
+  });
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      closeDuplicateSheet();
+    });
+  }
+
+  if (sheetBackdrop) {
+    sheetBackdrop.addEventListener("click", (e) => {
+      if (e.target === sheetBackdrop) {
+        closeDuplicateSheet();
+      }
+    });
+  }
+
+  if (dateCancelBtn) {
+    dateCancelBtn.addEventListener("click", () => {
+      closeDuplicateDateModal();
+    });
+  }
+
+  if (dateConfirmBtn) {
+    dateConfirmBtn.addEventListener("click", async () => {
+      if (!state.duplicateTarget || !state.currentUid) {
+        closeDuplicateDateModal();
+        return;
+      }
+      if (!dateInput || !dateInput.value) return;
+      await performDuplicateWithCustomDate(dateInput.value);
+      closeDuplicateDateModal();
+    });
+  }
+
+  if (dateBackdrop) {
+    dateBackdrop.addEventListener("click", (e) => {
+      if (e.target === dateBackdrop) {
+        closeDuplicateDateModal();
+      }
+    });
+  }
 }
 
 // UI wiring
@@ -1190,59 +1209,6 @@ function setupDebugToggle() {
     const hidden = body.style.display === "none";
     body.style.display = hidden ? "block" : "none";
     btn.textContent = hidden ? "Collapse" : "Expand";
-  });
-}
-
-// Duplicate sheet + modal wiring
-function setupDuplicateUI() {
-  const sheet = document.getElementById("duplicateSheet");
-  const sheetOptions = sheet.querySelectorAll(".sheet-option[data-offset]");
-  const sheetCustomBtn = document.getElementById("sheetCustomDateBtn");
-  const sheetCancelBtn = document.getElementById("sheetCancelBtn");
-
-  sheetOptions.forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const offset = parseInt(btn.getAttribute("data-offset"), 10) || 0;
-      await handleDuplicateWithOffset(offset);
-    });
-  });
-
-  sheetCustomBtn.addEventListener("click", () => {
-    openDuplicateDateModal();
-  });
-
-  sheetCancelBtn.addEventListener("click", () => {
-    closeDuplicateSheet();
-  });
-
-  sheet.addEventListener("click", (e) => {
-    if (e.target === sheet) {
-      closeDuplicateSheet();
-    }
-  });
-
-  const modal = document.getElementById("duplicateDateModal");
-  const cancelBtn = document.getElementById("dupDateCancelBtn");
-  const confirmBtn = document.getElementById("dupDateConfirmBtn");
-
-  cancelBtn.addEventListener("click", () => {
-    closeDuplicateDateModal();
-  });
-  confirmBtn.addEventListener("click", async () => {
-    await handleDuplicateWithCustomDate();
-  });
-
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) {
-      closeDuplicateDateModal();
-    }
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      closeDuplicateSheet();
-      closeDuplicateDateModal();
-    }
   });
 }
 
