@@ -1,11 +1,9 @@
-// DNM's Tasker v1.5.0-alpha2 – Magnet-from-NOW + Firebase (project: dnmstasker-3b85f)
-// Changes vs alpha1:
-// - Remove all "parallel" concept:
-//   * No isParallel for main tasks
-//   * No isParallel for background tasks
-//   * No slice type 2. Background slices always block main tasks.
-// - Keep: w = duration / minutesLeft, ONLY/PREFER, short-task boost, split across free slices,
-//   duplicate sheet, tooltip, edit modal, Firebase auth + Firestore.
+// DNM's Tasker v1.5.0-alpha3 – Magnet-from-NOW + Firebase (project: dnmstasker-3b85f)
+// Changes vs alpha2:
+// - UI only: premium styling for timeline blocks (STYLE 1 – iOS soft blue gradient).
+// - Ensure current-time-line is always visible via CSS z-index.
+// - Minimum visual width for blocks (24px) for better readability.
+// - Engine logic (magnet, ONLY/PREFER, no parallel, background blocks main) is unchanged.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -27,7 +25,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -131,7 +128,6 @@ function isNowWithinTaskWindow(task, nowMs) {
   return dayOk && slotOk;
 }
 
-// Convert ISO to local datetime-local input string
 function isoToLocalInput(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -141,6 +137,7 @@ function isoToLocalInput(iso) {
 }
 
 // Firebase helpers
+
 async function ensureUserInitialized(uid) {
   const userRef = doc(db, "users", uid);
   const snap = await getDoc(userRef);
@@ -180,6 +177,7 @@ async function getNextCounter(fieldName, uid) {
 }
 
 // Magnet scheduler
+
 function recomputeTimeline() {
   state.now = Date.now();
   state.timelineStart = startOfToday();
@@ -196,7 +194,7 @@ function recomputeTimeline() {
 
   const now = state.now;
 
-  // Background slices, with auto-expire: BG with end < now are ignored
+  // Background slices, auto-expire past BG
   for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
@@ -211,7 +209,7 @@ function recomputeTimeline() {
     ei = clamp(ei, 0, totalSlices - 1);
 
     for (let s = si; s <= ei; s++) {
-      state.sliceTypes[s] = 3; // always blocking
+      state.sliceTypes[s] = 3; // blocked
     }
   }
 
@@ -314,6 +312,7 @@ function scheduleMainTasks(totalSlices) {
 }
 
 // Render timeline
+
 function renderTimeline() {
   const header = document.getElementById("timelineHeader");
   const canvas = document.getElementById("timelineCanvas");
@@ -357,8 +356,8 @@ function renderTimeline() {
 
     const isToday = d === 0;
     band.style.background = isToday
-      ? "rgba(239, 246, 255, 0.95)"
-      : "rgba(249, 250, 251, 0.95)";
+      ? "rgba(239, 246, 255, 0.96)"
+      : "rgba(249, 250, 251, 0.96)";
 
     band.textContent =
       String(date.getMonth() + 1).padStart(2, "0") +
@@ -411,13 +410,17 @@ function renderTimeline() {
     const block = document.createElement("div");
     block.className = "timeline-block bg";
     block.style.left = offsetHours * pxPerHour + "px";
-    block.style.width = Math.max(durationHours * pxPerHour, 4) + "px";
+    block.style.width =
+      Math.max(durationHours * pxPerHour, 24) + "px";
     block.title = `${bg.title}\n${formatHM(startClamped)}–${formatHM(
       endClamped
     )}`;
-    block.innerHTML = `<div>${bg.title || "(BG)"}</div><div style="font-size:0.65rem;opacity:0.8">${formatHM(
-      startClamped
-    )}–${formatHM(endClamped)}</div>`;
+    block.innerHTML = `
+      <div class="block-title">${bg.title || "(BG)"}</div>
+      <div class="block-meta">${formatHM(startClamped)}–${formatHM(
+      endClamped
+    )}</div>
+    `;
     laneBg.appendChild(block);
   }
 
@@ -454,19 +457,22 @@ function renderTimeline() {
       block.className =
         "timeline-block main" + (isOverdue ? " overdue" : "");
       block.style.left = offsetHours * pxPerHour + "px";
-      block.style.width = Math.max(durationHours * pxPerHour, 4) + "px";
+      block.style.width =
+        Math.max(durationHours * pxPerHour, 24) + "px";
+
       block.title =
         `#${t.shortId ?? ""} ${t.title}\n` +
-        `${formatHM(startMs)}–${formatHM(endMs)}\n` +
-        `Duration: ${t.durationMinutes} min\n` +
+        `${formatHM(startMs)}–${formatHM(
+          endMs
+        )}\nDuration: ${t.durationMinutes} min\n` +
         `Deadline: ${
           dlMs ? formatDateTimeShort(dlMs) : "No deadline"
-        }\n` +
-        `Mode: ${t.onlyMode}`;
+        }\nMode: ${t.onlyMode}`;
+
       block.innerHTML = `
-        <div style="font-weight:500">${t.title}</div>
-        <div style="font-size:0.65rem;opacity:0.85">
-          #${t.shortId ?? ""} ${formatHM(startMs)}–${formatHM(endMs)}
+        <div class="block-title">${t.title}</div>
+        <div class="block-meta">
+          #${t.shortId ?? ""} · ${formatHM(startMs)}–${formatHM(endMs)}
         </div>
       `;
 
@@ -480,16 +486,21 @@ function renderTimeline() {
     }
   }
 
+  // Pending lane: simple markers
   for (const t of state.mainTasks.filter((t) => t.isPending)) {
     const block = document.createElement("div");
     block.className = "timeline-block main";
     block.style.left = "4px";
-    block.style.width = "140px";
+    block.style.width = "160px";
     block.title = `${t.title}\n(Pending task - no timeline)`;
-    block.innerHTML = `<div>${t.title}</div><div style="font-size:0.65rem;opacity:0.8">Pending (no timeline)</div>`;
+    block.innerHTML = `
+      <div class="block-title">${t.title}</div>
+      <div class="block-meta">Pending (no timeline)</div>
+    `;
     lanePending.appendChild(block);
   }
 
+  // Current time line
   const offsetHoursNow =
     (state.now - state.timelineStart) / HOUR_MS;
   const line = document.createElement("div");
@@ -503,7 +514,8 @@ function renderTimeline() {
   canvas.appendChild(inner);
 }
 
-// Helper to toggle done / delete
+// Done / delete helpers
+
 async function toggleDoneTask(t) {
   if (!state.currentUid) return;
   const ref = doc(db, "users", state.currentUid, "mainTasks", t.id);
@@ -526,6 +538,7 @@ async function deleteMainTask(t) {
 }
 
 // Render lists + debug
+
 function renderMainTaskList() {
   const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
@@ -830,7 +843,8 @@ function renderDebugPanel() {
   wrapper.appendChild(table);
 }
 
-// Tooltip for timeline blocks
+// Tooltip
+
 let tooltipEl = null;
 
 function hideTimelineTooltip() {
@@ -851,9 +865,10 @@ function openTimelineTooltip(task, evt) {
   const dlText = task.deadline
     ? formatDateTimeShort(new Date(task.deadline).getTime())
     : "No deadline";
-  const modeText = task.onlyMode && task.onlyMode !== "NONE"
-    ? task.onlyMode
-    : "Normal";
+  const modeText =
+    task.onlyMode && task.onlyMode !== "NONE"
+      ? task.onlyMode
+      : "Normal";
 
   tooltipEl.innerHTML = `
     <div class="tooltip-title">#${task.shortId ?? ""} ${task.title || ""}</div>
@@ -1095,7 +1110,8 @@ function setupDuplicateUI() {
   }
 }
 
-// Edit modal helpers: pill groups and multi-select
+// Edit modal helpers
+
 function initSinglePillGroup(groupEl) {
   const pills = groupEl.querySelectorAll(".pill");
   pills.forEach((pill) => {
@@ -1167,6 +1183,7 @@ function getActiveSlotPills() {
 }
 
 // Edit modal open/close/save
+
 function openEditModal(task) {
   const backdrop = document.getElementById("editTaskModalBackdrop");
   if (!backdrop) return;
@@ -1274,6 +1291,7 @@ function setupEditModal() {
 }
 
 // UI wiring
+
 function setupTabs() {
   const buttons = document.querySelectorAll(".tab-button");
   const tabs = document.querySelectorAll(".tab-content");
@@ -1471,6 +1489,7 @@ function setupDebugToggle() {
 }
 
 // Auth UI
+
 function setLoggedOutUI() {
   state.currentUid = null;
   document.getElementById("loginBtn").style.display = "inline-flex";
@@ -1517,6 +1536,7 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
 });
 
 // Load data
+
 async function loadMainTasksFromFirestore() {
   if (!state.currentUid) {
     state.mainTasks = [];
@@ -1601,6 +1621,7 @@ async function recomputeAfterReload() {
 }
 
 // Init
+
 function init() {
   setupTabs();
   setupMainTaskForm();
