@@ -454,7 +454,6 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  cursor: default;
 }
 
 .timeline-block.main {
@@ -465,6 +464,7 @@ body {
   );
   border: 1px solid rgba(59, 130, 246, 0.7);
   color: #0f172a;
+  cursor: pointer;
 }
 
 .timeline-block.main.overdue {
@@ -853,6 +853,10 @@ textarea {
   padding: 12px 14px 10px;
 }
 
+.modal-card.modal-edit {
+  max-width: 520px;
+}
+
 .modal-title {
   font-size: 0.9rem;
   font-weight: 600;
@@ -876,6 +880,39 @@ textarea {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+/* TOOLTIP */
+
+.timeline-tooltip {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  font-size: 0.78rem;
+}
+
+.timeline-tooltip .tooltip-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.timeline-tooltip .tooltip-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.timeline-tooltip .tooltip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 /* RESPONSIVE */
