@@ -2,26 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.5.0-alpha2 – Magnet Timeline</title>
+  <title>DNM's Tasker v1.5.0-alpha3 – Magnet Timeline</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!--
-    Version notes (v1.5.0-alpha2):
-    - Based on v1.5.0-alpha1:
-      + Magnet engine, ONLY/PREFER, w = duration / minutesLeft
-      + Duplicate with action sheet + custom date
-      + Tooltip on timeline blocks (Edit / Done / Delete)
-      + Edit Main Task modal
-      + Firebase Auth + Firestore
-    - Change in this version:
-      + REMOVE all parallel logic:
-        * No "parallel / non-parallel" for main tasks
-        * No "parallel / non-parallel" for background tasks
-        * No slice type 2; background slices always block main tasks
-      + UI cleaned accordingly: no parallel pills, no parallel badges
+    Version notes (v1.5.0-alpha3):
+    - Based on v1.5.0-alpha2:
+      + Magnet engine (w = duration / minutesLeft)
+      + ONLY/PREFER with k multiplier
+      + Short-task boost for tasks <= 10min & deadline within 48h
+      + Background tasks block main tasks (no parallel concept)
+      + Split main tasks across free slices
+      + Firebase Auth + Firestore, per-user data
+      + Duplicate action sheet + custom deadline modal
+      + Edit main task modal
+      + Timeline tooltip (click on main blocks)
+    - Changes in this version (UI only, engine unchanged):
+      + Premium UI for timeline blocks (STYLE 1 – iOS Soft Blue Gradient / Things 3 style)
+      + Refined background blocks (clean "busy" events)
+      + Increased lane height & spacing, better readability
+      + Minimum width for blocks to avoid ugly thin strips
+      + Current time line (NOW) always on top (z-index fix)
+      + Cleaner hour ruler & day band look
+      + Overall visual polish for a commercial-grade look
   -->
 
   <div class="page-bg"></div>
@@ -32,7 +38,7 @@
         <div class="logo-orb"></div>
         <div class="title-texts">
           <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.5.0-alpha2 · Magnet-only timeline · Firebase</span>
+          <span class="title-sub">v1.5.0-alpha3 · Magnet-only timeline · Firebase</span>
         </div>
       </div>
 
@@ -66,7 +72,7 @@
           <div>
             <h1 class="section-title">Timeline</h1>
             <p class="section-subtitle">
-              See your main tasks placed by the Magnet engine, in real time.
+              Your day, auto-arranged by the Magnet engine.
             </p>
           </div>
           <div class="timeline-actions">
@@ -84,7 +90,7 @@
             <span class="legend-color legend-main"></span>Main task
           </span>
           <span class="legend-item">
-            <span class="legend-color legend-bg"></span>Background (blocks main)
+            <span class="legend-color legend-bg"></span>Background (blocks)
           </span>
           <span class="legend-item">
             <span class="legend-color legend-overdue"></span>Overdue
@@ -97,11 +103,12 @@
         </section>
 
         <section class="panel-grid">
+          <!-- Main tasks form -->
           <div class="panel-main card-soft">
             <header class="panel-header">
               <div>
                 <h2>Main tasks</h2>
-                <p>Create main tasks to be scheduled automatically.</p>
+                <p>Create work that the engine will place automatically.</p>
               </div>
             </header>
 
@@ -173,6 +180,7 @@
             </form>
           </div>
 
+          <!-- Main tasks list -->
           <div class="panel-main card-soft">
             <header class="panel-header">
               <div>
@@ -184,6 +192,7 @@
           </div>
         </section>
 
+        <!-- Debug panel -->
         <section class="debug-panel card-soft">
           <header class="panel-header">
             <div>
@@ -207,7 +216,7 @@
           <div>
             <h1 class="section-title">Background tasks</h1>
             <p class="section-subtitle">
-              Fixed blocks like sleep, office hours, or recurring routines.
+              Fixed blocks (sleep, office hours, etc.) that fully block main tasks.
             </p>
           </div>
         </header>
@@ -217,7 +226,7 @@
             <header class="panel-header">
               <div>
                 <h2>Create background task</h2>
-                <p>Define occupied time windows that block main tasks.</p>
+                <p>Define when your time is not available for main work.</p>
               </div>
             </header>
 
@@ -252,7 +261,7 @@
             <header class="panel-header">
               <div>
                 <h2>Background task list</h2>
-                <p>All background constraints that block your slices.</p>
+                <p>Active blocking windows within your horizon.</p>
               </div>
             </header>
             <div id="bgTaskList" class="task-list"></div>
@@ -266,7 +275,7 @@
           <div>
             <h1 class="section-title">Settings</h1>
             <p class="section-subtitle">
-              Tune your magnet engine, horizon and multipliers.
+              Tune your magnet engine and timeline horizon.
             </p>
           </div>
         </header>
@@ -361,7 +370,7 @@
       <div class="modal-header">
         <div class="modal-title">Edit task</div>
         <p class="modal-subtitle">
-          Update the task properties and the magnet engine will recompute its placement.
+          Update it and the magnet engine will recompute placement.
         </p>
       </div>
       <div class="modal-body">
