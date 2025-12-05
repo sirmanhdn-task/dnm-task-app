@@ -2,32 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.5.0-alpha3 – Magnet Timeline</title>
+  <title>DNM's Tasker v1.5.1 – Magnet Timeline</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="format-detection" content="telephone=no,time=no,date=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <!--
-    Version notes (v1.5.0-alpha3):
-    - Based on v1.5.0-alpha2:
-      + Magnet engine (w = duration / minutesLeft)
-      + ONLY/PREFER with k multiplier
-      + Short-task boost for tasks <= 10min & deadline within 48h
-      + Background tasks block main tasks (no parallel concept)
-      + Split main tasks across free slices
-      + Firebase Auth + Firestore, per-user data
-      + Duplicate action sheet + custom deadline modal
-      + Edit main task modal
-      + Timeline tooltip (click on main blocks)
-    - Changes in this version (UI only, engine unchanged):
-      + Premium UI for timeline blocks (STYLE 1 – iOS Soft Blue Gradient / Things 3 style)
-      + Refined background blocks (clean "busy" events)
-      + Increased lane height & spacing, better readability
-      + Minimum width for blocks to avoid ugly thin strips
-      + Current time line (NOW) always on top (z-index fix)
-      + Cleaner hour ruler & day band look
-      + Overall visual polish for a commercial-grade look
+    Version notes (v1.5.1):
+    Base: v1.5.0-alpha3 (STYLE 1 – iOS soft blue gradient, premium UI)
+      - Magnet engine w = duration / minutesLeft
+      - ONLY/PREFER with k multiplier
+      - Short-task boost (<=10min & deadline within 48h)
+      - Background tasks block main tasks (no parallel)
+      - Split main tasks across free slices
+      - Firebase Auth + Firestore, per-user data
+      - Duplicate action sheet + custom deadline modal
+      - Edit main task modal
+      - Timeline tooltip (click on main blocks)
+    New in v1.5.1:
+      - Overdue cluster:
+        + Main tasks with deadline < NOW and not DONE are removed from engine scheduling
+        + They appear as red premium blocks grouped on the left side of the NOW line on main lane
+        + Timeline to the right of NOW is reserved for future main tasks only
+      - Background tasks auto-delete when their end time <= NOW (removed from Firestore)
+      - Pending Until:
+        + New field pendingUntil (datetime)
+        + If pendingUntil > NOW -> task stays in Pending lane (lane 3), not scheduled by engine
+        + When NOW >= pendingUntil -> task automatically becomes active and joins engine
+      - Task list updated to reflect overdue / pendingUntil status
   -->
 
   <div class="page-bg"></div>
@@ -38,7 +41,7 @@
         <div class="logo-orb"></div>
         <div class="title-texts">
           <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.5.0-alpha3 · Magnet-only timeline · Firebase</span>
+          <span class="title-sub">v1.5.1 · Magnet timeline · Pending Until · Firebase</span>
         </div>
       </div>
 
@@ -72,7 +75,7 @@
           <div>
             <h1 class="section-title">Timeline</h1>
             <p class="section-subtitle">
-              Your day, auto-arranged by the Magnet engine.
+              NOW-centered magnet engine with overdue cluster and Pending Until.
             </p>
           </div>
           <div class="timeline-actions">
@@ -93,7 +96,7 @@
             <span class="legend-color legend-bg"></span>Background (blocks)
           </span>
           <span class="legend-item">
-            <span class="legend-color legend-overdue"></span>Overdue
+            <span class="legend-color legend-overdue"></span>Overdue cluster
           </span>
         </div>
 
@@ -172,6 +175,21 @@
                 </div>
               </div>
 
+              <div class="form-row">
+                <label>Pending control</label>
+                <div class="pill-group pending-group">
+                  <button type="button" id="mtPendingToggle" class="pill">
+                    Pending until…
+                  </button>
+                  <input
+                    type="datetime-local"
+                    id="mtPendingUntil"
+                    class="pending-input"
+                    disabled
+                  />
+                </div>
+              </div>
+
               <div class="form-actions">
                 <button type="submit" class="btn primary-btn">
                   Add main task
@@ -185,7 +203,7 @@
             <header class="panel-header">
               <div>
                 <h2>Task list</h2>
-                <p>Sorted by magnet weight w (higher first).</p>
+                <p>Sorted by magnet w (active), plus pending and overdue status.</p>
               </div>
             </header>
             <div id="mainTaskList" class="task-list"></div>
@@ -261,7 +279,7 @@
             <header class="panel-header">
               <div>
                 <h2>Background task list</h2>
-                <p>Active blocking windows within your horizon.</p>
+                <p>Active blocking windows within your horizon (expired auto-removed).</p>
               </div>
             </header>
             <div id="bgTaskList" class="task-list"></div>
@@ -428,6 +446,20 @@
               <button type="button" data-slot="5" class="pill">15–18</button>
               <button type="button" data-slot="6" class="pill">18–21</button>
               <button type="button" data-slot="7" class="pill">21–24</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label>Pending control</label>
+            <div class="pill-group pending-group">
+              <button type="button" id="etPendingToggle" class="pill">
+                Pending until…
+              </button>
+              <input
+                type="datetime-local"
+                id="etPendingUntil"
+                class="pending-input"
+              />
             </div>
           </div>
         </div>
