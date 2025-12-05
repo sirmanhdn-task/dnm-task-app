@@ -1,9 +1,17 @@
-// DNM's Tasker v1.5.0-alpha3 – Magnet-from-NOW + Firebase (project: dnmstasker-3b85f)
-// Changes vs alpha2:
-// - UI only: premium styling for timeline blocks (STYLE 1 – iOS soft blue gradient).
-// - Ensure current-time-line is always visible via CSS z-index.
-// - Minimum visual width for blocks (24px) for better readability.
-// - Engine logic (magnet, ONLY/PREFER, no parallel, background blocks main) is unchanged.
+// DNM's Tasker v1.5.1 – Magnet-from-NOW + Pending Until + Overdue cluster + Firebase
+// Project: dnmstasker-3b85f
+//
+// Key logic changes vs v1.5.0-alpha3:
+// - Main tasks are classified into 4 states:
+//   1) DONE: not in engine.
+//   2) OVERDUE (deadline < NOW, !DONE): removed from magnet engine, rendered as red cluster
+//      on the left side of NOW in the main lane.
+//   3) PENDING (isPending == true OR pendingUntil > NOW): rendered in Pending lane (lane 3),
+//      not scheduled by engine.
+//   4) ACTIVE (everything else): scheduled by magnet engine with w = duration / minutesLeft,
+//      ONLY/PREFER multiplier, short-task boost.
+// - Background tasks with end <= NOW are auto-deleted from Firestore and not displayed.
+// - New field pendingUntil (ISO string) for main tasks, controlled by UI in create & edit modals.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -61,7 +69,9 @@ const state = {
   currentUid: null,
   duplicateTarget: null,
   currentEditTask: null,
-  currentTooltipTask: null
+  currentTooltipTask: null,
+  overdueTasks: [],
+  pendingTasks: []
 };
 
 // sliceTypes: 1 = free, 3 = blocked by background
@@ -176,7 +186,7 @@ async function getNextCounter(fieldName, uid) {
   return newCount;
 }
 
-// Magnet scheduler
+// Magnet scheduler with overdue & pendingUntil
 
 function recomputeTimeline() {
   state.now = Date.now();
@@ -194,7 +204,7 @@ function recomputeTimeline() {
 
   const now = state.now;
 
-  // Background slices, auto-expire past BG
+  // Background slices (skip expired ones, they are deleted at load time)
   for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
@@ -214,7 +224,6 @@ function recomputeTimeline() {
   }
 
   state.scheduledMain = scheduleMainTasks(totalSlices);
-
   renderTimeline();
   renderMainTaskList();
   renderBgTaskList();
@@ -226,15 +235,44 @@ function scheduleMainTasks(totalSlices) {
   const nowSliceRaw = msToSliceIndex(now);
   state.nowSlice = clamp(nowSliceRaw, 0, totalSlices - 1);
 
-  const tasks = state.mainTasks.filter(
-    (t) => !t.isPending && !t.isDone
-  );
+  state.overdueTasks = [];
+  state.pendingTasks = [];
 
-  const decorated = [];
+  const engineTasks = [];
   const k = state.settings.kOnlyPrefer;
   const kShort = state.settings.kShort;
 
-  for (const t of tasks) {
+  // Classify tasks into OVERDUE / PENDING / ACTIVE
+  for (const t of state.mainTasks) {
+    if (t.isDone) continue;
+
+    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+    const pendingUntilMs = t.pendingUntil
+      ? new Date(t.pendingUntil).getTime()
+      : null;
+
+    const isOverdue = dlMs && dlMs < now;
+    const isPendingFlag = !!t.isPending;
+    const isPendingUntilFuture =
+      pendingUntilMs && !isNaN(pendingUntilMs) && pendingUntilMs > now;
+
+    if (isOverdue) {
+      state.overdueTasks.push(t);
+      continue;
+    }
+
+    if (isPendingFlag || isPendingUntilFuture) {
+      state.pendingTasks.push(t);
+      continue;
+    }
+
+    // ACTIVE (goes into engine)
+    engineTasks.push(t);
+  }
+
+  const decorated = [];
+
+  for (const t of engineTasks) {
     const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
     let minutesLeft;
 
@@ -252,6 +290,7 @@ function scheduleMainTasks(totalSlices) {
 
     let w = baseW;
 
+    // Short task boost
     if (
       t.durationMinutes <= 10 &&
       minutesLeft <= 48 * 60
@@ -425,6 +464,8 @@ function renderTimeline() {
   }
 
   const now = state.now;
+
+  // Scheduled main tasks (ACTIVE)
   for (const entry of state.scheduledMain) {
     const t = entry.task;
     const slices = entry.assignedSlices;
@@ -445,7 +486,6 @@ function renderTimeline() {
     segments.push([curStart, prev]);
 
     const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-    const isOverdue = dlMs && dlMs < now;
 
     for (const [sStart, sEnd] of segments) {
       const startMs = sliceIndexToMs(sStart);
@@ -454,8 +494,7 @@ function renderTimeline() {
       const durationHours = (endMs - startMs) / HOUR_MS;
 
       const block = document.createElement("div");
-      block.className =
-        "timeline-block main" + (isOverdue ? " overdue" : "");
+      block.className = "timeline-block main";
       block.style.left = offsetHours * pxPerHour + "px";
       block.style.width =
         Math.max(durationHours * pxPerHour, 24) + "px";
@@ -486,21 +525,84 @@ function renderTimeline() {
     }
   }
 
-  // Pending lane: simple markers
-  for (const t of state.mainTasks.filter((t) => t.isPending)) {
-    const block = document.createElement("div");
-    block.className = "timeline-block main";
-    block.style.left = "4px";
-    block.style.width = "160px";
-    block.title = `${t.title}\n(Pending task - no timeline)`;
-    block.innerHTML = `
-      <div class="block-title">${t.title}</div>
-      <div class="block-meta">Pending (no timeline)</div>
-    `;
-    lanePending.appendChild(block);
+  // Overdue cluster – on the left side of NOW
+  const overdue = state.overdueTasks || [];
+  if (overdue.length > 0) {
+    const nowX = (state.now - state.timelineStart) / HOUR_MS * pxPerHour;
+    const blockWidth = 150;
+    const gap = 8;
+    const totalWidth =
+      overdue.length * blockWidth + (overdue.length - 1) * gap;
+
+    let startX = nowX - totalWidth - 12;
+    if (startX < 4) startX = 4;
+
+    overdue.forEach((t, index) => {
+      const block = document.createElement("div");
+      block.className = "timeline-block main overdue";
+      block.style.left = (startX + index * (blockWidth + gap)) + "px";
+      block.style.width = blockWidth + "px";
+
+      const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+
+      block.innerHTML = `
+        <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
+        <div class="block-meta">
+          Overdue · ${dlMs ? formatHM(dlMs) : "No deadline"}
+        </div>
+      `;
+
+      block.dataset.taskId = t.id;
+      block.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        openTimelineTooltip(t, evt);
+      });
+
+      laneMain.appendChild(block);
+    });
   }
 
-  // Current time line
+  // Pending lane – manual pending or pendingUntil future
+  const pendingList = state.pendingTasks || [];
+  if (pendingList.length > 0) {
+    const baseLeft = 8;
+    const blockWidth = 180;
+    const gap = 8;
+
+    pendingList.forEach((t, index) => {
+      const x = baseLeft + index * (blockWidth + gap);
+      const block = document.createElement("div");
+      block.className = "timeline-block main";
+      block.style.left = x + "px";
+      block.style.width = blockWidth + "px";
+
+      const pendingUntilMs = t.pendingUntil
+        ? new Date(t.pendingUntil).getTime()
+        : null;
+
+      const metaText = pendingUntilMs
+        ? `Pending until ${formatDateTimeShort(pendingUntilMs)}`
+        : "Pending (no until)";
+
+      block.innerHTML = `
+        <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
+        <div class="block-meta">${metaText}</div>
+      `;
+
+      block.dataset.taskId = t.id;
+      block.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        openTimelineTooltip(t, evt);
+      });
+
+      lanePending.appendChild(block);
+    });
+  }
+
+  // Pending tasks flagged as isPending only but not in pendingList (for backward compatibility)
+  // no-op here, because classification already built state.pendingTasks.
+
+  // Current time line (NOW)
   const offsetHoursNow =
     (state.now - state.timelineStart) / HOUR_MS;
   const line = document.createElement("div");
@@ -555,20 +657,32 @@ function renderMainTaskList() {
   const activeIds = new Set(activeEntries.map((e) => e.task.id));
 
   const doneTasks = state.mainTasks.filter((t) => t.isDone);
-  const pendingOrNotScheduled = state.mainTasks.filter(
-    (t) =>
-      !t.isPending &&
-      !t.isDone &&
-      !activeIds.has(t.id)
+
+  const now = state.now;
+  const overdueIds = new Set(
+    state.overdueTasks.map((t) => t.id)
+  );
+  const pendingIds = new Set(
+    state.pendingTasks.map((t) => t.id)
   );
 
+  const others = state.mainTasks.filter(
+    (t) =>
+      !t.isDone &&
+      !activeIds.has(t.id) &&
+      !overdueIds.has(t.id) &&
+      !pendingIds.has(t.id)
+  );
+
+  // Active scheduled first
   for (const entry of activeEntries) {
     const t = entry.task;
     const row = buildMainTaskRow(t, entry);
     list.appendChild(row);
   }
 
-  for (const t of pendingOrNotScheduled) {
+  // Pending (pending lane)
+  for (const t of state.pendingTasks) {
     const pseudoEntry = {
       task: t,
       baseW: 0,
@@ -581,6 +695,35 @@ function renderMainTaskList() {
     list.appendChild(row);
   }
 
+  // Overdue
+  for (const t of state.overdueTasks) {
+    const pseudoEntry = {
+      task: t,
+      baseW: 0,
+      w: 0,
+      timeFactor: 0,
+      minutesLeft: 0,
+      assignedSlices: []
+    };
+    const row = buildMainTaskRow(t, pseudoEntry);
+    list.appendChild(row);
+  }
+
+  // Others (active but not scheduled)
+  for (const t of others) {
+    const pseudoEntry = {
+      task: t,
+      baseW: 0,
+      w: 0,
+      timeFactor: 0,
+      minutesLeft: 0,
+      assignedSlices: []
+    };
+    const row = buildMainTaskRow(t, pseudoEntry);
+    list.appendChild(row);
+  }
+
+  // Done
   for (const t of doneTasks) {
     const pseudoEntry = {
       task: t,
@@ -596,7 +739,9 @@ function renderMainTaskList() {
 
   if (
     activeEntries.length === 0 &&
-    pendingOrNotScheduled.length === 0 &&
+    state.pendingTasks.length === 0 &&
+    state.overdueTasks.length === 0 &&
+    others.length === 0 &&
     doneTasks.length === 0
   ) {
     const p = document.createElement("p");
@@ -628,32 +773,57 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   idSpan.textContent = "#" + (t.shortId ?? "");
   titleRow.appendChild(idSpan);
 
+  // Badges for status
+  const now = state.now;
+  const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+  const pendingUntilMs = t.pendingUntil
+    ? new Date(t.pendingUntil).getTime()
+    : null;
+  const isOverdue = dlMs && dlMs < now && !t.isDone;
+  const isPendingUntil =
+    pendingUntilMs && pendingUntilMs > now && !t.isDone;
+  const isPendingFlag = !!t.isPending && !t.isDone;
+
   if (t.isDone) {
     const doneBadge = document.createElement("span");
     doneBadge.className = "badge badge-done";
     doneBadge.textContent = "DONE";
     titleRow.appendChild(doneBadge);
+  } else if (isOverdue) {
+    const odBadge = document.createElement("span");
+    odBadge.className = "badge badge-overdue";
+    odBadge.textContent = "OVERDUE";
+    titleRow.appendChild(odBadge);
+  } else if (isPendingUntil || isPendingFlag) {
+    const pBadge = document.createElement("span");
+    pBadge.className = "badge badge-pending-until";
+    pBadge.textContent = isPendingUntil
+      ? "PENDING UNTIL"
+      : "PENDING";
+    titleRow.appendChild(pBadge);
   }
 
   main.appendChild(titleRow);
 
   const meta = document.createElement("div");
   meta.className = "task-meta";
-  const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-  const minutesLeft =
-    dlMs && !isNaN(dlMs)
-      ? Math.max(0, (dlMs - state.now) / MINUTE_MS)
-      : null;
 
-  meta.innerHTML = `
-    <span>${dlMs ? formatDateTimeShort(dlMs) : "No deadline"}</span>
-    <span>${t.durationMinutes} min</span>
-    ${
-      minutesLeft != null
-        ? `<span>${minutesLeft.toFixed(1)} min left</span>`
-        : ""
-    }
-  `;
+  let minutesLeft = null;
+  if (dlMs && !isNaN(dlMs)) {
+    minutesLeft = Math.max(0, (dlMs - now) / MINUTE_MS);
+  }
+
+  const parts = [];
+  parts.push(dlMs ? formatDateTimeShort(dlMs) : "No deadline");
+  parts.push(`${t.durationMinutes} min`);
+  if (minutesLeft != null) {
+    parts.push(`${minutesLeft.toFixed(1)} min left`);
+  }
+  if (pendingUntilMs && !isNaN(pendingUntilMs)) {
+    parts.push("Pending until " + formatDateTimeShort(pendingUntilMs));
+  }
+
+  meta.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
   main.appendChild(meta);
 
   const badges = document.createElement("div");
@@ -727,11 +897,12 @@ function renderBgTaskList() {
   }
 
   let anyShown = false;
+  const now = state.now;
   for (const t of state.bgTasks) {
     const sMs = new Date(t.start).getTime();
     const eMs = new Date(t.end).getTime();
     if (isNaN(sMs) || isNaN(eMs) || eMs <= sMs) continue;
-    if (eMs <= state.now) continue; // auto-expire in list
+    if (eMs <= now) continue; // should not happen; auto-delete occurs at load
 
     const row = document.createElement("div");
     row.className = "task-item";
@@ -798,11 +969,15 @@ function renderDebugPanel() {
 
   summary.textContent = `Main tasks: ${totalMain} (active: ${
     totalMain - doneCount
-  }, done: ${doneCount}), scheduled: ${scheduled}. SliceMinutes=${
-    state.settings.sliceMinutes
-  }, HorizonDays=${state.settings.horizonDays}, k=${
-    state.settings.kOnlyPrefer
-  }, k_short=${state.settings.kShort}, nowSlice=${state.nowSlice}`;
+  }, done: ${doneCount}), scheduled (ACTIVE only): ${
+    scheduled
+  }. Overdue cluster: ${state.overdueTasks.length}, pending: ${
+    state.pendingTasks.length
+  }. SliceMinutes=${state.settings.sliceMinutes}, HorizonDays=${
+    state.settings.horizonDays
+  }, k=${state.settings.kOnlyPrefer}, k_short=${
+    state.settings.kShort
+  }, nowSlice=${state.nowSlice}`;
 
   const table = document.createElement("table");
   table.className = "debug-table";
@@ -865,6 +1040,14 @@ function openTimelineTooltip(task, evt) {
   const dlText = task.deadline
     ? formatDateTimeShort(new Date(task.deadline).getTime())
     : "No deadline";
+
+  const pendingUntilMs = task.pendingUntil
+    ? new Date(task.pendingUntil).getTime()
+    : null;
+  const pendingText = pendingUntilMs
+    ? " · Pending until " + formatDateTimeShort(pendingUntilMs)
+    : "";
+
   const modeText =
     task.onlyMode && task.onlyMode !== "NONE"
       ? task.onlyMode
@@ -873,7 +1056,7 @@ function openTimelineTooltip(task, evt) {
   tooltipEl.innerHTML = `
     <div class="tooltip-title">#${task.shortId ?? ""} ${task.title || ""}</div>
     <div class="tooltip-meta">
-      ${dlText} · ${task.durationMinutes} min · ${modeText}
+      ${dlText} · ${task.durationMinutes} min · ${modeText}${pendingText}
     </div>
     <div class="tooltip-actions">
       <button type="button" class="btn subtle-btn small js-tooltip-edit">Edit</button>
@@ -1004,6 +1187,7 @@ async function performDuplicateBase(newDeadlineIso) {
     onlyMode: src.onlyMode ?? "NONE",
     dayPills: Array.isArray(src.dayPills) ? src.dayPills : [],
     slotPills: Array.isArray(src.slotPills) ? src.slotPills : [],
+    pendingUntil: null,
     createdAt: serverTimestamp()
   });
 
@@ -1110,7 +1294,7 @@ function setupDuplicateUI() {
   }
 }
 
-// Edit modal helpers
+// Edit modal & pill utilities
 
 function initSinglePillGroup(groupEl) {
   const pills = groupEl.querySelectorAll(".pill");
@@ -1182,6 +1366,34 @@ function getActiveSlotPills() {
   return getPillsFromGroup(group, "slot");
 }
 
+// Pending toggle helpers
+
+function setupPendingToggle(toggleEl, inputEl) {
+  if (!toggleEl || !inputEl) return;
+  inputEl.disabled = true;
+  toggleEl.addEventListener("click", () => {
+    const active = toggleEl.classList.toggle("active");
+    inputEl.disabled = !active;
+    if (!active) {
+      inputEl.value = "";
+    }
+  });
+}
+
+function setPendingUIFromTask(toggleEl, inputEl, task) {
+  if (!toggleEl || !inputEl) return;
+  const hasPendingUntil = !!task.pendingUntil;
+  if (hasPendingUntil) {
+    toggleEl.classList.add("active");
+    inputEl.disabled = false;
+    inputEl.value = isoToLocalInput(task.pendingUntil);
+  } else {
+    toggleEl.classList.remove("active");
+    inputEl.disabled = true;
+    inputEl.value = "";
+  }
+}
+
 // Edit modal open/close/save
 
 function openEditModal(task) {
@@ -1205,6 +1417,10 @@ function openEditModal(task) {
   setPillsFromArray(dayGroup, "day", task.dayPills || []);
   setPillsFromArray(slotGroup, "slot", task.slotPills || []);
 
+  const pendingToggle = document.getElementById("etPendingToggle");
+  const pendingInput = document.getElementById("etPendingUntil");
+  setPendingUIFromTask(pendingToggle, pendingInput, task);
+
   backdrop.style.display = "flex";
 }
 
@@ -1224,6 +1440,10 @@ function setupEditModal() {
   initSinglePillGroup(document.getElementById("etModeGroup"));
   setupTogglePills(document.getElementById("etDayPills"));
   setupTogglePills(document.getElementById("etSlotPills"));
+
+  const pendingToggle = document.getElementById("etPendingToggle");
+  const pendingInput = document.getElementById("etPendingUntil");
+  setupPendingToggle(pendingToggle, pendingInput);
 
   if (cancelBtn) {
     cancelBtn.addEventListener("click", () => {
@@ -1273,6 +1493,14 @@ function setupEditModal() {
         "slot"
       );
 
+      let pendingUntil = null;
+      if (pendingToggle.classList.contains("active") && pendingInput.value) {
+        const puMs = new Date(pendingInput.value).getTime();
+        if (!isNaN(puMs)) {
+          pendingUntil = new Date(puMs).toISOString();
+        }
+      }
+
       const ref = doc(db, "users", state.currentUid, "mainTasks", t.id);
       await updateDoc(ref, {
         title,
@@ -1281,7 +1509,8 @@ function setupEditModal() {
         deadline: new Date(dlMs).toISOString(),
         onlyMode: mode || "NONE",
         dayPills,
-        slotPills
+        slotPills,
+        pendingUntil
       });
 
       closeEditModal();
@@ -1330,6 +1559,10 @@ function setupMainTaskForm() {
   setupTogglePills(document.getElementById("mtDayPills"));
   setupTogglePills(document.getElementById("mtSlotPills"));
 
+  const pendingToggle = document.getElementById("mtPendingToggle");
+  const pendingInput = document.getElementById("mtPendingUntil");
+  setupPendingToggle(pendingToggle, pendingInput);
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!state.currentUid) {
@@ -1347,6 +1580,14 @@ function setupMainTaskForm() {
     const dlMs = new Date(dlStr).getTime();
 
     if (!title || !dur || isNaN(dlMs)) return;
+
+    let pendingUntil = null;
+    if (pendingToggle.classList.contains("active") && pendingInput.value) {
+      const puMs = new Date(pendingInput.value).getTime();
+      if (!isNaN(puMs)) {
+        pendingUntil = new Date(puMs).toISOString();
+      }
+    }
 
     const shortId = await getNextCounter(
       "mainTaskCount",
@@ -1370,10 +1611,15 @@ function setupMainTaskForm() {
       onlyMode: modeGetter(),
       dayPills: getActiveDayPills(),
       slotPills: getActiveSlotPills(),
+      pendingUntil,
       createdAt: serverTimestamp()
     });
 
     form.reset();
+    pendingToggle.classList.remove("active");
+    pendingInput.disabled = true;
+    pendingInput.value = "";
+
     recomputeAfterReload();
   });
 }
@@ -1550,6 +1796,8 @@ async function loadMainTasksFromFirestore() {
     items.push({ id: docSnap.id, ...docSnap.data() })
   );
 
+  const now = Date.now();
+
   state.mainTasks = items.map((d, index) => {
     const durationMinutes =
       d.durationMinutes ??
@@ -1559,6 +1807,14 @@ async function loadMainTasksFromFirestore() {
       d.deadline ??
       d.deadlineAt ??
       null;
+
+    const pendingUntil =
+      d.pendingUntil ?? null;
+
+    // Optional "wake up" logic for pendingUntil <= now can be added here
+    // if we want to clear pendingUntil automatically in Firestore.
+    // For now we keep the value and only interpret at runtime.
+
     return {
       id: d.id,
       shortId: d.shortId ?? d.taskId ?? index + 1,
@@ -1571,6 +1827,7 @@ async function loadMainTasksFromFirestore() {
       onlyMode: d.onlyMode ?? "NONE",
       dayPills: Array.isArray(d.dayPills) ? d.dayPills : [],
       slotPills: Array.isArray(d.slotPills) ? d.slotPills : [],
+      pendingUntil,
       createdAt: d.createdAt ?? null
     };
   });
@@ -1589,17 +1846,45 @@ async function loadBgTasksFromFirestore() {
     items.push({ id: docSnap.id, ...docSnap.data() })
   );
 
-  state.bgTasks = items
-    .filter((d) => d.start && d.end)
-    .map((d, index) => ({
-      id: d.id,
-      shortId: d.shortId ?? d.taskId ?? index + 1,
-      title: d.title || "",
-      description: d.description || "",
-      start: d.start,
-      end: d.end,
-      createdAt: d.createdAt ?? null
-    }));
+  const now = Date.now();
+  const active = [];
+  const deletePromises = [];
+
+  for (const d of items) {
+    if (!d.start || !d.end) continue;
+    const sMs = new Date(d.start).getTime();
+    const eMs = new Date(d.end).getTime();
+    if (isNaN(sMs) || isNaN(eMs) || eMs <= sMs) continue;
+
+    if (eMs <= now) {
+      // auto delete expired background tasks
+      deletePromises.push(
+        deleteDoc(
+          doc(db, "users", state.currentUid, "backgroundTasks", d.id)
+        )
+      );
+    } else {
+      active.push(d);
+    }
+  }
+
+  if (deletePromises.length) {
+    try {
+      await Promise.all(deletePromises);
+    } catch (err) {
+      console.error("Error auto-deleting expired background tasks:", err);
+    }
+  }
+
+  state.bgTasks = active.map((d, index) => ({
+    id: d.id,
+    shortId: d.shortId ?? d.taskId ?? index + 1,
+    title: d.title || "",
+    description: d.description || "",
+    start: d.start,
+    end: d.end,
+    createdAt: d.createdAt ?? null
+  }));
 }
 
 async function loadAllData() {
