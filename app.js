@@ -1,7 +1,8 @@
-// DNM's Tasker v1.4.6 – Magnet-from-NOW + Firebase (project: dnmstasker)
-// Premium UI version: logic unchanged from v1.4.4a, plus:
-// - Background tasks auto-expire (end < now)
-// - Duplicate main task with action sheet + custom date
+// DNM's Tasker v1.5.0-alpha1 – Magnet-from-NOW + Firebase (project: dnmstasker)
+// Premium UI version:
+// - Keep v1.4.6 logic (Magnet engine, ONLY/PREFER, parallel, Duplicate, BG auto-expire)
+// - Add interactive timeline tooltip (Edit / Done / Delete)
+// - Add Edit Main Task modal
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
@@ -23,7 +24,6 @@ import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -58,7 +58,9 @@ const state = {
   now: null,
   nowSlice: 0,
   currentUid: null,
-  duplicateTarget: null
+  duplicateTarget: null,
+  currentEditTask: null,
+  currentTooltipTask: null
 };
 
 function startOfToday() {
@@ -121,6 +123,15 @@ function isNowWithinTaskWindow(task, nowMs) {
   const slotOk = !hasSlots || task.slotPills.includes(slot);
 
   return dayOk && slotOk;
+}
+
+// Convert ISO to local datetime-local input string
+function isoToLocalInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * MINUTE_MS);
+  return local.toISOString().slice(0, 16);
 }
 
 // Firebase helpers
@@ -459,6 +470,13 @@ function renderTimeline() {
           #${t.shortId ?? ""} ${formatHM(startMs)}–${formatHM(endMs)}
         </div>
       `;
+
+      block.dataset.taskId = t.id;
+      block.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        openTimelineTooltip(t, evt);
+      });
+
       laneMain.appendChild(block);
     }
   }
@@ -484,6 +502,28 @@ function renderTimeline() {
   inner.appendChild(laneBg);
   inner.appendChild(lanePending);
   canvas.appendChild(inner);
+}
+
+// Helper to toggle done / delete from multiple UI entry points
+async function toggleDoneTask(t) {
+  if (!state.currentUid) return;
+  const ref = doc(db, "users", state.currentUid, "mainTasks", t.id);
+  if (t.isDone) {
+    await updateDoc(ref, { isDone: false });
+  } else {
+    if (!confirm("Mark this task as DONE?")) return;
+    await updateDoc(ref, { isDone: true });
+  }
+  await loadAllData();
+}
+
+async function deleteMainTask(t) {
+  if (!state.currentUid) return;
+  if (!confirm("Delete this task permanently?")) return;
+  await deleteDoc(
+    doc(db, "users", state.currentUid, "mainTasks", t.id)
+  );
+  await loadAllData();
 }
 
 // Render lists + debug
@@ -629,24 +669,20 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   const actions = document.createElement("div");
   actions.className = "task-actions";
 
+  const editBtn = document.createElement("button");
+  editBtn.className = "icon-btn";
+  editBtn.textContent = "Edit";
+  editBtn.onclick = () => {
+    if (!state.currentUid) return;
+    openEditModal(t);
+  };
+  actions.appendChild(editBtn);
+
   const doneBtn = document.createElement("button");
   doneBtn.className = "icon-btn";
   doneBtn.textContent = t.isDone ? "Undone" : "Done";
   doneBtn.onclick = async () => {
-    if (!state.currentUid) return;
-    if (t.isDone) {
-      await updateDoc(
-        doc(db, "users", state.currentUid, "mainTasks", t.id),
-        { isDone: false }
-      );
-    } else {
-      if (!confirm("Mark this task as DONE?")) return;
-      await updateDoc(
-        doc(db, "users", state.currentUid, "mainTasks", t.id),
-        { isDone: true }
-      );
-    }
-    await loadAllData();
+    await toggleDoneTask(t);
   };
   actions.appendChild(doneBtn);
 
@@ -663,12 +699,7 @@ function buildMainTaskRow(t, entry, isDoneGroup = false) {
   delBtn.className = "icon-btn";
   delBtn.textContent = "Delete";
   delBtn.onclick = async () => {
-    if (!state.currentUid) return;
-    if (!confirm("Delete this task permanently?")) return;
-    await deleteDoc(
-      doc(db, "users", state.currentUid, "mainTasks", t.id)
-    );
-    await loadAllData();
+    await deleteMainTask(t);
   };
   actions.appendChild(delBtn);
 
@@ -806,6 +837,105 @@ function renderDebugPanel() {
 
   table.appendChild(tbody);
   wrapper.appendChild(table);
+}
+
+// Tooltip for timeline blocks
+let tooltipEl = null;
+
+function hideTimelineTooltip() {
+  if (tooltipEl) {
+    tooltipEl.style.display = "none";
+  }
+  state.currentTooltipTask = null;
+}
+
+function openTimelineTooltip(task, evt) {
+  if (!tooltipEl) {
+    tooltipEl = document.getElementById("timelineTooltip");
+  }
+  if (!tooltipEl) return;
+
+  state.currentTooltipTask = task;
+
+  const dlText = task.deadline
+    ? formatDateTimeShort(new Date(task.deadline).getTime())
+    : "No deadline";
+  const modeText = task.onlyMode && task.onlyMode !== "NONE"
+    ? task.onlyMode
+    : "Normal";
+  const parallelText = task.isParallel ? "Parallel" : "Non-parallel";
+
+  tooltipEl.innerHTML = `
+    <div class="tooltip-title">#${task.shortId ?? ""} ${task.title || ""}</div>
+    <div class="tooltip-meta">
+      ${dlText} · ${task.durationMinutes} min · ${modeText} · ${parallelText}
+    </div>
+    <div class="tooltip-actions">
+      <button type="button" class="btn subtle-btn small js-tooltip-edit">Edit</button>
+      <button type="button" class="btn subtle-btn small js-tooltip-done">
+        ${task.isDone ? "Undone" : "Done"}
+      </button>
+      <button type="button" class="btn subtle-btn small js-tooltip-delete">Delete</button>
+    </div>
+  `;
+
+  tooltipEl.style.display = "block";
+
+  const padding = 8;
+  let x = evt.clientX + 8;
+  let y = evt.clientY - 10;
+
+  const rect = tooltipEl.getBoundingClientRect();
+  if (x + rect.width + padding > window.innerWidth) {
+    x = window.innerWidth - rect.width - padding;
+  }
+  if (y + rect.height + padding > window.innerHeight) {
+    y = window.innerHeight - rect.height - padding;
+  }
+  if (y < padding) y = padding;
+
+  tooltipEl.style.left = x + "px";
+  tooltipEl.style.top = y + "px";
+
+  const editBtn = tooltipEl.querySelector(".js-tooltip-edit");
+  const doneBtn = tooltipEl.querySelector(".js-tooltip-done");
+  const delBtn = tooltipEl.querySelector(".js-tooltip-delete");
+
+  if (editBtn) {
+    editBtn.onclick = (e) => {
+      e.stopPropagation();
+      hideTimelineTooltip();
+      openEditModal(task);
+    };
+  }
+  if (doneBtn) {
+    doneBtn.onclick = async (e) => {
+      e.stopPropagation();
+      hideTimelineTooltip();
+      await toggleDoneTask(task);
+    };
+  }
+  if (delBtn) {
+    delBtn.onclick = async (e) => {
+      e.stopPropagation();
+      hideTimelineTooltip();
+      await deleteMainTask(task);
+    };
+  }
+}
+
+function setupTimelineTooltipGlobalClose() {
+  tooltipEl = document.getElementById("timelineTooltip");
+  document.addEventListener("click", (e) => {
+    if (!tooltipEl) return;
+    if (tooltipEl.style.display !== "block") return;
+
+    const insideTooltip = tooltipEl.contains(e.target);
+    const onBlock = e.target.closest(".timeline-block.main");
+    if (!insideTooltip && !onBlock) {
+      hideTimelineTooltip();
+    }
+  });
 }
 
 // Duplicate UI + logic
@@ -976,6 +1106,195 @@ function setupDuplicateUI() {
   }
 }
 
+// Edit modal helpers: pill groups and multi-select
+function initSinglePillGroup(groupEl) {
+  const pills = groupEl.querySelectorAll(".pill");
+  pills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      pills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+    });
+  });
+}
+
+function setSinglePillGroup(groupEl, value) {
+  const pills = groupEl.querySelectorAll(".pill");
+  pills.forEach((p) => {
+    if (p.getAttribute("data-value") === value) {
+      p.classList.add("active");
+    } else {
+      p.classList.remove("active");
+    }
+  });
+}
+
+function getSinglePillGroup(groupEl) {
+  const active = groupEl.querySelector(".pill.active");
+  return active ? active.getAttribute("data-value") : null;
+}
+
+function setupTogglePills(groupEl) {
+  const pills = groupEl.querySelectorAll(".pill");
+  pills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      pill.classList.toggle("active");
+    });
+  });
+}
+
+function setPillsFromArray(groupEl, attr, values) {
+  const set = new Set(values || []);
+  const pills = groupEl.querySelectorAll(".pill");
+  pills.forEach((p) => {
+    const raw = p.getAttribute("data-" + attr);
+    const v = raw != null ? parseInt(raw, 10) : NaN;
+    if (!isNaN(v) && set.has(v)) {
+      p.classList.add("active");
+    } else {
+      p.classList.remove("active");
+    }
+  });
+}
+
+function getPillsFromGroup(groupEl, attr) {
+  const pills = groupEl.querySelectorAll(".pill.active");
+  const values = [];
+  pills.forEach((p) => {
+    const raw = p.getAttribute("data-" + attr);
+    const v = raw != null ? parseInt(raw, 10) : NaN;
+    if (!isNaN(v)) values.push(v);
+  });
+  return values;
+}
+
+function getActiveDayPills() {
+  const group = document.getElementById("mtDayPills");
+  return getPillsFromGroup(group, "day");
+}
+
+function getActiveSlotPills() {
+  const group = document.getElementById("mtSlotPills");
+  return getPillsFromGroup(group, "slot");
+}
+
+// Edit modal open/close/save
+function openEditModal(task) {
+  const backdrop = document.getElementById("editTaskModalBackdrop");
+  if (!backdrop) return;
+
+  state.currentEditTask = task;
+
+  document.getElementById("etTitle").value = task.title || "";
+  document.getElementById("etDescription").value = task.description || "";
+  document.getElementById("etDuration").value = task.durationMinutes || 0;
+  document.getElementById("etDeadline").value = task.deadline
+    ? isoToLocalInput(task.deadline)
+    : "";
+
+  const parallelGroup = document.getElementById("etParallelGroup");
+  const modeGroup = document.getElementById("etModeGroup");
+  setSinglePillGroup(
+    parallelGroup,
+    task.isParallel ? "parallel" : "nonparallel"
+  );
+  setSinglePillGroup(modeGroup, task.onlyMode || "NONE");
+
+  const dayGroup = document.getElementById("etDayPills");
+  const slotGroup = document.getElementById("etSlotPills");
+  setPillsFromArray(dayGroup, "day", task.dayPills || []);
+  setPillsFromArray(slotGroup, "slot", task.slotPills || []);
+
+  backdrop.style.display = "flex";
+}
+
+function closeEditModal() {
+  const backdrop = document.getElementById("editTaskModalBackdrop");
+  if (backdrop) {
+    backdrop.style.display = "none";
+  }
+  state.currentEditTask = null;
+}
+
+function setupEditModal() {
+  const backdrop = document.getElementById("editTaskModalBackdrop");
+  const cancelBtn = document.getElementById("editTaskCancelBtn");
+  const saveBtn = document.getElementById("editTaskSaveBtn");
+
+  initSinglePillGroup(document.getElementById("etParallelGroup"));
+  initSinglePillGroup(document.getElementById("etModeGroup"));
+  setupTogglePills(document.getElementById("etDayPills"));
+  setupTogglePills(document.getElementById("etSlotPills"));
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      closeEditModal();
+    });
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) {
+        closeEditModal();
+      }
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      const t = state.currentEditTask;
+      if (!t || !state.currentUid) {
+        closeEditModal();
+        return;
+      }
+
+      const title = document.getElementById("etTitle").value.trim();
+      const desc = document.getElementById("etDescription").value.trim();
+      const dur = parseInt(
+        document.getElementById("etDuration").value,
+        10
+      );
+      const dlStr = document.getElementById("etDeadline").value;
+      const dlMs = new Date(dlStr).getTime();
+
+      if (!title || !dur || isNaN(dlMs)) {
+        alert("Title, duration, and deadline are required.");
+        return;
+      }
+
+      const parallel = getSinglePillGroup(
+        document.getElementById("etParallelGroup")
+      );
+      const mode = getSinglePillGroup(
+        document.getElementById("etModeGroup")
+      );
+
+      const dayPills = getPillsFromGroup(
+        document.getElementById("etDayPills"),
+        "day"
+      );
+      const slotPills = getPillsFromGroup(
+        document.getElementById("etSlotPills"),
+        "slot"
+      );
+
+      const ref = doc(db, "users", state.currentUid, "mainTasks", t.id);
+      await updateDoc(ref, {
+        title,
+        description: desc,
+        durationMinutes: dur,
+        deadline: new Date(dlMs).toISOString(),
+        isParallel: parallel === "parallel",
+        onlyMode: mode || "NONE",
+        dayPills,
+        slotPills
+      });
+
+      closeEditModal();
+      await loadAllData();
+    });
+  }
+}
+
 // UI wiring
 function setupTabs() {
   const buttons = document.querySelectorAll(".tab-button");
@@ -1003,35 +1322,6 @@ function setupPillGroupSingle(groupEl, defaultVal) {
     });
   });
   return () => current;
-}
-
-function setupTogglePills(groupEl) {
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      pill.classList.toggle("active");
-    });
-  });
-}
-
-function getActiveDayPills() {
-  const group = document.getElementById("mtDayPills");
-  const actives = group.querySelectorAll(".pill.active");
-  const days = [];
-  actives.forEach((p) => {
-    days.push(parseInt(p.getAttribute("data-day"), 10));
-  });
-  return days;
-}
-
-function getActiveSlotPills() {
-  const group = document.getElementById("mtSlotPills");
-  const actives = group.querySelectorAll(".pill.active");
-  const slots = [];
-  actives.forEach((p) => {
-    slots.push(parseInt(p.getAttribute("data-slot"), 10));
-  });
-  return slots;
 }
 
 function setupMainTaskForm() {
@@ -1353,6 +1643,8 @@ function init() {
   setupTimelineControls();
   setupDebugToggle();
   setupDuplicateUI();
+  setupEditModal();
+  setupTimelineTooltipGlobalClose();
 
   onAuthStateChanged(auth, async (user) => {
     if (user) {
