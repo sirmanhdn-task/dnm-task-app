@@ -1,451 +1,987 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.5.0-alpha3 – Magnet Timeline</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="format-detection" content="telephone=no,time=no,date=no" />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <!--
-    Version notes (v1.5.0-alpha3):
-    - Based on v1.5.0-alpha2:
-      + Magnet engine (w = duration / minutesLeft)
-      + ONLY/PREFER with k multiplier
-      + Short-task boost for tasks <= 10min & deadline within 48h
-      + Background tasks block main tasks (no parallel concept)
-      + Split main tasks across free slices
-      + Firebase Auth + Firestore, per-user data
-      + Duplicate action sheet + custom deadline modal
-      + Edit main task modal
-      + Timeline tooltip (click on main blocks)
-    - Changes in this version (UI only, engine unchanged):
-      + Premium UI for timeline blocks (STYLE 1 – iOS Soft Blue Gradient / Things 3 style)
-      + Refined background blocks (clean "busy" events)
-      + Increased lane height & spacing, better readability
-      + Minimum width for blocks to avoid ugly thin strips
-      + Current time line (NOW) always on top (z-index fix)
-      + Cleaner hour ruler & day band look
-      + Overall visual polish for a commercial-grade look
-  -->
+:root {
+  --bg-page: #f5f5f7;
+  --bg-page-gradient: radial-gradient(circle at top left, #ffffff, #f5f5f7 65%);
+  --bg-main: #ffffff;
+  --bg-soft: #f9fafb;
+  --border-subtle: #e5e7eb;
+  --border-strong: #cbd5e1;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-strong: #1d4ed8;
+  --danger: #dc2626;
+  --text: #0f172a;
+  --text-soft: #4b5563;
+  --text-muted: #6b7280;
 
-  <div class="page-bg"></div>
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+  --lane-height: 76px;
+  --lane-gap: 10px;
+  --px-per-hour: 64;
+}
 
-  <div class="app-shell">
-    <header class="app-header card-glass">
-      <div class="app-title-block">
-        <div class="logo-orb"></div>
-        <div class="title-texts">
-          <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.5.0-alpha3 · Magnet-only timeline · Firebase</span>
-        </div>
-      </div>
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-      <div class="header-right">
-        <button id="loginBtn" class="btn secondary-btn">
-          Sign in with Google
-        </button>
-        <div id="userInfo" class="user-info" style="display:none">
-          <img id="userAvatar" class="user-avatar" alt="avatar" />
-          <div class="user-text">
-            <span id="userEmail" class="user-email"></span>
-            <span class="user-status">Premium-ready</span>
-          </div>
-          <button id="logoutBtn" class="btn ghost-btn">
-            Sign out
-          </button>
-        </div>
-      </div>
-    </header>
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Inter", sans-serif;
+  color: var(--text);
+}
 
-    <main class="app-main card-main">
-      <nav class="tabs">
-        <button class="tab-button active" data-tab="timelineTab">Timeline</button>
-        <button class="tab-button" data-tab="backgroundTab">Background</button>
-        <button class="tab-button" data-tab="settingsTab">Settings</button>
-      </nav>
+body {
+  min-height: 100vh;
+  background: var(--bg-page-gradient);
+}
 
-      <!-- TIMELINE TAB -->
-      <section id="timelineTab" class="tab-content active">
-        <div class="section-header">
-          <div>
-            <h1 class="section-title">Timeline</h1>
-            <p class="section-subtitle">
-              Your day, auto-arranged by the Magnet engine.
-            </p>
-          </div>
-          <div class="timeline-actions">
-            <button id="jumpNowBtn" class="btn primary-btn">Jump to now</button>
-            <div class="jump-date-group">
-              <label for="jumpDateInput">Jump to date</label>
-              <input type="date" id="jumpDateInput" />
-              <button id="jumpDateBtn" class="btn subtle-btn">Go</button>
-            </div>
-          </div>
-        </div>
+/* BACKGROUND LAYER */
 
-        <div class="timeline-legend">
-          <span class="legend-item">
-            <span class="legend-color legend-main"></span>Main task
-          </span>
-          <span class="legend-item">
-            <span class="legend-color legend-bg"></span>Background (blocks)
-          </span>
-          <span class="legend-item">
-            <span class="legend-color legend-overdue"></span>Overdue
-          </span>
-        </div>
+.page-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(59, 130, 246, 0.18), transparent 60%),
+    radial-gradient(circle at 90% 0%, rgba(56, 189, 248, 0.18), transparent 60%),
+    radial-gradient(circle at 50% 100%, rgba(147, 197, 253, 0.18), transparent 60%);
+  opacity: 0.6;
+  z-index: -1;
+}
 
-        <section class="timeline-shell card-soft">
-          <header id="timelineHeader" class="timeline-header"></header>
-          <div id="timelineCanvas" class="timeline-canvas"></div>
-        </section>
+/* APP SHELL */
 
-        <section class="panel-grid">
-          <!-- Main tasks form -->
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Main tasks</h2>
-                <p>Create work that the engine will place automatically.</p>
-              </div>
-            </header>
+.app-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px;
+}
 
-            <form id="mainTaskForm" class="form-grid">
-              <div class="form-row">
-                <label>Title</label>
-                <input type="text" id="mtTitle" required />
-              </div>
-              <div class="form-row">
-                <label>Description</label>
-                <textarea id="mtDescription" rows="2"></textarea>
-              </div>
-              <div class="form-row">
-                <label>Duration (minutes)</label>
-                <input type="number" id="mtDuration" min="1" step="1" required />
-              </div>
-              <div class="form-row">
-                <label>Deadline</label>
-                <input type="datetime-local" id="mtDeadline" required />
-              </div>
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 8px;
+  }
+}
 
-              <div class="form-row">
-                <label class="pill-label">Mode</label>
-                <div class="pill-group" id="mtModeGroup">
-                  <button type="button" data-value="NONE" class="pill active">
-                    Normal
-                  </button>
-                  <button type="button" data-value="ONLY" class="pill">
-                    ONLY
-                  </button>
-                  <button type="button" data-value="PREFER" class="pill">
-                    PREFER
-                  </button>
-                </div>
-              </div>
+/* HEADER */
 
-              <div class="form-row">
-                <label>Days (ONLY/PREFER)</label>
-                <div class="pill-group pill-wrap" id="mtDayPills">
-                  <button type="button" data-day="0" class="pill">Sun</button>
-                  <button type="button" data-day="1" class="pill">Mon</button>
-                  <button type="button" data-day="2" class="pill">Tue</button>
-                  <button type="button" data-day="3" class="pill">Wed</button>
-                  <button type="button" data-day="4" class="pill">Thu</button>
-                  <button type="button" data-day="5" class="pill">Fri</button>
-                  <button type="button" data-day="6" class="pill">Sat</button>
-                </div>
-              </div>
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
 
-              <div class="form-row">
-                <label>Time windows (3h blocks)</label>
-                <div class="pill-group pill-wrap" id="mtSlotPills">
-                  <button type="button" data-slot="0" class="pill">00–03</button>
-                  <button type="button" data-slot="1" class="pill">03–06</button>
-                  <button type="button" data-slot="2" class="pill">06–09</button>
-                  <button type="button" data-slot="3" class="pill">09–12</button>
-                  <button type="button" data-slot="4" class="pill">12–15</button>
-                  <button type="button" data-slot="5" class="pill">15–18</button>
-                  <button type="button" data-slot="6" class="pill">18–21</button>
-                  <button type="button" data-slot="7" class="pill">21–24</button>
-                </div>
-              </div>
+.card-glass {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(18px);
+}
 
-              <div class="form-actions">
-                <button type="submit" class="btn primary-btn">
-                  Add main task
-                </button>
-              </div>
-            </form>
-          </div>
+.app-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-          <!-- Main tasks list -->
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Task list</h2>
-                <p>Sorted by magnet weight w (higher first).</p>
-              </div>
-            </header>
-            <div id="mainTaskList" class="task-list"></div>
-          </div>
-        </section>
+.logo-orb {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 30%, #f97316, #2563eb);
+  box-shadow: 0 0 16px rgba(37, 99, 235, 0.7);
+}
 
-        <!-- Debug panel -->
-        <section class="debug-panel card-soft">
-          <header class="panel-header">
-            <div>
-              <h2>Magnet Debug</h2>
-              <p>Inspect weights, slice assignments, and modes.</p>
-            </div>
-            <button id="toggleDebugBtn" class="btn subtle-btn small">
-              Collapse
-            </button>
-          </header>
-          <div id="debugBody" class="debug-body">
-            <div id="debugSummary" class="debug-summary"></div>
-            <div id="debugTableWrapper" class="debug-table-wrapper"></div>
-          </div>
-        </section>
-      </section>
+.title-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
-      <!-- BACKGROUND TAB -->
-      <section id="backgroundTab" class="tab-content">
-        <header class="section-header">
-          <div>
-            <h1 class="section-title">Background tasks</h1>
-            <p class="section-subtitle">
-              Fixed blocks (sleep, office hours, etc.) that fully block main tasks.
-            </p>
-          </div>
-        </header>
+.title-main {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.03em;
+}
 
-        <section class="panel-grid single">
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Create background task</h2>
-                <p>Define when your time is not available for main work.</p>
-              </div>
-            </header>
+.title-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
 
-            <form id="bgTaskForm" class="form-grid">
-              <div class="form-row">
-                <label>Title</label>
-                <input type="text" id="bgTitle" required />
-              </div>
-              <div class="form-row">
-                <label>Description</label>
-                <textarea id="bgDescription" rows="2"></textarea>
-              </div>
-              <div class="form-row two-cols">
-                <div>
-                  <label>Start</label>
-                  <input type="datetime-local" id="bgStart" required />
-                </div>
-                <div>
-                  <label>End</label>
-                  <input type="datetime-local" id="bgEnd" required />
-                </div>
-              </div>
-              <div class="form-actions">
-                <button type="submit" class="btn primary-btn">
-                  Add background task
-                </button>
-              </div>
-            </form>
-          </div>
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Background task list</h2>
-                <p>Active blocking windows within your horizon.</p>
-              </div>
-            </header>
-            <div id="bgTaskList" class="task-list"></div>
-          </div>
-        </section>
-      </section>
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-      <!-- SETTINGS TAB -->
-      <section id="settingsTab" class="tab-content">
-        <header class="section-header">
-          <div>
-            <h1 class="section-title">Settings</h1>
-            <p class="section-subtitle">
-              Tune your magnet engine and timeline horizon.
-            </p>
-          </div>
-        </header>
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+}
 
-        <section class="panel-grid single">
-          <div class="panel-main card-soft">
-            <form class="form-grid">
-              <div class="form-row">
-                <label>Slice length (minutes)</label>
-                <input type="number" id="setSliceMinutes" min="5" max="60" step="5" />
-              </div>
-              <div class="form-row">
-                <label>Horizon (days)</label>
-                <input type="number" id="setHorizonDays" min="1" max="30" />
-              </div>
-              <div class="form-row">
-                <label>k (ONLY/PREFER multiplier)</label>
-                <input type="number" id="setKOnlyPrefer" min="1" step="0.1" />
-              </div>
-              <div class="form-row">
-                <label>Short task boost (k_short)</label>
-                <input type="number" id="setKShort" min="1" step="10" />
-              </div>
-              <div class="form-actions">
-                <button id="saveSettingsBtn" type="button" class="btn primary-btn">
-                  Save & recompute
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
-      </section>
-    </main>
-  </div>
+.user-text {
+  display: flex;
+  flex-direction: column;
+}
 
-  <!-- Duplicate action sheet -->
-  <div id="duplicateSheetBackdrop" class="overlay">
-    <div class="action-sheet">
-      <div class="sheet-header">
-        <div class="sheet-title">Duplicate task</div>
-        <div id="dupTaskLabel" class="sheet-subtitle"></div>
-      </div>
-      <div class="sheet-options">
-        <button type="button" class="sheet-option" data-dup-shift="same">
-          Keep same deadline
-        </button>
-        <button type="button" class="sheet-option" data-dup-shift="1">
-          Move +1 day
-        </button>
-        <button type="button" class="sheet-option" data-dup-shift="3">
-          Move +3 days
-        </button>
-        <button type="button" class="sheet-option" data-dup-shift="7">
-          Move +7 days
-        </button>
-        <button type="button" class="sheet-option strong" data-dup-shift="custom">
-          Custom date…
-        </button>
-      </div>
-      <button type="button" id="dupCancelBtn" class="sheet-cancel">
-        Cancel
-      </button>
-    </div>
-  </div>
+.user-email {
+  font-size: 0.8rem;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  <!-- Custom date modal -->
-  <div id="duplicateDateModalBackdrop" class="overlay center">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title">Pick new deadline</div>
-        <p class="modal-subtitle">
-          Choose the exact date & time for the duplicated task.
-        </p>
-      </div>
-      <div class="modal-body">
-        <input type="datetime-local" id="dupDateInput" />
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="dupDateCancelBtn" class="btn subtle-btn small">
-          Cancel
-        </button>
-        <button type="button" id="dupDateConfirmBtn" class="btn primary-btn small">
-          Duplicate
-        </button>
-      </div>
-    </div>
-  </div>
+.user-status {
+  font-size: 0.65rem;
+  color: #16a34a;
+}
 
-  <!-- Edit Main Task modal -->
-  <div id="editTaskModalBackdrop" class="overlay center">
-    <div class="modal-card modal-edit">
-      <div class="modal-header">
-        <div class="modal-title">Edit task</div>
-        <p class="modal-subtitle">
-          Update it and the magnet engine will recompute placement.
-        </p>
-      </div>
-      <div class="modal-body">
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Title</label>
-            <input type="text" id="etTitle" />
-          </div>
-          <div class="form-row">
-            <label>Description</label>
-            <textarea id="etDescription" rows="2"></textarea>
-          </div>
-          <div class="form-row">
-            <label>Duration (minutes)</label>
-            <input type="number" id="etDuration" min="1" step="1" />
-          </div>
-          <div class="form-row">
-            <label>Deadline</label>
-            <input type="datetime-local" id="etDeadline" />
-          </div>
-          <div class="form-row">
-            <label class="pill-label">Mode</label>
-            <div class="pill-group" id="etModeGroup">
-              <button type="button" data-value="NONE" class="pill active">
-                Normal
-              </button>
-              <button type="button" data-value="ONLY" class="pill">
-                ONLY
-              </button>
-              <button type="button" data-value="PREFER" class="pill">
-                PREFER
-              </button>
-            </div>
-          </div>
-          <div class="form-row">
-            <label>Days (ONLY/PREFER)</label>
-            <div class="pill-group pill-wrap" id="etDayPills">
-              <button type="button" data-day="0" class="pill">Sun</button>
-              <button type="button" data-day="1" class="pill">Mon</button>
-              <button type="button" data-day="2" class="pill">Tue</button>
-              <button type="button" data-day="3" class="pill">Wed</button>
-              <button type="button" data-day="4" class="pill">Thu</button>
-              <button type="button" data-day="5" class="pill">Fri</button>
-              <button type="button" data-day="6" class="pill">Sat</button>
-            </div>
-          </div>
-          <div class="form-row">
-            <label>Time windows (3h blocks)</label>
-            <div class="pill-group pill-wrap" id="etSlotPills">
-              <button type="button" data-slot="0" class="pill">00–03</button>
-              <button type="button" data-slot="1" class="pill">03–06</button>
-              <button type="button" data-slot="2" class="pill">06–09</button>
-              <button type="button" data-slot="3" class="pill">09–12</button>
-              <button type="button" data-slot="4" class="pill">12–15</button>
-              <button type="button" data-slot="5" class="pill">15–18</button>
-              <button type="button" data-slot="6" class="pill">18–21</button>
-              <button type="button" data-slot="7" class="pill">21–24</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="editTaskCancelBtn" class="btn subtle-btn small">
-          Cancel
-        </button>
-        <button type="button" id="editTaskSaveBtn" class="btn primary-btn small">
-          Save
-        </button>
-      </div>
-    </div>
-  </div>
+/* MAIN CARD */
 
-  <!-- Timeline tooltip -->
-  <div id="timelineTooltip" class="timeline-tooltip" style="display:none;"></div>
+.app-main {
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  padding: 12px 14px 14px;
+}
 
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+/* BUTTONS */
+
+.btn {
+  border-radius: 999px;
+  border: none;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.btn:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6);
+  outline-offset: 2px;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #f9fafb;
+  font-weight: 600;
+}
+
+.secondary-btn {
+  background: #0f172a;
+  color: #f9fafb;
+  font-weight: 500;
+}
+
+.ghost-btn {
+  background: rgba(248, 250, 252, 0.9);
+  color: var(--text-soft);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  padding-inline: 10px;
+}
+
+.subtle-btn {
+  background: #f9fafb;
+  color: var(--text-soft);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.btn.small {
+  padding: 4px 9px;
+  font-size: 0.75rem;
+}
+
+.primary-btn:hover,
+.secondary-btn:hover,
+.ghost-btn:hover,
+.subtle-btn:hover {
+  filter: brightness(1.03);
+}
+
+/* TABS */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  margin-bottom: 10px;
+}
+
+.tab-button {
+  flex: 1;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  padding: 7px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.tab-button.active {
+  background: #ffffff;
+  box-shadow: 0 1px 6px rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.tab-content {
+  display: none;
+  margin-top: 6px;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* SECTION HEADER */
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.section-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.timeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jump-date-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.jump-date-group input[type="date"] {
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  font-size: 0.76rem;
+  background: #f9fafb;
+}
+
+/* TIMELINE LEGEND */
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-color {
+  width: 14px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.legend-main {
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+}
+
+.legend-bg {
+  background: rgba(148, 163, 184, 0.9);
+}
+
+.legend-overdue {
+  background: rgba(220, 38, 38, 0.95);
+}
+
+/* CARDS */
+
+.card-soft {
+  border-radius: var(--radius-lg);
+  background: var(--bg-soft);
+  border: 1px solid var(--border-subtle);
+  padding: 10px;
+}
+
+/* TIMELINE SHELL */
+
+.timeline-shell {
+  margin-top: 4px;
+  margin-bottom: 10px;
+}
+
+/* TIMELINE HEADER (RULER) */
+
+.timeline-header {
+  position: relative;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.timeline-header-inner {
+  position: relative;
+  height: 100%;
+}
+
+.timeline-hour-marker {
+  position: absolute;
+  top: 20px;
+  bottom: 0;
+  width: 1px;
+  background: rgba(209, 213, 219, 0.85);
+}
+
+.timeline-hour-label {
+  position: absolute;
+  top: 4px;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  transform: translateX(-50%);
+}
+
+.timeline-day-band {
+  position: absolute;
+  bottom: 0;
+  height: 20px;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* TIMELINE CANVAS */
+
+.timeline-canvas {
+  position: relative;
+  height: calc(var(--lane-height) * 3 + var(--lane-gap) * 2 + 28px);
+  margin-top: 4px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  overflow-x: auto;
+}
+
+.timeline-inner {
+  position: relative;
+  height: 100%;
+}
+
+/* LANE */
+
+.timeline-lane {
+  position: relative;
+  height: var(--lane-height);
+  margin: var(--lane-gap) 10px;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(248, 250, 252, 1),
+    rgba(241, 245, 249, 1)
+  );
+  overflow: visible;
+}
+
+.lane-label {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* CURRENT TIME LINE (NOW) */
+
+.current-time-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, #f97316, #ef4444);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.9);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* TIMELINE BLOCKS */
+
+.timeline-block {
+  position: absolute;
+  top: 10px;
+  height: calc(100% - 20px);
+  border-radius: 14px;
+  padding: 6px 11px;
+  font-size: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+/* Main task block – STYLE 1 (iOS soft gradient) */
+
+.timeline-block.main {
+  background: linear-gradient(
+    135deg,
+    rgba(231, 240, 255, 0.96),
+    rgba(243, 246, 255, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.08),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6);
+  color: #0f172a;
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.16s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.12s ease-out;
+}
+
+.timeline-block.main.overdue {
+  background: linear-gradient(
+    135deg,
+    rgba(254, 226, 226, 0.96),
+    rgba(254, 242, 242, 0.98)
+  );
+  border-color: rgba(220, 38, 38, 0.9);
+  box-shadow:
+    0 2px 6px rgba(185, 28, 28, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.timeline-block.main:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 10px rgba(15, 23, 42, 0.12),
+    inset 0 1px 2px rgba(255, 255, 255, 0.7);
+}
+
+/* Background block – premium busy event */
+
+.timeline-block.bg {
+  background: rgba(176, 192, 224, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 12px;
+  box-shadow:
+    0 2px 5px rgba(15, 23, 42, 0.12),
+    inset 0 1px 3px rgba(255, 255, 255, 0.45);
+  color: #f9fafb;
+  font-size: 0.7rem;
+}
+
+/* Block internal text */
+
+.block-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.block-meta {
+  font-size: 0.7rem;
+  opacity: 0.65;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* PANEL GRID */
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.panel-grid.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel-main h2 {
+  margin: 0;
+  font-size: 0.96rem;
+}
+
+.panel-main p {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-soft);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+/* FORM */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-row.two-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.form-row label {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"],
+input[type="date"],
+textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  padding: 6px 9px;
+  font-size: 0.8rem;
+  background: #ffffff;
+  color: var(--text);
+}
+
+textarea {
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* PILLS */
+
+.pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid rgba(209, 213, 219, 0.9);
+}
+
+.pill-wrap {
+  flex-wrap: wrap;
+}
+
+.pill {
+  border-radius: 999px;
+  border: none;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.pill.active {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.pill-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* TASK LIST */
+
+.task-list {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-item {
+  padding: 7px 9px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-title {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.task-title.done {
+  text-decoration: line-through;
+}
+
+.task-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  font-size: 0.65rem;
+}
+
+.badge-main {
+  border-color: rgba(22, 163, 74, 0.8);
+  color: #15803d;
+}
+
+.badge-mode {
+  border-color: rgba(129, 140, 248, 0.9);
+  color: #4f46e5;
+}
+
+.badge-done {
+  border-color: rgba(34, 197, 94, 0.9);
+  color: #15803d;
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.task-item.done {
+  opacity: 0.55;
+}
+
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.icon-btn {
+  border-radius: 999px;
+  border: none;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  filter: brightness(1.05);
+}
+
+/* DEBUG PANEL */
+
+.debug-panel {
+  margin-top: 10px;
+  font-size: 0.74rem;
+}
+
+.debug-summary {
+  margin-bottom: 6px;
+  color: var(--text-soft);
+}
+
+.debug-table-wrapper {
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+}
+
+.debug-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.debug-table th,
+.debug-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.debug-table th {
+  background: #f3f4ff;
+  position: sticky;
+  top: 0;
+}
+
+/* OVERLAY + ACTION SHEET + MODAL */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.25);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+
+.overlay.center {
+  align-items: center;
+}
+
+.action-sheet {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 20px 20px 0 0;
+  background: rgba(255, 255, 255, 0.98);
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 -10px 30px rgba(15, 23, 42, 0.28);
+  padding: 10px 14px 12px;
+}
+
+@media (min-width: 640px) {
+  .action-sheet {
+    border-radius: 18px;
+    margin-bottom: 16px;
+  }
+}
+
+.sheet-header {
+  margin-bottom: 8px;
+}
+
+.sheet-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.sheet-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.sheet-options {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+
+.sheet-option {
+  border-radius: 12px;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: #f9fafb;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.sheet-option.strong {
+  background: var(--accent-soft);
+  border-color: rgba(37, 99, 235, 0.55);
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.sheet-option:hover {
+  filter: brightness(1.02);
+}
+
+.sheet-cancel {
+  border-radius: 999px;
+  border: none;
+  background: #e5e7eb;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  width: 100%;
+  cursor: pointer;
+}
+
+/* Modal */
+
+.modal-card {
+  width: 100%;
+  max-width: 360px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18);
+  padding: 12px 14px 10px;
+}
+
+.modal-card.modal-edit {
+  max-width: 520px;
+}
+
+.modal-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.modal-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.modal-body {
+  margin: 8px 0 10px;
+}
+
+.modal-body input[type="datetime-local"] {
+  width: 100%;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* TOOLTIP */
+
+.timeline-tooltip {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  font-size: 0.78rem;
+}
+
+.timeline-tooltip .tooltip-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.timeline-tooltip .tooltip-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.timeline-tooltip .tooltip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 900px) {
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timeline-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-main {
+    padding: 10px;
+  }
+
+  .app-header {
+    padding-inline: 10px;
+  }
+
+  .user-email {
+    max-width: 110px;
+  }
+
+  .timeline-canvas {
+    height: calc(var(--lane-height) * 3 + var(--lane-gap) * 2 + 32px);
+  }
+}
