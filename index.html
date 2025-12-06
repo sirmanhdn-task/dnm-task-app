@@ -1,293 +1,369 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.5.2-stable</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="format-detection" content="telephone=no,time=no,date=no" />
+  <title>DNM's Tasker v1.5.2</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
-  <div class="page-bg"></div>
-
-  <div class="app-shell">
-
-    <!-- HEADER -------------------------------------------------------- -->
-    <header class="app-header card-glass">
-      <div class="app-title-block">
-        <div class="logo-orb"></div>
-        <div class="title-texts">
-          <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.5.2-stable · Magnet Engine + PendingUntil + Overdue + Yesterday Timeline</span>
-        </div>
+  <div class="app-root">
+    <!-- HEADER -->
+    <header class="app-header glass-card">
+      <div class="app-header-left">
+        <h1 class="app-title">DNM's Tasker</h1>
+        <p class="app-subtitle">Magnet-from-NOW • v1.5.2 (yesterday + today + future)</p>
       </div>
-
-      <div class="header-right">
-        <button id="loginBtn" class="btn secondary-btn">Sign in with Google</button>
-
-        <div id="userInfo" class="user-info" style="display:none">
-          <img id="userAvatar" class="user-avatar" />
-          <div class="user-text">
-            <span id="userEmail" class="user-email"></span>
-            <span class="user-status">Premium-ready</span>
-          </div>
-          <button id="logoutBtn" class="btn ghost-btn">Sign out</button>
+      <div class="app-header-right">
+        <div id="user-info" class="user-info hidden">
+          <span id="user-email"></span>
+          <button id="logout-btn" class="btn ghost">Đăng xuất</button>
         </div>
+        <button id="login-btn" class="btn primary">Đăng nhập với Google</button>
       </div>
     </header>
 
-    <!-- MAIN ---------------------------------------------------------- -->
-    <main class="app-main card-glass">
+    <!-- TAB BAR -->
+    <nav class="tab-bar glass-card">
+      <button class="tab-btn active" data-tab="timeline-tab">Timeline</button>
+      <button class="tab-btn" data-tab="bg-tab">Background</button>
+      <button class="tab-btn" data-tab="settings-tab">Settings</button>
+    </nav>
 
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab-button active" data-tab="timelineTab">Timeline</button>
-        <button class="tab-button" data-tab="backgroundTab">Background</button>
-        <button class="tab-button" data-tab="settingsTab">Settings</button>
-      </div>
+    <!-- CONTENT AREA -->
+    <main class="app-main">
+      <!-- TIMELINE TAB -->
+      <section id="timeline-tab" class="tab-panel active">
+        <!-- 2-COLUMN LAYOUT: FORM LEFT, LIST RIGHT -->
+        <div class="timeline-main-container">
+          <!-- LEFT COLUMN: MAIN TASK FORM -->
+          <div class="timeline-column timeline-column-form">
+            <div class="card section-card">
+              <div class="section-header">
+                <h2>Thêm Main Task</h2>
+                <p class="section-subtitle">Nhập việc cần làm, để engine tự sắp từ NOW</p>
+              </div>
+              <form id="main-task-form" class="form-grid">
+                <div class="form-row">
+                  <label for="task-title">Tiêu đề</label>
+                  <input id="task-title" type="text" placeholder="VD: Viết báo cáo, gọi khách hàng..." required />
+                </div>
+                <div class="form-row">
+                  <label for="task-desc">Mô tả</label>
+                  <textarea id="task-desc" rows="2" placeholder="Ghi chú thêm (không bắt buộc)"></textarea>
+                </div>
+                <div class="form-row two-cols">
+                  <div>
+                    <label for="task-duration">Thời lượng (phút)</label>
+                    <input id="task-duration" type="number" min="5" step="5" value="30" required />
+                  </div>
+                  <div>
+                    <label for="task-deadline">Deadline</label>
+                    <input id="task-deadline" type="datetime-local" required />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label for="task-mode">Mode thời gian</label>
+                  <select id="task-mode">
+                    <option value="NONE">Không ràng buộc (NONE)</option>
+                    <option value="ONLY">Chỉ trong khung (ONLY)</option>
+                    <option value="PREFER">Ưu tiên khung (PREFER)</option>
+                  </select>
+                </div>
 
-      <!-- ========================================================= -->
-      <!-- TIMELINE TAB                                             -->
-      <!-- ========================================================= -->
-      <section id="timelineTab" class="tab-panel active">
+                <div class="pills-group">
+                  <div class="pills-group-header">
+                    <span>Ngày trong tuần</span>
+                    <span class="hint">Nếu trống: mọi ngày</span>
+                  </div>
+                  <div class="pill-row" id="day-pills">
+                    <button type="button" data-day="0" class="pill">CN</button>
+                    <button type="button" data-day="1" class="pill">T2</button>
+                    <button type="button" data-day="2" class="pill">T3</button>
+                    <button type="button" data-day="3" class="pill">T4</button>
+                    <button type="button" data-day="4" class="pill">T5</button>
+                    <button type="button" data-day="5" class="pill">T6</button>
+                    <button type="button" data-day="6" class="pill">T7</button>
+                  </div>
+                </div>
 
-        <!-- NEW MAIN TASK FORM (FIX #1) -->
-        <div class="timeline-add-form card-soft" style="margin-bottom:12px;">
-          <h3 class="section-title-sm">New main task</h3>
+                <div class="pills-group">
+                  <div class="pills-group-header">
+                    <span>Khung giờ (3h/block)</span>
+                    <span class="hint">Nếu trống: mọi giờ</span>
+                  </div>
+                  <div class="pill-row" id="slot-pills">
+                    <button type="button" data-slot="0" class="pill">00–03</button>
+                    <button type="button" data-slot="1" class="pill">03–06</button>
+                    <button type="button" data-slot="2" class="pill">06–09</button>
+                    <button type="button" data-slot="3" class="pill">09–12</button>
+                    <button type="button" data-slot="4" class="pill">12–15</button>
+                    <button type="button" data-slot="5" class="pill">15–18</button>
+                    <button type="button" data-slot="6" class="pill">18–21</button>
+                    <button type="button" data-slot="7" class="pill">21–24</button>
+                  </div>
+                </div>
 
-          <form id="mainTaskForm" class="form">
-            <div class="form-row">
-              <label for="mainTitle">Title</label>
-              <input type="text" id="mainTitle" required />
+                <div class="form-row pending-row">
+                  <label class="pending-label">
+                    <input type="checkbox" id="task-pending-toggle" />
+                    Đặt PendingUntil
+                  </label>
+                  <input id="task-pending-until" type="datetime-local" disabled />
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn primary full-width">Thêm task</button>
+                </div>
+              </form>
             </div>
+          </div>
 
-            <div class="form-row">
-              <label for="mainDescription">Description</label>
-              <textarea id="mainDescription" rows="2"></textarea>
+          <!-- RIGHT COLUMN: MAIN TASK LIST -->
+          <div class="timeline-column timeline-column-list">
+            <div class="card section-card">
+              <div class="section-header">
+                <h2>Danh sách Main Task</h2>
+                <p class="section-subtitle">Ưu tiên theo engine, phân loại Active / Pending / Overdue / Done</p>
+              </div>
+              <div id="main-task-list" class="task-list"></div>
             </div>
+          </div>
+        </div>
 
+        <!-- TIMELINE CANVAS -->
+        <div class="card section-card timeline-card">
+          <div class="section-header">
+            <h2>Timeline</h2>
+            <p class="section-subtitle">Từ ngày hôm qua đến tương lai, với Now-line & background blocks</p>
+          </div>
+          <div id="timeline-scroll" class="timeline-scroll">
+            <div id="timeline-container" class="timeline-container">
+              <div id="timeline-ruler" class="timeline-ruler"></div>
+              <div id="timeline-days" class="timeline-days"></div>
+              <div class="timeline-lanes">
+                <div class="timeline-lane" data-lane="main">
+                  <div class="lane-label">Main</div>
+                  <div class="lane-body" id="lane-main"></div>
+                </div>
+                <div class="timeline-lane" data-lane="background">
+                  <div class="lane-label">Background</div>
+                  <div class="lane-body" id="lane-bg"></div>
+                </div>
+                <div class="timeline-lane" data-lane="pending">
+                  <div class="lane-label">Pending</div>
+                  <div class="lane-body" id="lane-pending"></div>
+                </div>
+                <div id="now-line" class="now-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEBUG PANEL (TÙY CHỌN) -->
+        <div class="card debug-card">
+          <div class="section-header">
+            <h3>Debug / Engine Insight</h3>
+          </div>
+          <div id="debug-summary" class="debug-summary"></div>
+          <div id="debug-table" class="debug-table"></div>
+        </div>
+      </section>
+
+      <!-- BACKGROUND TAB -->
+      <section id="bg-tab" class="tab-panel">
+        <div class="card section-card">
+          <div class="section-header">
+            <h2>Background tasks</h2>
+            <p class="section-subtitle">Khung chặn thời gian, engine không chen vào được</p>
+          </div>
+          <form id="bg-task-form" class="form-grid">
+            <div class="form-row">
+              <label for="bg-title">Tiêu đề</label>
+              <input id="bg-title" type="text" placeholder="VD: Họp, di chuyển, ngủ..." required />
+            </div>
             <div class="form-row two-cols">
               <div>
-                <label for="mainDuration">Duration (minutes)</label>
-                <input type="number" id="mainDuration" min="5" step="5" required />
+                <label for="bg-start">Bắt đầu</label>
+                <input id="bg-start" type="datetime-local" required />
               </div>
               <div>
-                <label for="mainDeadline">Deadline</label>
-                <input type="datetime-local" id="mainDeadline" required />
+                <label for="bg-end">Kết thúc</label>
+                <input id="bg-end" type="datetime-local" required />
               </div>
             </div>
-
-            <div class="form-row">
-              <label>ONLY / PREFER mode</label>
-              <div class="pill-row" id="onlyModePills">
-                <button type="button" class="pill pill-selected" data-mode="NONE">NONE</button>
-                <button type="button" class="pill" data-mode="ONLY">ONLY</button>
-                <button type="button" class="pill" data-mode="PREFER">PREFER</button>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <label>Day pills</label>
-              <div class="pill-row" id="dayPills">
-                <button type="button" class="pill" data-day="0">Sun</button>
-                <button type="button" class="pill" data-day="1">Mon</button>
-                <button type="button" class="pill" data-day="2">Tue</button>
-                <button type="button" class="pill" data-day="3">Wed</button>
-                <button type="button" class="pill" data-day="4">Thu</button>
-                <button type="button" class="pill" data-day="5">Fri</button>
-                <button type="button" class="pill" data-day="6">Sat</button>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <label>Slot pills (3h blocks)</label>
-              <div class="pill-row" id="slotPills">
-                <button type="button" class="pill" data-slot="0">00–03</button>
-                <button type="button" class="pill" data-slot="1">03–06</button>
-                <button type="button" class="pill" data-slot="2">06–09</button>
-                <button type="button" class="pill" data-slot="3">09–12</button>
-                <button type="button" class="pill" data-slot="4">12–15</button>
-                <button type="button" class="pill" data-slot="5">15–18</button>
-                <button type="button" class="pill" data-slot="6">18–21</button>
-                <button type="button" class="pill" data-slot="7">21–24</button>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <label for="pendingUntil">Pending until (optional)</label>
-              <input type="datetime-local" id="pendingUntil" />
-            </div>
-
-            <div class="form-footer">
-              <button type="submit" class="btn primary-btn">Add main task</button>
+            <div class="form-actions">
+              <button type="submit" class="btn primary full-width">Thêm background</button>
             </div>
           </form>
-        </div>
-
-        <!-- TIMELINE HEADER -->
-        <div class="timeline-layout">
-          <div class="timeline-header-bar">
-            <div>
-              <h2 class="section-title">Magnet Timeline</h2>
-              <p class="section-subtitle">
-                Engine schedules tasks from NOW → future. Background blocks reserve time.
-              </p>
-            </div>
-
-            <div class="timeline-controls">
-              <button id="jumpNowBtn" class="btn subtle-btn">Now</button>
-
-              <div class="jump-date-control">
-                <label for="jumpDateInput">Jump to</label>
-                <input type="date" id="jumpDateInput" />
-                <button id="jumpDateBtn" class="btn subtle-btn">Go</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Legend -->
-          <div class="timeline-legend">
-            <span class="legend-item"><span class="legend-color legend-main"></span>Main</span>
-            <span class="legend-item"><span class="legend-color legend-bg"></span>Background</span>
-            <span class="legend-item"><span class="legend-color legend-overdue"></span>Overdue</span>
-            <span class="legend-item"><span class="legend-color legend-pending"></span>Pending</span>
-          </div>
-
-          <!-- TIMELINE CANVAS -->
-          <div class="timeline-shell">
-            <div id="timelineHeader" class="timeline-header"></div>
-
-            <div id="timelineCanvasWrapper" class="timeline-canvas-wrapper">
-              <div id="timelineCanvas" class="timeline-canvas"></div>
-              <div id="currentTimeLine" class="current-time-line"></div>
-            </div>
-          </div>
-
-          <!-- Task list -->
-          <div class="timeline-bottom">
-            <h3 class="section-title-sm">Main tasks</h3>
-            <button id="toggleDebugBtn" class="btn ghost-btn">Debug</button>
-          </div>
-
-          <div id="mainTaskList" class="task-list"></div>
-
-          <section id="debugPanel" class="debug-panel" style="display:none">
-            <div id="debugSummary"></div>
-            <div id="debugTableWrapper"></div>
-          </section>
+          <div id="bg-task-list" class="task-list"></div>
         </div>
       </section>
 
-
-      <!-- ========================================================= -->
-      <!-- BACKGROUND TAB                                           -->
-      <!-- ========================================================= -->
-      <section id="backgroundTab" class="tab-panel">
-        <div class="background-layout">
-
-          <div class="background-left">
-            <h2 class="section-title">Background blocks</h2>
-            <p class="section-subtitle">These block the magnet engine.</p>
-
-            <form id="bgTaskForm" class="form card-soft">
-              <h3 class="form-title">Add background block</h3>
-
-              <div class="form-row">
-                <label for="bgTitle">Title</label>
-                <input type="text" id="bgTitle" required />
+      <!-- SETTINGS TAB -->
+      <section id="settings-tab" class="tab-panel">
+        <div class="card section-card">
+          <div class="section-header">
+            <h2>Settings</h2>
+            <p class="section-subtitle">Điều chỉnh engine theo style làm việc của bạn</p>
+          </div>
+          <form id="settings-form" class="form-grid">
+            <div class="form-row two-cols">
+              <div>
+                <label for="setting-slice">Độ dài slice (phút)</label>
+                <input id="setting-slice" type="number" min="5" step="5" />
               </div>
-
-              <div class="form-row">
-                <label for="bgStart">Start</label>
-                <input type="datetime-local" id="bgStart" required />
+              <div>
+                <label for="setting-horizon">Horizon (ngày tương lai)</label>
+                <input id="setting-horizon" type="number" min="1" max="30" />
               </div>
-
-              <div class="form-row">
-                <label for="bgEnd">End</label>
-                <input type="datetime-local" id="bgEnd" required />
-              </div>
-
-              <div class="form-footer">
-                <button class="btn primary-btn">Add</button>
-              </div>
-            </form>
-
-            <div class="background-note">
-              Background tasks that have already ended are auto-deleted.
             </div>
-          </div>
-
-          <div class="background-right">
-            <h3 class="section-title-sm">Existing blocks</h3>
-            <div id="bgTaskList" class="bg-list"></div>
-          </div>
-
-        </div>
-      </section>
-
-
-      <!-- ========================================================= -->
-      <!-- SETTINGS TAB                                              -->
-      <!-- ========================================================= -->
-      <section id="settingsTab" class="tab-panel">
-        <div class="settings-layout">
-
-          <div class="settings-left">
-            <h2 class="section-title">Engine Settings</h2>
-            <p class="section-subtitle">Applied locally.</p>
-
-            <form id="settingsForm" class="form card-soft">
-
-              <div class="form-row">
-                <label>Slice length (minutes)</label>
-                <input type="number" id="setSliceMinutes" min="5" max="60" step="5" />
+            <div class="form-row two-cols">
+              <div>
+                <label for="setting-konly">kOnlyPrefer (ONLY/PREFER booster)</label>
+                <input id="setting-konly" type="number" min="1" step="0.1" />
               </div>
-
-              <div class="form-row">
-                <label>Horizon (days)</label>
-                <input type="number" id="setHorizonDays" min="3" max="30" />
+              <div>
+                <label for="setting-kshort">kShort (boost task ≤10')</label>
+                <input id="setting-kshort" type="number" min="1" />
               </div>
-
-              <div class="form-row">
-                <label>ONLY/PREFER multiplier</label>
-                <input type="number" id="setKOnlyPrefer" step="0.1" />
-              </div>
-
-              <div class="form-row">
-                <label>Short-task boost</label>
-                <input type="number" id="setKShort" step="10" />
-              </div>
-
-              <div class="form-footer">
-                <button class="btn primary-btn">Save & Recompute</button>
-              </div>
-            </form>
-          </div>
-
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary full-width">Lưu & Recompute</button>
+            </div>
+          </form>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Tooltip (Fix #3 pointer-events) -->
-  <div id="timelineTooltip" class="timeline-tooltip" style="display:none">
-    <div class="tooltip-inner card-glass">
-      <div class="tooltip-title-row">
-        <div id="tooltipTitle"></div>
-        <div id="tooltipDeadline" class="tooltip-deadline"></div>
+  <!-- TIMELINE TOOLTIP -->
+  <div id="task-tooltip" class="tooltip hidden">
+    <div class="tooltip-header">
+      <div class="tooltip-title" id="tooltip-title"></div>
+      <div class="tooltip-meta" id="tooltip-meta"></div>
+    </div>
+    <div class="tooltip-actions">
+      <button id="tooltip-edit" class="btn small">Edit</button>
+      <button id="tooltip-done" class="btn small primary">Done</button>
+      <button id="tooltip-duplicate" class="btn small">Duplicate</button>
+      <button id="tooltip-delete" class="btn small danger">Delete</button>
+    </div>
+  </div>
+
+  <!-- EDIT TASK MODAL -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content card">
+      <div class="modal-header">
+        <h2>Sửa Main Task</h2>
+        <button id="edit-close" class="icon-btn">&times;</button>
       </div>
-      <div class="tooltip-meta-row">
-        <span id="tooltipId" class="tooltip-badge"></span>
-        <span id="tooltipDuration" class="tooltip-badge"></span>
-        <span id="tooltipMode" class="tooltip-badge"></span>
-        <span id="tooltipPending" class="tooltip-badge tooltip-pending" style="display:none"></span>
+      <form id="edit-task-form" class="form-grid">
+        <div class="form-row">
+          <label for="edit-title">Tiêu đề</label>
+          <input id="edit-title" type="text" required />
+        </div>
+        <div class="form-row">
+          <label for="edit-desc">Mô tả</label>
+          <textarea id="edit-desc" rows="2"></textarea>
+        </div>
+        <div class="form-row two-cols">
+          <div>
+            <label for="edit-duration">Thời lượng (phút)</label>
+            <input id="edit-duration" type="number" min="5" step="5" required />
+          </div>
+          <div>
+            <label for="edit-deadline">Deadline</label>
+            <input id="edit-deadline" type="datetime-local" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="edit-mode">Mode thời gian</label>
+          <select id="edit-mode">
+            <option value="NONE">Không ràng buộc (NONE)</option>
+            <option value="ONLY">Chỉ trong khung (ONLY)</option>
+            <option value="PREFER">Ưu tiên khung (PREFER)</option>
+          </select>
+        </div>
+
+        <div class="pills-group">
+          <div class="pills-group-header">
+            <span>Ngày trong tuần</span>
+          </div>
+          <div class="pill-row" id="edit-day-pills">
+            <button type="button" data-day="0" class="pill">CN</button>
+            <button type="button" data-day="1" class="pill">T2</button>
+            <button type="button" data-day="2" class="pill">T3</button>
+            <button type="button" data-day="3" class="pill">T4</button>
+            <button type="button" data-day="4" class="pill">T5</button>
+            <button type="button" data-day="5" class="pill">T6</button>
+            <button type="button" data-day="6" class="pill">T7</button>
+          </div>
+        </div>
+
+        <div class="pills-group">
+          <div class="pills-group-header">
+            <span>Khung giờ (3h/block)</span>
+          </div>
+          <div class="pill-row" id="edit-slot-pills">
+            <button type="button" data-slot="0" class="pill">00–03</button>
+            <button type="button" data-slot="1" class="pill">03–06</button>
+            <button type="button" data-slot="2" class="pill">06–09</button>
+            <button type="button" data-slot="3" class="pill">09–12</button>
+            <button type="button" data-slot="4" class="pill">12–15</button>
+            <button type="button" data-slot="5" class="pill">15–18</button>
+            <button type="button" data-slot="6" class="pill">18–21</button>
+            <button type="button" data-slot="7" class="pill">21–24</button>
+          </div>
+        </div>
+
+        <div class="form-row pending-row">
+          <label class="pending-label">
+            <input type="checkbox" id="edit-pending-toggle" />
+            Đặt PendingUntil
+          </label>
+          <input id="edit-pending-until" type="datetime-local" disabled />
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary full-width">Lưu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DUPLICATE SHEET -->
+  <div id="duplicate-sheet" class="bottom-sheet hidden">
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-content card">
+      <div class="sheet-header">
+        <h3>Duplicate task</h3>
+        <button id="duplicate-close" class="icon-btn">&times;</button>
       </div>
-      <div id="tooltipDescription" class="tooltip-desc"></div>
-      <div class="tooltip-actions">
-        <button id="tooltipEditBtn" class="btn subtle-btn">Edit</button>
-        <button id="tooltipDoneBtn" class="btn subtle-btn">Done</button>
-        <button id="tooltipDeleteBtn" class="btn ghost-btn">Delete</button>
+      <div class="sheet-body">
+        <button class="btn full-width" data-shift="0">Giữ nguyên deadline</button>
+        <button class="btn full-width" data-shift="1">+1 ngày</button>
+        <button class="btn full-width" data-shift="3">+3 ngày</button>
+        <button class="btn full-width" data-shift="7">+7 ngày</button>
+        <button class="btn full-width ghost" id="duplicate-custom-open">Chọn ngày custom...</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DUPLICATE CUSTOM MODAL -->
+  <div id="duplicate-custom-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content card">
+      <div class="modal-header">
+        <h3>Chọn deadline mới</h3>
+        <button id="duplicate-custom-close" class="icon-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input id="duplicate-custom-deadline" type="datetime-local" />
+      </div>
+      <div class="modal-footer">
+        <button id="duplicate-custom-confirm" class="btn primary full-width">Duplicate</button>
       </div>
     </div>
   </div>
