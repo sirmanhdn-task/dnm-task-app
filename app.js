@@ -25,18 +25,15 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
-// ----------------------------------------------------
-// Firebase configuration
-// ----------------------------------------------------
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD7hqFqHGFjawzMQ8-vax4e2_GS3VNpqEo",
+  apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
   authDomain: "dnmstasker-3b85f.firebaseapp.com",
   projectId: "dnmstasker-3b85f",
-  storageBucket: "dnmstasker-3b85f.appspot.com",
-  messagingSenderId: "893957095802",
-  appId: "1:893957095802:web:d9f3f0c129e4c8e4d8bba3"
+  storageBucket: "dnmstasker-3b85f.firebasestorage.app",
+  messagingSenderId: "1053072513804",
+  appId: "1:1053072513804:web:27b52ec9b9a23035b2c729"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
