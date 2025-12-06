@@ -1,4 +1,4 @@
-// DNM's Tasker v1.5.1 – Magnet-from-NOW + Pending Until + Overdue cluster + Firebase
+// DNM's Tasker v1.5.2 – Magnet-from-NOW + Pending Until + Overdue cluster + Yesterday timeline + Firebase
 // Project: dnmstasker-3b85f
 //
 // Key logic changes vs v1.5.0-alpha3:
@@ -11,28 +11,34 @@
 //   4) ACTIVE (everything else): scheduled by magnet engine with w = duration / minutesLeft,
 //      ONLY/PREFER multiplier, short-task boost.
 // - Background tasks with end <= NOW are auto-deleted from Firestore and not displayed.
-// - New field pendingUntil (ISO string) for main tasks, controlled by UI in create & edit modals.
+// - New field pendingUntil (ISO string) for main tasks, controlled via form + edit modal.
+// - v1.5.1: Overdue cluster + PendingUntil lane + BG auto-delete + Magnet engine v1.0 stable.
+// - v1.5.2: timeline range extended to include *yesterday* while keeping the same future horizon;
+//           engine logic unchanged (still schedules only from NOW onward).
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import {
   getFirestore,
   collection,
-  addDoc,
-  getDocs,
   doc,
+  getDocs,
   getDoc,
   setDoc,
+  addDoc,
   deleteDoc,
-  serverTimestamp,
-  updateDoc
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  query,
+  where,
+  orderBy,
+  limit
+} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signOut,
   onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBjmg3ZQqSOWS0X8MRZ97EoRYDrPCiRzj8",
@@ -48,8 +54,11 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
+// --- Constants & helpers ---
+
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
+const ONE_DAY = 24 * HOUR_MS;
 
 const state = {
   settings: {
@@ -83,31 +92,28 @@ function startOfToday() {
 }
 
 function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
+  return Math.min(Math.max(v, min), max);
 }
 
-function formatDateTimeShort(ms) {
-  const d = new Date(ms);
-  return (
-    d.getFullYear().toString().slice(2) +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0") +
-    " " +
-    String(d.getHours()).padStart(2, "0") +
-    ":" +
-    String(d.getMinutes()).padStart(2, "0")
-  );
+function isoToLocalInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function localInputToIso(val) {
+  if (!val) return null;
+  const d = new Date(val);
+  return d.toISOString();
 }
 
 function formatHM(ms) {
   const d = new Date(ms);
-  return (
-    String(d.getHours()).padStart(2, "0") +
-    ":" +
-    String(d.getMinutes()).padStart(2, "0")
-  );
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
 }
 
 function msToSliceIndex(ms) {
@@ -121,113 +127,234 @@ function sliceIndexToMs(sliceIndex) {
   return state.timelineStart + sliceIndex * sliceLenMs;
 }
 
+// --- Firestore helpers ---
+
+function userDocRef(uid) {
+  return doc(db, "users", uid);
+}
+
+function mainTasksColRef(uid) {
+  return collection(db, "users", uid, "mainTasks");
+}
+
+function bgTasksColRef(uid) {
+  return collection(db, "users", uid, "backgroundTasks");
+}
+
+function metadataColRef(uid) {
+  return collection(db, "users", uid, "metadata");
+}
+
+async function ensureUserInitialized(uid) {
+  const countersRef = doc(metadataColRef(uid), "counters");
+  const snap = await getDoc(countersRef);
+  if (!snap.exists()) {
+    await setDoc(countersRef, {
+      mainShortCounter: 1,
+      bgShortCounter: 1
+    });
+  }
+}
+
+async function getAndIncrementCounter(uid, fieldName) {
+  const countersRef = doc(metadataColRef(uid), "counters");
+  const snap = await getDoc(countersRef);
+  if (!snap.exists()) {
+    const initial = {
+      mainShortCounter: 1,
+      bgShortCounter: 1
+    };
+    await setDoc(countersRef, initial);
+    return initial[fieldName] || 1;
+  }
+  const data = snap.data();
+  const current = data[fieldName] || 1;
+  const next = current + 1;
+  await setDoc(countersRef, { ...data, [fieldName]: next });
+  return current;
+}
+
+// --- Data loading ---
+
+async function loadMainTasksFromFirestore() {
+  if (!state.currentUid) return;
+  const colRef = mainTasksColRef(state.currentUid);
+  const q = query(colRef, orderBy("createdAt", "asc"));
+  const snapshot = await getDocs(q);
+
+  const tasks = [];
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    const id = docSnap.id;
+
+    const durationMinutes =
+      typeof data.durationMinutes === "number"
+        ? data.durationMinutes
+        : typeof data.duration === "number"
+        ? data.duration
+        : 30;
+
+    const deadlineIso =
+      data.deadline ||
+      (data.deadlineAt
+        ? new Date(data.deadlineAt).toISOString()
+        : null);
+
+    const shortId =
+      typeof data.shortId === "number" ? data.shortId : data.taskId || null;
+
+    const onlyMode = data.onlyMode || "NONE";
+
+    const dayPills = Array.isArray(data.dayPills) ? data.dayPills : [];
+    const slotPills = Array.isArray(data.slotPills) ? data.slotPills : [];
+
+    const isPending = !!data.isPending;
+    const pendingUntil = data.pendingUntil || null;
+
+    const isDone = !!data.isDone;
+
+    const createdAt = data.createdAt || new Date().toISOString();
+
+    tasks.push({
+      id,
+      shortId,
+      title: data.title || "(untitled)",
+      description: data.description || "",
+      durationMinutes,
+      deadline: deadlineIso,
+      onlyMode,
+      dayPills,
+      slotPills,
+      isPending,
+      pendingUntil,
+      isDone,
+      createdAt
+    });
+  });
+
+  state.mainTasks = tasks;
+}
+
+async function loadBgTasksFromFirestore() {
+  if (!state.currentUid) return;
+  const colRef = bgTasksColRef(state.currentUid);
+  const snapshot = await getDocs(colRef);
+
+  const now = Date.now();
+  const tasks = [];
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
+    const id = docSnap.id;
+
+    const startIso =
+      data.start ||
+      (data.startAt ? new Date(data.startAt).toISOString() : null);
+    const endIso =
+      data.end ||
+      (data.endAt ? new Date(data.endAt).toISOString() : null);
+
+    if (!startIso || !endIso) continue;
+
+    const endMs = new Date(endIso).getTime();
+    if (endMs <= now) {
+      await deleteDoc(doc(db, "users", state.currentUid, "backgroundTasks", id));
+      continue;
+    }
+
+    const shortId =
+      typeof data.shortId === "number" ? data.shortId : data.bgId || null;
+
+    const createdAt = data.createdAt || new Date().toISOString();
+
+    tasks.push({
+      id,
+      shortId,
+      title: data.title || "(untitled)",
+      start: startIso,
+      end: endIso,
+      createdAt
+    });
+  }
+
+  state.bgTasks = tasks;
+}
+
+async function loadAllData() {
+  if (!state.currentUid) return;
+  await loadMainTasksFromFirestore();
+  await loadBgTasksFromFirestore();
+  recomputeTimeline();
+}
+
+// --- Magnet engine core ---
+
 function isNowWithinTaskWindow(task, nowMs) {
-  if (task.onlyMode === "NONE") return false;
-  const now = new Date(nowMs);
-  const day = now.getDay();
-  const hour = now.getHours();
-  const slot = Math.floor(hour / 3);
+  if (!task.dayPills?.length && !task.slotPills?.length) {
+    return true;
+  }
+
+  const d = new Date(nowMs);
+  const day = d.getDay();
 
   const hasDays = Array.isArray(task.dayPills) && task.dayPills.length > 0;
   const hasSlots =
     Array.isArray(task.slotPills) && task.slotPills.length > 0;
 
   const dayOk = !hasDays || task.dayPills.includes(day);
+
+  const hour = d.getHours();
+  const slot = Math.floor(hour / 3);
   const slotOk = !hasSlots || task.slotPills.includes(slot);
 
   return dayOk && slotOk;
 }
 
-function isoToLocalInput(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const off = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - off * MINUTE_MS);
-  return local.toISOString().slice(0, 16);
-}
+function computeWeight(task, nowMs) {
+  const duration = task.durationMinutes || 0;
+  if (duration <= 0) return 0;
 
-// Firebase helpers
+  let minutesLeft = 1e9;
+  let baseW = 0;
 
-async function ensureUserInitialized(uid) {
-  const userRef = doc(db, "users", uid);
-  const snap = await getDoc(userRef);
-  if (!snap.exists()) {
-    await setDoc(userRef, {
-      createdAt: serverTimestamp()
-    });
-  }
-
-  const countersRef = doc(db, "users", uid, "metadata", "counters");
-  const countersSnap = await getDoc(countersRef);
-  if (!countersSnap.exists()) {
-    await setDoc(countersRef, {
-      mainTaskCount: 0,
-      backgroundTaskCount: 0
-    });
-  }
-}
-
-async function getNextCounter(fieldName, uid) {
-  const countersRef = doc(db, "users", uid, "metadata", "counters");
-  const snap = await getDoc(countersRef);
-
-  let data;
-  if (!snap.exists()) {
-    data = { mainTaskCount: 0, backgroundTaskCount: 0 };
-  } else {
-    data = snap.data();
-    if (data.mainTaskCount == null) data.mainTaskCount = 0;
-    if (data.backgroundTaskCount == null) data.backgroundTaskCount = 0;
-  }
-
-  const newCount = (data[fieldName] || 0) + 1;
-  data[fieldName] = newCount;
-  await setDoc(countersRef, data);
-  return newCount;
-}
-
-// Magnet scheduler with overdue & pendingUntil
-
-function recomputeTimeline() {
-  state.now = Date.now();
-  state.timelineStart = startOfToday();
-  state.timelineEnd =
-    state.timelineStart +
-    state.settings.horizonDays * 24 * HOUR_MS -
-    1;
-
-  const totalSlices =
-    (state.settings.horizonDays * 24 * 60) / state.settings.sliceMinutes;
-
-  // 1 = free, 3 = blocked by BG
-  state.sliceTypes = new Array(totalSlices).fill(1);
-
-  const now = state.now;
-
-  // Background slices (skip expired ones, they are deleted at load time)
-  for (const bg of state.bgTasks) {
-    const startMs = new Date(bg.start).getTime();
-    const endMs = new Date(bg.end).getTime();
-    if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) continue;
-    if (endMs <= now) continue;
-
-    const startClamped = clamp(startMs, state.timelineStart, state.timelineEnd);
-    const endClamped = clamp(endMs, state.timelineStart, state.timelineEnd);
-
-    let si = msToSliceIndex(startClamped);
-    let ei = msToSliceIndex(endClamped);
-    ei = clamp(ei, 0, totalSlices - 1);
-
-    for (let s = si; s <= ei; s++) {
-      state.sliceTypes[s] = 3; // blocked
+  if (task.deadline) {
+    const dl = new Date(task.deadline).getTime();
+    const diff = dl - nowMs;
+    if (diff <= 0) {
+      minutesLeft = 1;
+      baseW = 0;
+    } else {
+      minutesLeft = Math.max(1, diff / MINUTE_MS);
+      baseW = duration / minutesLeft;
     }
   }
 
-  state.scheduledMain = scheduleMainTasks(totalSlices);
-  renderTimeline();
-  renderMainTaskList();
-  renderBgTaskList();
-  renderDebugPanel();
+  let w = baseW;
+  let shortBoost = 1;
+  if (duration <= 10 && minutesLeft <= 48 * 60) {
+    shortBoost = state.settings.kShort;
+  }
+  w *= shortBoost;
+
+  let timeFactor = 1;
+  const mode = task.onlyMode || "NONE";
+  const within = isNowWithinTaskWindow(task, nowMs);
+
+  if (mode === "ONLY") {
+    timeFactor = within ? state.settings.kOnlyPrefer : 0;
+  } else if (mode === "PREFER") {
+    timeFactor = within ? state.settings.kOnlyPrefer : 1;
+  }
+
+  w *= timeFactor;
+
+  return {
+    baseW,
+    minutesLeft,
+    w,
+    timeFactor,
+    shortBoost
+  };
 }
 
 function scheduleMainTasks(totalSlices) {
@@ -239,24 +366,25 @@ function scheduleMainTasks(totalSlices) {
   state.pendingTasks = [];
 
   const engineTasks = [];
-  const k = state.settings.kOnlyPrefer;
-  const kShort = state.settings.kShort;
 
-  // Classify tasks into OVERDUE / PENDING / ACTIVE
   for (const t of state.mainTasks) {
-    if (t.isDone) continue;
+    if (t.isDone) {
+      continue;
+    }
 
-    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-    const pendingUntilMs = t.pendingUntil
-      ? new Date(t.pendingUntil).getTime()
-      : null;
+    let dlMs = null;
+    if (t.deadline) {
+      dlMs = new Date(t.deadline).getTime();
+    }
 
-    const isOverdue = dlMs && dlMs < now;
+    const pendingUntilMs =
+      t.pendingUntil != null ? new Date(t.pendingUntil).getTime() : null;
+
     const isPendingFlag = !!t.isPending;
     const isPendingUntilFuture =
-      pendingUntilMs && !isNaN(pendingUntilMs) && pendingUntilMs > now;
+      pendingUntilMs != null && pendingUntilMs > now;
 
-    if (isOverdue) {
+    if (dlMs != null && dlMs < now) {
       state.overdueTasks.push(t);
       continue;
     }
@@ -266,91 +394,118 @@ function scheduleMainTasks(totalSlices) {
       continue;
     }
 
-    // ACTIVE (goes into engine)
     engineTasks.push(t);
   }
 
-  const decorated = [];
-
+  const weighted = [];
   for (const t of engineTasks) {
-    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-    let minutesLeft;
-
-    if (!dlMs || isNaN(dlMs)) {
-      minutesLeft = 1e9;
-    } else {
-      const diff = dlMs - now;
-      minutesLeft = diff <= 0 ? 1 : Math.max(1, diff / MINUTE_MS);
-    }
-
-    const baseW =
-      minutesLeft === 1e9
-        ? 0
-        : (t.durationMinutes || 0) / minutesLeft;
-
-    let w = baseW;
-
-    // Short task boost
-    if (
-      t.durationMinutes <= 10 &&
-      minutesLeft <= 48 * 60
-    ) {
-      w *= kShort;
-    }
-
-    let timeFactor = 1;
-    if (t.onlyMode === "ONLY" || t.onlyMode === "PREFER") {
-      const within = isNowWithinTaskWindow(t, now);
-      if (t.onlyMode === "ONLY") {
-        timeFactor = within ? k : 0;
-      } else if (t.onlyMode === "PREFER") {
-        timeFactor = within ? k : 1;
-      }
-    }
-    w *= timeFactor;
-
-    decorated.push({
+    const { baseW, minutesLeft, w, timeFactor, shortBoost } = computeWeight(
+      t,
+      now
+    );
+    weighted.push({
       task: t,
       baseW,
+      minutesLeft,
       w,
       timeFactor,
-      minutesLeft,
+      shortBoost,
       assignedSlices: []
     });
   }
 
-  decorated.sort((a, b) => {
+  weighted.sort((a, b) => {
     if (b.w !== a.w) return b.w - a.w;
     return a.minutesLeft - b.minutesLeft;
   });
 
-  const sliceTypes = state.sliceTypes;
   let frontier = state.nowSlice;
-  const sliceMinutes = state.settings.sliceMinutes;
 
-  for (const entry of decorated) {
+  const sliceTypes = state.sliceTypes;
+
+  for (const entry of weighted) {
     const t = entry.task;
-    const requiredSlices = Math.ceil(t.durationMinutes / sliceMinutes);
-    const assigned = [];
+    const requiredSlices = Math.ceil(
+      (t.durationMinutes || 0) / state.settings.sliceMinutes
+    );
+    if (requiredSlices <= 0) continue;
 
-    let s = frontier;
-    while (s < totalSlices && assigned.length < requiredSlices) {
+    const assigned = [];
+    for (
+      let s = frontier;
+      s < totalSlices && assigned.length < requiredSlices;
+      s++
+    ) {
       if (sliceTypes[s] === 1) {
         assigned.push(s);
       }
-      s++;
     }
 
     entry.assignedSlices = assigned;
+
     if (assigned.length > 0) {
       frontier = assigned[assigned.length - 1] + 1;
     }
   }
 
-  return decorated;
+  return weighted;
 }
 
-// Render timeline
+function recomputeTimeline() {
+  state.now = Date.now();
+
+  // v1.5.2: timeline covers yesterday + today + future horizonDays
+  const today = new Date(state.now);
+  today.setHours(0, 0, 0, 0);
+  const todayStart = today.getTime();
+
+  // Start from yesterday 00:00
+  state.timelineStart = todayStart - 24 * HOUR_MS;
+
+  // Keep the same future coverage as v1.5.1 (today + horizonDays-1),
+  // just add one extra day in the past.
+  state.timelineEnd =
+    todayStart +
+    state.settings.horizonDays * 24 * HOUR_MS -
+    1;
+
+  const totalSlices =
+    ((state.settings.horizonDays + 1) * 24 * 60) / state.settings.sliceMinutes;
+
+  // 1 = free, 3 = blocked by BG
+  state.sliceTypes = new Array(totalSlices).fill(1);
+
+  const now = state.now;
+
+  // Background slices (skip expired ones, they are deleted at load time)
+  for (const bg of state.bgTasks) {
+    const startMs = new Date(bg.start).getTime();
+    const endMs = new Date(bg.end).getTime();
+
+    const startClamped = Math.max(startMs, state.timelineStart);
+    const endClamped = Math.min(endMs, state.timelineEnd);
+
+    if (endClamped <= startClamped) continue;
+
+    let si = msToSliceIndex(startClamped);
+    si = clamp(si, 0, totalSlices - 1);
+
+    let ei = msToSliceIndex(endClamped);
+    ei = clamp(ei, 0, totalSlices - 1);
+
+    for (let s = si; s <= ei; s++) {
+      state.sliceTypes[s] = 3;
+    }
+  }
+
+  state.scheduledMain = scheduleMainTasks(totalSlices);
+  renderTimeline();
+  renderMainTaskList();
+  renderBgTaskList();
+  renderDebugPanel();
+}
+
+// --- Rendering ---
 
 function renderTimeline() {
   const header = document.getElementById("timelineHeader");
@@ -359,7 +514,9 @@ function renderTimeline() {
   canvas.innerHTML = "";
 
   const pxPerHour = 64;
-  const totalHours = state.settings.horizonDays * 24;
+  // v1.5.2: timeline shows yesterday + today + future horizonDays
+  const totalDays = state.settings.horizonDays + 1;
+  const totalHours = totalDays * 24;
   const totalWidth = totalHours * pxPerHour;
 
   const headerInner = document.createElement("div");
@@ -384,7 +541,13 @@ function renderTimeline() {
     }
   }
 
-  for (let d = 0; d < state.settings.horizonDays; d++) {
+  const todayStartForBand = (() => {
+    const d0 = new Date(state.now);
+    d0.setHours(0, 0, 0, 0);
+    return d0.getTime();
+  })();
+
+  for (let d = 0; d < totalDays; d++) {
     const dayStartMs = start + d * 24 * HOUR_MS;
     const date = new Date(dayStartMs);
     const x = d * 24 * pxPerHour;
@@ -393,7 +556,7 @@ function renderTimeline() {
     band.style.left = x + "px";
     band.style.width = 24 * pxPerHour + "px";
 
-    const isToday = d === 0;
+    const isToday = dayStartMs === todayStartForBand;
     band.style.background = isToday
       ? "rgba(239, 246, 255, 0.96)"
       : "rgba(249, 250, 251, 0.96)";
@@ -433,15 +596,16 @@ function renderTimeline() {
   lblPending.textContent = "Pending";
   lanePending.appendChild(lblPending);
 
-  // Background blocks (skip expired)
   for (const bg of state.bgTasks) {
     const startMs = new Date(bg.start).getTime();
     const endMs = new Date(bg.end).getTime();
-    if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) continue;
-    if (endMs <= state.now) continue;
 
-    const startClamped = clamp(startMs, state.timelineStart, state.timelineEnd);
-    const endClamped = clamp(endMs, state.timelineStart, state.timelineEnd);
+    if (endMs <= state.timelineStart || startMs >= state.timelineEnd) {
+      continue;
+    }
+
+    const startClamped = Math.max(startMs, state.timelineStart);
+    const endClamped = Math.min(endMs, state.timelineEnd);
 
     const offsetHours = (startClamped - state.timelineStart) / HOUR_MS;
     const durationHours = (endClamped - startClamped) / HOUR_MS;
@@ -450,22 +614,109 @@ function renderTimeline() {
     block.className = "timeline-block bg";
     block.style.left = offsetHours * pxPerHour + "px";
     block.style.width =
-      Math.max(durationHours * pxPerHour, 24) + "px";
-    block.title = `${bg.title}\n${formatHM(startClamped)}–${formatHM(
-      endClamped
-    )}`;
+      Math.max(durationHours * pxPerHour, 26) + "px";
+
     block.innerHTML = `
-      <div class="block-title">${bg.title || "(BG)"}</div>
-      <div class="block-meta">${formatHM(startClamped)}–${formatHM(
-      endClamped
+      <div class="block-title">#${bg.shortId ?? ""} ${bg.title}</div>
+      <div class="block-meta">${formatHM(startMs)}–${formatHM(
+      endMs
     )}</div>
     `;
+
     laneBg.appendChild(block);
   }
 
-  const now = state.now;
+  const overdue = state.overdueTasks.slice();
+  overdue.sort((a, b) => {
+    const da = a.deadline ? new Date(a.deadline).getTime() : 0;
+    const db = b.deadline ? new Date(b.deadline).getTime() : 0;
+    return da - db;
+  });
 
-  // Scheduled main tasks (ACTIVE)
+  const now = state.now;
+  const nowOffsetHours = (now - state.timelineStart) / HOUR_MS;
+  const nowX = nowOffsetHours * pxPerHour;
+
+  const blockWidth = 150;
+  const gap = 8;
+
+  const startX = Math.max(nowX - (blockWidth + gap) * overdue.length - 20, 4);
+
+  overdue.forEach((t, index) => {
+    const block = document.createElement("div");
+    block.className = "timeline-block main overdue";
+    block.style.left = (startX + index * (blockWidth + gap)) + "px";
+    block.style.width = blockWidth + "px";
+
+    const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
+
+    block.innerHTML = `
+      <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
+      <div class="block-meta">
+        Overdue · ${dlMs ? formatHM(dlMs) : "No deadline"}
+      </div>
+    `;
+
+    block.dataset.taskId = t.id;
+    block.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTimelineTooltipForTask(t, {
+        x: nowX,
+        lane: "main"
+      });
+    });
+
+    laneMain.appendChild(block);
+  });
+
+  const pendingTasks = state.pendingTasks.slice();
+  pendingTasks.sort((a, b) => {
+    const pa =
+      a.pendingUntil != null
+        ? new Date(a.pendingUntil).getTime()
+        : Number.MAX_SAFE_INTEGER;
+    const pb =
+      b.pendingUntil != null
+        ? new Date(b.pendingUntil).getTime()
+        : Number.MAX_SAFE_INTEGER;
+    return pa - pb;
+  });
+
+  let pendingIndex = 0;
+  for (const t of pendingTasks) {
+    const width = 160;
+    const gapPending = 10;
+    const x = 70 + pendingIndex * (width + gapPending);
+
+    const block = document.createElement("div");
+    block.className = "timeline-block pending";
+    block.style.left = x + "px";
+    block.style.width = width + "px";
+
+    let pendingLabel = "Pending";
+    if (t.pendingUntil) {
+      const pm = new Date(t.pendingUntil).getTime();
+      pendingLabel = `Pending until ${formatHM(pm)}`;
+    }
+
+    block.innerHTML = `
+      <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
+      <div class="block-meta">${pendingLabel}</div>
+    `;
+
+    block.dataset.taskId = t.id;
+    block.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTimelineTooltipForTask(t, {
+        x,
+        lane: "pending"
+      });
+    });
+
+    lanePending.appendChild(block);
+    pendingIndex++;
+  }
+
   for (const entry of state.scheduledMain) {
     const t = entry.task;
     const slices = entry.assignedSlices;
@@ -503,458 +754,325 @@ function renderTimeline() {
         `#${t.shortId ?? ""} ${t.title}\n` +
         `${formatHM(startMs)}–${formatHM(
           endMs
-        )}\nDuration: ${t.durationMinutes} min\n` +
-        `Deadline: ${
-          dlMs ? formatDateTimeShort(dlMs) : "No deadline"
-        }\nMode: ${t.onlyMode}`;
+        )} (deadline: ${
+          dlMs ? formatHM(dlMs) : "no deadline"
+        })`;
 
       block.innerHTML = `
-        <div class="block-title">${t.title}</div>
+        <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
         <div class="block-meta">
-          #${t.shortId ?? ""} · ${formatHM(startMs)}–${formatHM(endMs)}
+          ${formatHM(startMs)}–${formatHM(
+        endMs
+      )} · ${t.durationMinutes} min
         </div>
       `;
 
       block.dataset.taskId = t.id;
-      block.addEventListener("click", (evt) => {
-        evt.stopPropagation();
-        openTimelineTooltip(t, evt);
+      block.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openTimelineTooltipForTask(t, {
+          x: offsetHours * pxPerHour,
+          lane: "main"
+        });
       });
 
       laneMain.appendChild(block);
     }
   }
 
-  // Overdue cluster – on the left side of NOW
-  const overdue = state.overdueTasks || [];
-  if (overdue.length > 0) {
-    const nowX = (state.now - state.timelineStart) / HOUR_MS * pxPerHour;
-    const blockWidth = 150;
-    const gap = 8;
-    const totalWidth =
-      overdue.length * blockWidth + (overdue.length - 1) * gap;
-
-    let startX = nowX - totalWidth - 12;
-    if (startX < 4) startX = 4;
-
-    overdue.forEach((t, index) => {
-      const block = document.createElement("div");
-      block.className = "timeline-block main overdue";
-      block.style.left = (startX + index * (blockWidth + gap)) + "px";
-      block.style.width = blockWidth + "px";
-
-      const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-
-      block.innerHTML = `
-        <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
-        <div class="block-meta">
-          Overdue · ${dlMs ? formatHM(dlMs) : "No deadline"}
-        </div>
-      `;
-
-      block.dataset.taskId = t.id;
-      block.addEventListener("click", (evt) => {
-        evt.stopPropagation();
-        openTimelineTooltip(t, evt);
-      });
-
-      laneMain.appendChild(block);
-    });
-  }
-
-  // Pending lane – manual pending or pendingUntil future
-  const pendingList = state.pendingTasks || [];
-  if (pendingList.length > 0) {
-    const baseLeft = 8;
-    const blockWidth = 180;
-    const gap = 8;
-
-    pendingList.forEach((t, index) => {
-      const x = baseLeft + index * (blockWidth + gap);
-      const block = document.createElement("div");
-      block.className = "timeline-block main";
-      block.style.left = x + "px";
-      block.style.width = blockWidth + "px";
-
-      const pendingUntilMs = t.pendingUntil
-        ? new Date(t.pendingUntil).getTime()
-        : null;
-
-      const metaText = pendingUntilMs
-        ? `Pending until ${formatDateTimeShort(pendingUntilMs)}`
-        : "Pending (no until)";
-
-      block.innerHTML = `
-        <div class="block-title">#${t.shortId ?? ""} ${t.title}</div>
-        <div class="block-meta">${metaText}</div>
-      `;
-
-      block.dataset.taskId = t.id;
-      block.addEventListener("click", (evt) => {
-        evt.stopPropagation();
-        openTimelineTooltip(t, evt);
-      });
-
-      lanePending.appendChild(block);
-    });
-  }
-
-  // Pending tasks flagged as isPending only but not in pendingList (for backward compatibility)
-  // no-op here, because classification already built state.pendingTasks.
-
-  // Current time line (NOW)
-  const offsetHoursNow =
-    (state.now - state.timelineStart) / HOUR_MS;
-  const line = document.createElement("div");
-  line.className = "current-time-line";
-  line.style.left = offsetHoursNow * pxPerHour + "px";
-  inner.appendChild(line);
-
   inner.appendChild(laneMain);
   inner.appendChild(laneBg);
   inner.appendChild(lanePending);
+
   canvas.appendChild(inner);
+
+  const nowLine = document.getElementById("currentTimeLine");
+  const nowOffsetH = (state.now - state.timelineStart) / HOUR_MS;
+  const nowPos = nowOffsetH * pxPerHour;
+  nowLine.style.left = nowPos + "px";
 }
 
-// Done / delete helpers
-
-async function toggleDoneTask(t) {
-  if (!state.currentUid) return;
-  const ref = doc(db, "users", state.currentUid, "mainTasks", t.id);
-  if (t.isDone) {
-    await updateDoc(ref, { isDone: false });
-  } else {
-    if (!confirm("Mark this task as DONE?")) return;
-    await updateDoc(ref, { isDone: true });
-  }
-  await loadAllData();
-}
-
-async function deleteMainTask(t) {
-  if (!state.currentUid) return;
-  if (!confirm("Delete this task permanently?")) return;
-  await deleteDoc(
-    doc(db, "users", state.currentUid, "mainTasks", t.id)
-  );
-  await loadAllData();
-}
-
-// Render lists + debug
+// --- Main task list ---
 
 function renderMainTaskList() {
   const list = document.getElementById("mainTaskList");
   list.innerHTML = "";
 
-  if (!state.currentUid) {
-    const p = document.createElement("p");
-    p.className = "task-meta";
-    p.textContent = "Sign in to see your main tasks.";
-    list.appendChild(p);
-    return;
-  }
+  const activeEntries = state.scheduledMain.filter(
+    (e) => e.assignedSlices && e.assignedSlices.length > 0
+  );
 
-  const activeEntries = state.scheduledMain;
-  const activeIds = new Set(activeEntries.map((e) => e.task.id));
+  const activeScheduledTasks = activeEntries.map((e) => e.task);
+
+  const pendingTasks = state.pendingTasks.slice();
+  const overdueTasks = state.overdueTasks.slice();
+
+  const otherActive = state.mainTasks.filter((t) => {
+    if (t.isDone) return false;
+    if (pendingTasks.find((p) => p.id === t.id)) return false;
+    if (overdueTasks.find((o) => o.id === t.id)) return false;
+    if (activeScheduledTasks.find((a) => a.id === t.id)) return false;
+    return true;
+  });
 
   const doneTasks = state.mainTasks.filter((t) => t.isDone);
 
-  const now = state.now;
-  const overdueIds = new Set(
-    state.overdueTasks.map((t) => t.id)
-  );
-  const pendingIds = new Set(
-    state.pendingTasks.map((t) => t.id)
-  );
+  const sections = [];
 
-  const others = state.mainTasks.filter(
-    (t) =>
-      !t.isDone &&
-      !activeIds.has(t.id) &&
-      !overdueIds.has(t.id) &&
-      !pendingIds.has(t.id)
-  );
-
-  // Active scheduled first
-  for (const entry of activeEntries) {
-    const t = entry.task;
-    const row = buildMainTaskRow(t, entry);
-    list.appendChild(row);
+  if (activeScheduledTasks.length > 0) {
+    sections.push({
+      title: "ACTIVE – Scheduled by engine",
+      tasks: activeEntries.map((e) => e.task),
+      kind: "activeScheduled"
+    });
   }
 
-  // Pending (pending lane)
-  for (const t of state.pendingTasks) {
-    const pseudoEntry = {
-      task: t,
-      baseW: 0,
-      w: 0,
-      timeFactor: 0,
-      minutesLeft: 0,
-      assignedSlices: []
-    };
-    const row = buildMainTaskRow(t, pseudoEntry);
-    list.appendChild(row);
+  if (pendingTasks.length > 0) {
+    sections.push({
+      title: "PENDING – Waiting (PendingUntil / isPending)",
+      tasks: pendingTasks,
+      kind: "pending"
+    });
   }
 
-  // Overdue
-  for (const t of state.overdueTasks) {
-    const pseudoEntry = {
-      task: t,
-      baseW: 0,
-      w: 0,
-      timeFactor: 0,
-      minutesLeft: 0,
-      assignedSlices: []
-    };
-    const row = buildMainTaskRow(t, pseudoEntry);
-    list.appendChild(row);
+  if (overdueTasks.length > 0) {
+    sections.push({
+      title: "OVERDUE – Deadline < NOW (not in engine)",
+      tasks: overdueTasks,
+      kind: "overdue"
+    });
   }
 
-  // Others (active but not scheduled)
-  for (const t of others) {
-    const pseudoEntry = {
-      task: t,
-      baseW: 0,
-      w: 0,
-      timeFactor: 0,
-      minutesLeft: 0,
-      assignedSlices: []
-    };
-    const row = buildMainTaskRow(t, pseudoEntry);
-    list.appendChild(row);
+  if (otherActive.length > 0) {
+    sections.push({
+      title: "ACTIVE – Not scheduled (no slices)",
+      tasks: otherActive,
+      kind: "otherActive"
+    });
   }
 
-  // Done
-  for (const t of doneTasks) {
-    const pseudoEntry = {
-      task: t,
-      baseW: 0,
-      w: 0,
-      timeFactor: 0,
-      minutesLeft: 0,
-      assignedSlices: []
-    };
-    const row = buildMainTaskRow(t, pseudoEntry, true);
-    list.appendChild(row);
+  if (doneTasks.length > 0) {
+    sections.push({
+      title: "DONE",
+      tasks: doneTasks,
+      kind: "done"
+    });
   }
 
-  if (
-    activeEntries.length === 0 &&
-    state.pendingTasks.length === 0 &&
-    state.overdueTasks.length === 0 &&
-    others.length === 0 &&
-    doneTasks.length === 0
-  ) {
-    const p = document.createElement("p");
-    p.className = "task-meta";
-    p.textContent = "No main tasks yet.";
-    list.appendChild(p);
+  if (sections.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No main tasks yet. Create one from Settings tab.";
+    empty.style.fontSize = "12px";
+    empty.style.color = "#6b7280";
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const section of sections) {
+    const header = document.createElement("div");
+    header.className = "task-section-header";
+    header.textContent = section.title;
+    header.style.fontSize = "12px";
+    header.style.fontWeight = "600";
+    header.style.margin = "4px 0 2px";
+    list.appendChild(header);
+
+    for (const t of section.tasks) {
+      const row = document.createElement("div");
+      row.className = "task-row";
+
+      const main = document.createElement("div");
+      main.className = "task-main";
+
+      const titleLine = document.createElement("div");
+      titleLine.className = "task-title-line";
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "task-title";
+      titleSpan.textContent = t.title || "(untitled)";
+      const idSpan = document.createElement("span");
+      idSpan.className = "task-id";
+      idSpan.textContent = `#${t.shortId ?? ""}`;
+      titleLine.appendChild(titleSpan);
+      titleLine.appendChild(idSpan);
+
+      const desc = document.createElement("div");
+      desc.className = "task-desc";
+      desc.textContent = t.description || "";
+
+      const metaLine = document.createElement("div");
+      metaLine.className = "task-meta-line";
+
+      const badgeMain = document.createElement("span");
+      badgeMain.className = "badge badge-main";
+      badgeMain.textContent = "MAIN";
+      metaLine.appendChild(badgeMain);
+
+      const stateBadge = document.createElement("span");
+      stateBadge.className = "badge";
+      if (section.kind === "done") {
+        stateBadge.classList.add("badge-state-done");
+        stateBadge.textContent = "DONE";
+      } else if (section.kind === "overdue") {
+        stateBadge.classList.add("badge-state-overdue");
+        stateBadge.textContent = "OVERDUE";
+      } else if (section.kind === "pending") {
+        stateBadge.classList.add("badge-state-pending");
+        stateBadge.textContent = "PENDING";
+      } else if (section.kind === "activeScheduled") {
+        stateBadge.classList.add("badge-state-active");
+        stateBadge.textContent = "ACTIVE (scheduled)";
+      } else {
+        stateBadge.classList.add("badge-state-active");
+        stateBadge.textContent = "ACTIVE";
+      }
+      metaLine.appendChild(stateBadge);
+
+      const mode = t.onlyMode || "NONE";
+      const modeBadge = document.createElement("span");
+      modeBadge.className = "badge";
+      modeBadge.textContent = `MODE: ${mode}`;
+      metaLine.appendChild(modeBadge);
+
+      if (t.deadline) {
+        const dlMs = new Date(t.deadline).getTime();
+        const dlBadge = document.createElement("span");
+        dlBadge.className = "badge";
+        dlBadge.textContent = `DL: ${formatHM(dlMs)}`;
+        metaLine.appendChild(dlBadge);
+
+        const now = state.now || Date.now();
+        const diffMin = Math.round((dlMs - now) / MINUTE_MS);
+        const diffBadge = document.createElement("span");
+        diffBadge.className = "badge";
+        diffBadge.textContent = `T- ${diffMin} min`;
+        metaLine.appendChild(diffBadge);
+      } else {
+        const dlBadge = document.createElement("span");
+        dlBadge.className = "badge";
+        dlBadge.textContent = "DL: none";
+        metaLine.appendChild(dlBadge);
+      }
+
+      const durBadge = document.createElement("span");
+      durBadge.className = "badge";
+      durBadge.textContent = `${t.durationMinutes} min`;
+      metaLine.appendChild(durBadge);
+
+      if (t.pendingUntil) {
+        const pm = new Date(t.pendingUntil).getTime();
+        const pb = document.createElement("span");
+        pb.className = "badge badge-state-pending";
+        pb.textContent = `Pending until ${formatHM(pm)}`;
+        metaLine.appendChild(pb);
+      } else if (t.isPending) {
+        const pb = document.createElement("span");
+        pb.className = "badge badge-state-pending";
+        pb.textContent = "Pending (flag)";
+        metaLine.appendChild(pb);
+      }
+
+      main.appendChild(titleLine);
+      if (t.description) {
+        main.appendChild(desc);
+      }
+      main.appendChild(metaLine);
+
+      const actions = document.createElement("div");
+      actions.className = "task-actions";
+
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "btn subtle-btn";
+      btnEdit.textContent = "Edit";
+      btnEdit.addEventListener("click", () => openEditModal(t));
+      actions.appendChild(btnEdit);
+
+      const btnDone = document.createElement("button");
+      btnDone.className = "btn subtle-btn";
+      btnDone.textContent = t.isDone ? "Mark undone" : "Mark done";
+      btnDone.addEventListener("click", () => toggleDone(t));
+      actions.appendChild(btnDone);
+
+      const btnDup = document.createElement("button");
+      btnDup.className = "btn subtle-btn";
+      btnDup.textContent = "Duplicate";
+      btnDup.addEventListener("click", () => openDuplicateSheet(t));
+      actions.appendChild(btnDup);
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "btn ghost-btn";
+      btnDel.textContent = "Delete";
+      btnDel.addEventListener("click", () => deleteMainTask(t));
+      actions.appendChild(btnDel);
+
+      row.appendChild(main);
+      row.appendChild(actions);
+
+      list.appendChild(row);
+    }
   }
 }
 
-function buildMainTaskRow(t, entry, isDoneGroup = false) {
-  const row = document.createElement("div");
-  row.className = "task-item";
-  if (t.isDone) row.classList.add("done");
-
-  const main = document.createElement("div");
-  main.className = "task-main";
-
-  const titleRow = document.createElement("div");
-  titleRow.className = "task-title-row";
-  const titleSpan = document.createElement("span");
-  titleSpan.className = "task-title";
-  if (t.isDone) titleSpan.classList.add("done");
-  titleSpan.textContent = t.title || "(untitled)";
-  titleRow.appendChild(titleSpan);
-
-  const idSpan = document.createElement("span");
-  idSpan.style.fontSize = "0.65rem";
-  idSpan.style.color = "#6b7280";
-  idSpan.textContent = "#" + (t.shortId ?? "");
-  titleRow.appendChild(idSpan);
-
-  // Badges for status
-  const now = state.now;
-  const dlMs = t.deadline ? new Date(t.deadline).getTime() : null;
-  const pendingUntilMs = t.pendingUntil
-    ? new Date(t.pendingUntil).getTime()
-    : null;
-  const isOverdue = dlMs && dlMs < now && !t.isDone;
-  const isPendingUntil =
-    pendingUntilMs && pendingUntilMs > now && !t.isDone;
-  const isPendingFlag = !!t.isPending && !t.isDone;
-
-  if (t.isDone) {
-    const doneBadge = document.createElement("span");
-    doneBadge.className = "badge badge-done";
-    doneBadge.textContent = "DONE";
-    titleRow.appendChild(doneBadge);
-  } else if (isOverdue) {
-    const odBadge = document.createElement("span");
-    odBadge.className = "badge badge-overdue";
-    odBadge.textContent = "OVERDUE";
-    titleRow.appendChild(odBadge);
-  } else if (isPendingUntil || isPendingFlag) {
-    const pBadge = document.createElement("span");
-    pBadge.className = "badge badge-pending-until";
-    pBadge.textContent = isPendingUntil
-      ? "PENDING UNTIL"
-      : "PENDING";
-    titleRow.appendChild(pBadge);
-  }
-
-  main.appendChild(titleRow);
-
-  const meta = document.createElement("div");
-  meta.className = "task-meta";
-
-  let minutesLeft = null;
-  if (dlMs && !isNaN(dlMs)) {
-    minutesLeft = Math.max(0, (dlMs - now) / MINUTE_MS);
-  }
-
-  const parts = [];
-  parts.push(dlMs ? formatDateTimeShort(dlMs) : "No deadline");
-  parts.push(`${t.durationMinutes} min`);
-  if (minutesLeft != null) {
-    parts.push(`${minutesLeft.toFixed(1)} min left`);
-  }
-  if (pendingUntilMs && !isNaN(pendingUntilMs)) {
-    parts.push("Pending until " + formatDateTimeShort(pendingUntilMs));
-  }
-
-  meta.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
-  main.appendChild(meta);
-
-  const badges = document.createElement("div");
-  badges.className = "task-meta";
-  const bMain = document.createElement("span");
-  bMain.className = "badge badge-main";
-  bMain.textContent = "MAIN";
-  badges.appendChild(bMain);
-
-  if (t.onlyMode !== "NONE") {
-    const bMode = document.createElement("span");
-    bMode.className = "badge badge-mode";
-    bMode.textContent = t.onlyMode;
-    badges.appendChild(bMode);
-  }
-
-  main.appendChild(badges);
-
-  const actions = document.createElement("div");
-  actions.className = "task-actions";
-
-  const editBtn = document.createElement("button");
-  editBtn.className = "icon-btn";
-  editBtn.textContent = "Edit";
-  editBtn.onclick = () => {
-    if (!state.currentUid) return;
-    openEditModal(t);
-  };
-  actions.appendChild(editBtn);
-
-  const doneBtn = document.createElement("button");
-  doneBtn.className = "icon-btn";
-  doneBtn.textContent = t.isDone ? "Undone" : "Done";
-  doneBtn.onclick = async () => {
-    await toggleDoneTask(t);
-  };
-  actions.appendChild(doneBtn);
-
-  const dupBtn = document.createElement("button");
-  dupBtn.className = "icon-btn";
-  dupBtn.textContent = "Duplicate";
-  dupBtn.onclick = () => {
-    if (!state.currentUid) return;
-    openDuplicateSheet(t);
-  };
-  actions.appendChild(dupBtn);
-
-  const delBtn = document.createElement("button");
-  delBtn.className = "icon-btn";
-  delBtn.textContent = "Delete";
-  delBtn.onclick = async () => {
-    await deleteMainTask(t);
-  };
-  actions.appendChild(delBtn);
-
-  row.appendChild(main);
-  row.appendChild(actions);
-  return row;
-}
+// --- Background list ---
 
 function renderBgTaskList() {
   const list = document.getElementById("bgTaskList");
   list.innerHTML = "";
 
-  if (!state.currentUid) {
-    const p = document.createElement("p");
-    p.className = "task-meta";
-    p.textContent = "Sign in to see your background tasks.";
-    list.appendChild(p);
+  if (!state.bgTasks.length) {
+    const empty = document.createElement("div");
+    empty.textContent =
+      "No background blocks yet. Create one on the left.";
+    empty.style.fontSize = "12px";
+    empty.style.color = "#6b7280";
+    list.appendChild(empty);
     return;
   }
 
-  let anyShown = false;
-  const now = state.now;
-  for (const t of state.bgTasks) {
-    const sMs = new Date(t.start).getTime();
-    const eMs = new Date(t.end).getTime();
-    if (isNaN(sMs) || isNaN(eMs) || eMs <= sMs) continue;
-    if (eMs <= now) continue; // should not happen; auto-delete occurs at load
+  const tasks = state.bgTasks.slice().sort((a, b) => {
+    const sa = new Date(a.start).getTime();
+    const sb = new Date(b.start).getTime();
+    return sa - sb;
+  });
 
+  for (const t of tasks) {
     const row = document.createElement("div");
-    row.className = "task-item";
+    row.className = "bg-row";
 
     const main = document.createElement("div");
-    main.className = "task-main";
+    main.className = "bg-main";
 
-    const titleRow = document.createElement("div");
-    titleRow.className = "task-title-row";
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "task-title";
-    titleSpan.textContent = t.title || "(bg)";
-    titleRow.appendChild(titleSpan);
-    main.appendChild(titleRow);
+    const title = document.createElement("div");
+    title.className = "bg-title";
+    title.textContent = t.title;
 
     const meta = document.createElement("div");
-    meta.className = "task-meta";
-    meta.innerHTML = `
-      <span>${formatDateTimeShort(sMs)} → ${formatDateTimeShort(eMs)}</span>
-      <span>Blocks main timeline</span>
-    `;
+    meta.className = "bg-meta";
+    const s = new Date(t.start).getTime();
+    const e = new Date(t.end).getTime();
+    meta.textContent = `${formatHM(s)}–${formatHM(
+      e
+    )} (#${t.shortId ?? ""})`;
+
+    main.appendChild(title);
     main.appendChild(meta);
 
     const actions = document.createElement("div");
-    actions.className = "task-actions";
+    actions.className = "bg-actions";
 
-    const delBtn = document.createElement("button");
-    delBtn.className = "icon-btn";
-    delBtn.textContent = "Delete";
-    delBtn.onclick = async () => {
-      if (!state.currentUid) return;
-      if (!confirm("Delete this background task?")) return;
-      await deleteDoc(
-        doc(db, "users", state.currentUid, "backgroundTasks", t.id)
-      );
-      await loadAllData();
-    };
-    actions.appendChild(delBtn);
+    const btnDel = document.createElement("button");
+    btnDel.className = "btn ghost-btn";
+    btnDel.textContent = "Delete";
+    btnDel.addEventListener("click", () => deleteBgTask(t));
+    actions.appendChild(btnDel);
 
     row.appendChild(main);
     row.appendChild(actions);
-    list.appendChild(row);
-    anyShown = true;
-  }
 
-  if (!anyShown) {
-    const p = document.createElement("p");
-    p.className = "task-meta";
-    p.textContent = "No background tasks.";
-    list.appendChild(p);
+    list.appendChild(row);
   }
 }
+
+// --- Debug panel ---
 
 function renderDebugPanel() {
   const summary = document.getElementById("debugSummary");
@@ -987,11 +1105,11 @@ function renderDebugPanel() {
     <tr>
       <th>#</th>
       <th>Title</th>
-      <th>w_base</th>
+      <th>baseW</th>
       <th>minutesLeft</th>
       <th>timeFactor</th>
-      <th>w_final</th>
-      <th>mode</th>
+      <th>shortBoost</th>
+      <th>w</th>
       <th>assignedSlices</th>
     </tr>
   `;
@@ -1007,697 +1125,236 @@ function renderDebugPanel() {
       <td>${e.baseW.toFixed(4)}</td>
       <td>${e.minutesLeft.toFixed(1)}</td>
       <td>${e.timeFactor.toFixed(2)}</td>
+      <td>${e.shortBoost.toFixed(0)}</td>
       <td>${e.w.toFixed(4)}</td>
-      <td>${e.task.onlyMode}</td>
       <td>${e.assignedSlices.join(",")}</td>
     `;
     tbody.appendChild(tr);
   }
-
   table.appendChild(tbody);
+
   wrapper.appendChild(table);
 }
 
-// Tooltip
-
-let tooltipEl = null;
-
-function hideTimelineTooltip() {
-  if (tooltipEl) {
-    tooltipEl.style.display = "none";
-  }
-  state.currentTooltipTask = null;
-}
-
-function openTimelineTooltip(task, evt) {
-  if (!tooltipEl) {
-    tooltipEl = document.getElementById("timelineTooltip");
-  }
-  if (!tooltipEl) return;
-
-  state.currentTooltipTask = task;
-
-  const dlText = task.deadline
-    ? formatDateTimeShort(new Date(task.deadline).getTime())
-    : "No deadline";
-
-  const pendingUntilMs = task.pendingUntil
-    ? new Date(task.pendingUntil).getTime()
-    : null;
-  const pendingText = pendingUntilMs
-    ? " · Pending until " + formatDateTimeShort(pendingUntilMs)
-    : "";
-
-  const modeText =
-    task.onlyMode && task.onlyMode !== "NONE"
-      ? task.onlyMode
-      : "Normal";
-
-  tooltipEl.innerHTML = `
-    <div class="tooltip-title">#${task.shortId ?? ""} ${task.title || ""}</div>
-    <div class="tooltip-meta">
-      ${dlText} · ${task.durationMinutes} min · ${modeText}${pendingText}
-    </div>
-    <div class="tooltip-actions">
-      <button type="button" class="btn subtle-btn small js-tooltip-edit">Edit</button>
-      <button type="button" class="btn subtle-btn small js-tooltip-done">
-        ${task.isDone ? "Undone" : "Done"}
-      </button>
-      <button type="button" class="btn subtle-btn small js-tooltip-delete">Delete</button>
-    </div>
-  `;
-
-  tooltipEl.style.display = "block";
-
-  const padding = 8;
-  let x = evt.clientX + 8;
-  let y = evt.clientY - 10;
-
-  const rect = tooltipEl.getBoundingClientRect();
-  if (x + rect.width + padding > window.innerWidth) {
-    x = window.innerWidth - rect.width - padding;
-  }
-  if (y + rect.height + padding > window.innerHeight) {
-    y = window.innerHeight - rect.height - padding;
-  }
-  if (y < padding) y = padding;
-
-  tooltipEl.style.left = x + "px";
-  tooltipEl.style.top = y + "px";
-
-  const editBtn = tooltipEl.querySelector(".js-tooltip-edit");
-  const doneBtn = tooltipEl.querySelector(".js-tooltip-done");
-  const delBtn = tooltipEl.querySelector(".js-tooltip-delete");
-
-  if (editBtn) {
-    editBtn.onclick = (e) => {
-      e.stopPropagation();
-      hideTimelineTooltip();
-      openEditModal(task);
-    };
-  }
-  if (doneBtn) {
-    doneBtn.onclick = async (e) => {
-      e.stopPropagation();
-      hideTimelineTooltip();
-      await toggleDoneTask(task);
-    };
-  }
-  if (delBtn) {
-    delBtn.onclick = async (e) => {
-      e.stopPropagation();
-      hideTimelineTooltip();
-      await deleteMainTask(task);
-    };
-  }
-}
-
-function setupTimelineTooltipGlobalClose() {
-  tooltipEl = document.getElementById("timelineTooltip");
-  document.addEventListener("click", (e) => {
-    if (!tooltipEl) return;
-    if (tooltipEl.style.display !== "block") return;
-
-    const insideTooltip = tooltipEl.contains(e.target);
-    const onBlock = e.target.closest(".timeline-block.main");
-    if (!insideTooltip && !onBlock) {
-      hideTimelineTooltip();
-    }
-  });
-}
-
-// Duplicate UI + logic
-
-function openDuplicateSheet(task) {
-  state.duplicateTarget = task;
-  const backdrop = document.getElementById("duplicateSheetBackdrop");
-  const label = document.getElementById("dupTaskLabel");
-  if (label) {
-    label.textContent = `#${task.shortId ?? ""} ${task.title || ""}`;
-  }
-  if (backdrop) {
-    backdrop.style.display = "flex";
-  }
-}
-
-function closeDuplicateSheet() {
-  const backdrop = document.getElementById("duplicateSheetBackdrop");
-  if (backdrop) {
-    backdrop.style.display = "none";
-  }
-}
-
-function openDuplicateDateModal() {
-  const backdrop = document.getElementById("duplicateDateModalBackdrop");
-  const input = document.getElementById("dupDateInput");
-  if (input) input.value = "";
-  if (backdrop) backdrop.style.display = "flex";
-}
-
-function closeDuplicateDateModal() {
-  const backdrop = document.getElementById("duplicateDateModalBackdrop");
-  if (backdrop) {
-    backdrop.style.display = "none";
-  }
-}
-
-async function performDuplicateBase(newDeadlineIso) {
-  const src = state.duplicateTarget;
-  if (!src || !state.currentUid) return;
-
-  const shortId = await getNextCounter(
-    "mainTaskCount",
-    state.currentUid
-  );
-
-  const docRef = collection(
-    db,
-    "users",
-    state.currentUid,
-    "mainTasks"
-  );
-  await addDoc(docRef, {
-    shortId,
-    title: src.title,
-    description: src.description || "",
-    durationMinutes: src.durationMinutes,
-    deadline: newDeadlineIso,
-    isPending: false,
-    isDone: false,
-    onlyMode: src.onlyMode ?? "NONE",
-    dayPills: Array.isArray(src.dayPills) ? src.dayPills : [],
-    slotPills: Array.isArray(src.slotPills) ? src.slotPills : [],
-    pendingUntil: null,
-    createdAt: serverTimestamp()
-  });
-
-  state.duplicateTarget = null;
-  await recomputeAfterReload();
-}
-
-async function performDuplicateWithShift(shift) {
-  const src = state.duplicateTarget;
-  if (!src) return;
-
-  const dlMs = src.deadline ? new Date(src.deadline).getTime() : NaN;
-  if (!dlMs || isNaN(dlMs)) {
-    alert("Source task has no valid deadline.");
-    return;
-  }
-
-  let newMs = dlMs;
-  if (shift !== "same") {
-    const days = parseInt(shift, 10);
-    if (!isNaN(days)) {
-      newMs = dlMs + days * 24 * HOUR_MS;
-    }
-  }
-
-  const iso = new Date(newMs).toISOString();
-  await performDuplicateBase(iso);
-}
-
-async function performDuplicateWithCustomDate(dateStr) {
-  const ms = new Date(dateStr).getTime();
-  if (isNaN(ms)) {
-    alert("Invalid deadline.");
-    return;
-  }
-  const iso = new Date(ms).toISOString();
-  await performDuplicateBase(iso);
-}
-
-function setupDuplicateUI() {
-  const sheetBackdrop = document.getElementById("duplicateSheetBackdrop");
-  const dateBackdrop = document.getElementById("duplicateDateModalBackdrop");
-  const cancelBtn = document.getElementById("dupCancelBtn");
-  const dateInput = document.getElementById("dupDateInput");
-  const dateCancelBtn = document.getElementById("dupDateCancelBtn");
-  const dateConfirmBtn = document.getElementById("dupDateConfirmBtn");
-
-  const optionButtons = document.querySelectorAll("[data-dup-shift]");
-  optionButtons.forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const shift = btn.getAttribute("data-dup-shift");
-      if (!state.duplicateTarget || !state.currentUid) {
-        closeDuplicateSheet();
-        return;
-      }
-      if (shift === "custom") {
-        closeDuplicateSheet();
-        openDuplicateDateModal();
-        return;
-      }
-      await performDuplicateWithShift(shift);
-      closeDuplicateSheet();
-    });
-  });
-
-  if (cancelBtn) {
-    cancelBtn.addEventListener("click", () => {
-      closeDuplicateSheet();
-    });
-  }
-
-  if (sheetBackdrop) {
-    sheetBackdrop.addEventListener("click", (e) => {
-      if (e.target === sheetBackdrop) {
-        closeDuplicateSheet();
-      }
-    });
-  }
-
-  if (dateCancelBtn) {
-    dateCancelBtn.addEventListener("click", () => {
-      closeDuplicateDateModal();
-    });
-  }
-
-  if (dateConfirmBtn) {
-    dateConfirmBtn.addEventListener("click", async () => {
-      if (!state.duplicateTarget || !state.currentUid) {
-        closeDuplicateDateModal();
-        return;
-      }
-      if (!dateInput || !dateInput.value) return;
-      await performDuplicateWithCustomDate(dateInput.value);
-      closeDuplicateDateModal();
-    });
-  }
-
-  if (dateBackdrop) {
-    dateBackdrop.addEventListener("click", (e) => {
-      if (e.target === dateBackdrop) {
-        closeDuplicateDateModal();
-      }
-    });
-  }
-}
-
-// Edit modal & pill utilities
-
-function initSinglePillGroup(groupEl) {
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      pills.forEach((p) => p.classList.remove("active"));
-      pill.classList.add("active");
-    });
-  });
-}
-
-function setSinglePillGroup(groupEl, value) {
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((p) => {
-    if (p.getAttribute("data-value") === value) {
-      p.classList.add("active");
-    } else {
-      p.classList.remove("active");
-    }
-  });
-}
-
-function getSinglePillGroup(groupEl) {
-  const active = groupEl.querySelector(".pill.active");
-  return active ? active.getAttribute("data-value") : null;
-}
-
-function setupTogglePills(groupEl) {
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      pill.classList.toggle("active");
-    });
-  });
-}
-
-function setPillsFromArray(groupEl, attr, values) {
-  const set = new Set(values || []);
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((p) => {
-    const raw = p.getAttribute("data-" + attr);
-    const v = raw != null ? parseInt(raw, 10) : NaN;
-    if (!isNaN(v) && set.has(v)) {
-      p.classList.add("active");
-    } else {
-      p.classList.remove("active");
-    }
-  });
-}
-
-function getPillsFromGroup(groupEl, attr) {
-  const pills = groupEl.querySelectorAll(".pill.active");
-  const values = [];
-  pills.forEach((p) => {
-    const raw = p.getAttribute("data-" + attr);
-    const v = raw != null ? parseInt(raw, 10) : NaN;
-    if (!isNaN(v)) values.push(v);
-  });
-  return values;
-}
-
-function getActiveDayPills() {
-  const group = document.getElementById("mtDayPills");
-  return getPillsFromGroup(group, "day");
-}
-
-function getActiveSlotPills() {
-  const group = document.getElementById("mtSlotPills");
-  return getPillsFromGroup(group, "slot");
-}
-
-// Pending toggle helpers
-
-function setupPendingToggle(toggleEl, inputEl) {
-  if (!toggleEl || !inputEl) return;
-  inputEl.disabled = true;
-  toggleEl.addEventListener("click", () => {
-    const active = toggleEl.classList.toggle("active");
-    inputEl.disabled = !active;
-    if (!active) {
-      inputEl.value = "";
-    }
-  });
-}
-
-function setPendingUIFromTask(toggleEl, inputEl, task) {
-  if (!toggleEl || !inputEl) return;
-  const hasPendingUntil = !!task.pendingUntil;
-  if (hasPendingUntil) {
-    toggleEl.classList.add("active");
-    inputEl.disabled = false;
-    inputEl.value = isoToLocalInput(task.pendingUntil);
-  } else {
-    toggleEl.classList.remove("active");
-    inputEl.disabled = true;
-    inputEl.value = "";
-  }
-}
-
-// Edit modal open/close/save
-
-function openEditModal(task) {
-  const backdrop = document.getElementById("editTaskModalBackdrop");
-  if (!backdrop) return;
-
-  state.currentEditTask = task;
-
-  document.getElementById("etTitle").value = task.title || "";
-  document.getElementById("etDescription").value = task.description || "";
-  document.getElementById("etDuration").value = task.durationMinutes || 0;
-  document.getElementById("etDeadline").value = task.deadline
-    ? isoToLocalInput(task.deadline)
-    : "";
-
-  const modeGroup = document.getElementById("etModeGroup");
-  setSinglePillGroup(modeGroup, task.onlyMode || "NONE");
-
-  const dayGroup = document.getElementById("etDayPills");
-  const slotGroup = document.getElementById("etSlotPills");
-  setPillsFromArray(dayGroup, "day", task.dayPills || []);
-  setPillsFromArray(slotGroup, "slot", task.slotPills || []);
-
-  const pendingToggle = document.getElementById("etPendingToggle");
-  const pendingInput = document.getElementById("etPendingUntil");
-  setPendingUIFromTask(pendingToggle, pendingInput, task);
-
-  backdrop.style.display = "flex";
-}
-
-function closeEditModal() {
-  const backdrop = document.getElementById("editTaskModalBackdrop");
-  if (backdrop) {
-    backdrop.style.display = "none";
-  }
-  state.currentEditTask = null;
-}
-
-function setupEditModal() {
-  const backdrop = document.getElementById("editTaskModalBackdrop");
-  const cancelBtn = document.getElementById("editTaskCancelBtn");
-  const saveBtn = document.getElementById("editTaskSaveBtn");
-
-  initSinglePillGroup(document.getElementById("etModeGroup"));
-  setupTogglePills(document.getElementById("etDayPills"));
-  setupTogglePills(document.getElementById("etSlotPills"));
-
-  const pendingToggle = document.getElementById("etPendingToggle");
-  const pendingInput = document.getElementById("etPendingUntil");
-  setupPendingToggle(pendingToggle, pendingInput);
-
-  if (cancelBtn) {
-    cancelBtn.addEventListener("click", () => {
-      closeEditModal();
-    });
-  }
-
-  if (backdrop) {
-    backdrop.addEventListener("click", (e) => {
-      if (e.target === backdrop) {
-        closeEditModal();
-      }
-    });
-  }
-
-  if (saveBtn) {
-    saveBtn.addEventListener("click", async () => {
-      const t = state.currentEditTask;
-      if (!t || !state.currentUid) {
-        closeEditModal();
-        return;
-      }
-
-      const title = document.getElementById("etTitle").value.trim();
-      const desc = document.getElementById("etDescription").value.trim();
-      const dur = parseInt(
-        document.getElementById("etDuration").value,
-        10
-      );
-      const dlStr = document.getElementById("etDeadline").value;
-      const dlMs = new Date(dlStr).getTime();
-
-      if (!title || !dur || isNaN(dlMs)) {
-        alert("Title, duration, and deadline are required.");
-        return;
-      }
-
-      const mode = getSinglePillGroup(
-        document.getElementById("etModeGroup")
-      );
-      const dayPills = getPillsFromGroup(
-        document.getElementById("etDayPills"),
-        "day"
-      );
-      const slotPills = getPillsFromGroup(
-        document.getElementById("etSlotPills"),
-        "slot"
-      );
-
-      let pendingUntil = null;
-      if (pendingToggle.classList.contains("active") && pendingInput.value) {
-        const puMs = new Date(pendingInput.value).getTime();
-        if (!isNaN(puMs)) {
-          pendingUntil = new Date(puMs).toISOString();
-        }
-      }
-
-      const ref = doc(db, "users", state.currentUid, "mainTasks", t.id);
-      await updateDoc(ref, {
-        title,
-        description: desc,
-        durationMinutes: dur,
-        deadline: new Date(dlMs).toISOString(),
-        onlyMode: mode || "NONE",
-        dayPills,
-        slotPills,
-        pendingUntil
-      });
-
-      closeEditModal();
-      await loadAllData();
-    });
-  }
-}
-
-// UI wiring
+// --- Forms & interactions ---
 
 function setupTabs() {
   const buttons = document.querySelectorAll(".tab-button");
-  const tabs = document.querySelectorAll(".tab-content");
+  const panels = document.querySelectorAll(".tab-panel");
 
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      buttons.forEach((b) => b.classList.remove("active"));
-      tabs.forEach((t) => t.classList.remove("active"));
-      btn.classList.add("active");
-      const id = btn.getAttribute("data-tab");
-      document.getElementById(id).classList.add("active");
-    });
-  });
-}
+      const tab = btn.getAttribute("data-tab");
 
-function setupPillGroupSingle(groupEl, defaultVal) {
-  let current = defaultVal;
-  const pills = groupEl.querySelectorAll(".pill");
-  pills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      pills.forEach((p) => p.classList.remove("active"));
-      pill.classList.add("active");
-      current = pill.getAttribute("data-value");
+      buttons.forEach((b) => b.classList.remove("active"));
+      panels.forEach((p) => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      document.getElementById(tab).classList.add("active");
     });
   });
-  return () => current;
 }
 
 function setupMainTaskForm() {
   const form = document.getElementById("mainTaskForm");
-  const modeGetter = setupPillGroupSingle(
-    document.getElementById("mtModeGroup"),
-    "NONE"
-  );
+  if (!form) return;
 
-  setupTogglePills(document.getElementById("mtDayPills"));
-  setupTogglePills(document.getElementById("mtSlotPills"));
+  const modePills = document.querySelectorAll("#onlyModePills .pill");
+  modePills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      modePills.forEach((p) => p.classList.remove("pill-selected"));
+      pill.classList.add("pill-selected");
+    });
+  });
 
-  const pendingToggle = document.getElementById("mtPendingToggle");
-  const pendingInput = document.getElementById("mtPendingUntil");
-  setupPendingToggle(pendingToggle, pendingInput);
+  const dayPills = document.querySelectorAll("#dayPills .pill");
+  dayPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      pill.classList.toggle("pill-selected");
+    });
+  });
+
+  const slotPills = document.querySelectorAll("#slotPills .pill");
+  slotPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      pill.classList.toggle("pill-selected");
+    });
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!state.currentUid) {
-      alert("Please sign in before adding tasks.");
+      alert("Please sign in first.");
       return;
     }
 
-    const title = document.getElementById("mtTitle").value.trim();
-    const desc = document.getElementById("mtDescription").value.trim();
-    const dur = parseInt(
-      document.getElementById("mtDuration").value,
+    const title = document.getElementById("mainTitle").value.trim();
+    const description = document
+      .getElementById("mainDescription")
+      .value.trim();
+    const duration = parseInt(
+      document.getElementById("mainDuration").value,
       10
     );
-    const dlStr = document.getElementById("mtDeadline").value;
-    const dlMs = new Date(dlStr).getTime();
+    const deadlineInput = document.getElementById("mainDeadline").value;
+    const deadlineIso = localInputToIso(deadlineInput);
 
-    if (!title || !dur || isNaN(dlMs)) return;
-
-    let pendingUntil = null;
-    if (pendingToggle.classList.contains("active") && pendingInput.value) {
-      const puMs = new Date(pendingInput.value).getTime();
-      if (!isNaN(puMs)) {
-        pendingUntil = new Date(puMs).toISOString();
-      }
+    if (!title || !duration || !deadlineIso) {
+      alert("Title, duration and deadline are required.");
+      return;
     }
 
-    const shortId = await getNextCounter(
-      "mainTaskCount",
-      state.currentUid
-    );
-
-    const docRef = collection(
-      db,
-      "users",
-      state.currentUid,
-      "mainTasks"
-    );
-    await addDoc(docRef, {
-      shortId,
-      title,
-      description: desc,
-      durationMinutes: dur,
-      deadline: new Date(dlMs).toISOString(),
-      isPending: false,
-      isDone: false,
-      onlyMode: modeGetter(),
-      dayPills: getActiveDayPills(),
-      slotPills: getActiveSlotPills(),
-      pendingUntil,
-      createdAt: serverTimestamp()
+    let onlyMode = "NONE";
+    modePills.forEach((pill) => {
+      if (pill.classList.contains("pill-selected")) {
+        onlyMode = pill.getAttribute("data-mode");
+      }
     });
 
-    form.reset();
-    pendingToggle.classList.remove("active");
-    pendingInput.disabled = true;
-    pendingInput.value = "";
+    const selectedDays = [];
+    dayPills.forEach((pill) => {
+      if (pill.classList.contains("pill-selected")) {
+        selectedDays.push(parseInt(pill.getAttribute("data-day"), 10));
+      }
+    });
 
-    recomputeAfterReload();
+    const selectedSlots = [];
+    slotPills.forEach((pill) => {
+      if (pill.classList.contains("pill-selected")) {
+        selectedSlots.push(parseInt(pill.getAttribute("data-slot"), 10));
+      }
+    });
+
+    const pendingUntilInput =
+      document.getElementById("pendingUntil").value;
+    const pendingUntilIso = pendingUntilInput
+      ? localInputToIso(pendingUntilInput)
+      : null;
+
+    const shortId = await getAndIncrementCounter(
+      state.currentUid,
+      "mainShortCounter"
+    );
+
+    const docRef = await addDoc(mainTasksColRef(state.currentUid), {
+      shortId,
+      title,
+      description,
+      durationMinutes: duration,
+      deadline: deadlineIso,
+      onlyMode,
+      dayPills: selectedDays,
+      slotPills: selectedSlots,
+      isPending: false,
+      pendingUntil: pendingUntilIso,
+      isDone: false,
+      createdAt: new Date().toISOString()
+    });
+
+    console.log("Created main task", docRef.id);
+
+    form.reset();
+    modePills.forEach((p) => p.classList.remove("pill-selected"));
+    modePills[0].classList.add("pill-selected");
+    dayPills.forEach((p) => p.classList.remove("pill-selected"));
+    slotPills.forEach((p) => p.classList.remove("pill-selected"));
+
+    await loadMainTasksFromFirestore();
+    recomputeTimeline();
   });
 }
 
 function setupBgTaskForm() {
   const form = document.getElementById("bgTaskForm");
+  if (!form) return;
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!state.currentUid) {
-      alert("Please sign in before adding background tasks.");
+      alert("Please sign in first.");
       return;
     }
 
     const title = document.getElementById("bgTitle").value.trim();
-    const desc = document.getElementById("bgDescription").value.trim();
-    const startStr = document.getElementById("bgStart").value;
-    const endStr = document.getElementById("bgEnd").value;
+    const startInput = document.getElementById("bgStart").value;
+    const endInput = document.getElementById("bgEnd").value;
 
-    const sMs = new Date(startStr).getTime();
-    const eMs = new Date(endStr).getTime();
-    if (!title || isNaN(sMs) || isNaN(eMs) || eMs <= sMs) {
-      alert("Invalid background task times.");
+    const startIso = localInputToIso(startInput);
+    const endIso = localInputToIso(endInput);
+
+    if (!title || !startIso || !endIso) {
+      alert("Title, start, end are required.");
       return;
     }
 
-    const shortId = await getNextCounter(
-      "backgroundTaskCount",
-      state.currentUid
+    const startMs = new Date(startIso).getTime();
+    const endMs = new Date(endIso).getTime();
+    if (endMs <= startMs) {
+      alert("End must be after start.");
+      return;
+    }
+
+    const shortId = await getAndIncrementCounter(
+      state.currentUid,
+      "bgShortCounter"
     );
 
-    await addDoc(
-      collection(db, "users", state.currentUid, "backgroundTasks"),
-      {
-        shortId,
-        title,
-        description: desc,
-        start: new Date(sMs).toISOString(),
-        end: new Date(eMs).toISOString(),
-        createdAt: serverTimestamp()
-      }
-    );
+    const docRef = await addDoc(bgTasksColRef(state.currentUid), {
+      shortId,
+      title,
+      start: startIso,
+      end: endIso,
+      createdAt: new Date().toISOString()
+    });
+
+    console.log("Created background task", docRef.id);
 
     form.reset();
-    recomputeAfterReload();
+
+    await loadBgTasksFromFirestore();
+    recomputeTimeline();
   });
 }
 
 function setupSettings() {
+  const form = document.getElementById("settingsForm");
+  if (!form) return;
+
   const s = state.settings;
   document.getElementById("setSliceMinutes").value = s.sliceMinutes;
   document.getElementById("setHorizonDays").value = s.horizonDays;
   document.getElementById("setKOnlyPrefer").value = s.kOnlyPrefer;
   document.getElementById("setKShort").value = s.kShort;
 
-  document
-    .getElementById("saveSettingsBtn")
-    .addEventListener("click", () => {
-      const m = parseInt(
-        document.getElementById("setSliceMinutes").value,
-        10
-      );
-      const d = parseInt(
-        document.getElementById("setHorizonDays").value,
-        10
-      );
-      const k = parseFloat(
-        document.getElementById("setKOnlyPrefer").value
-      );
-      const ks = parseFloat(
-        document.getElementById("setKShort").value
-      );
-      if (m > 0) state.settings.sliceMinutes = m;
-      if (d > 0) state.settings.horizonDays = d;
-      if (k > 0) state.settings.kOnlyPrefer = k;
-      if (ks > 0) state.settings.kShort = ks;
-      recomputeTimeline();
-    });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const slice = parseInt(
+      document.getElementById("setSliceMinutes").value,
+      10
+    );
+    const d = parseInt(
+      document.getElementById("setHorizonDays").value,
+      10
+    );
+    const k = parseFloat(
+      document.getElementById("setKOnlyPrefer").value
+    );
+    const ks = parseFloat(
+      document.getElementById("setKShort").value
+    );
+
+    if (!slice || !d || !k || !ks) {
+      alert("All fields are required.");
+      return;
+    }
+
+    state.settings.sliceMinutes = slice;
+    state.settings.horizonDays = d;
+    state.settings.kOnlyPrefer = k;
+    state.settings.kShort = ks;
+
+    recomputeTimeline();
+  });
 }
 
 function setupTimelineControls() {
@@ -1726,186 +1383,416 @@ function setupTimelineControls() {
 
 function setupDebugToggle() {
   const btn = document.getElementById("toggleDebugBtn");
-  const body = document.getElementById("debugBody");
+  const panel = document.getElementById("debugPanel");
+  if (!btn || !panel) return;
+
   btn.addEventListener("click", () => {
-    const hidden = body.style.display === "none";
-    body.style.display = hidden ? "block" : "none";
-    btn.textContent = hidden ? "Collapse" : "Expand";
+    const visible = panel.style.display !== "none";
+    panel.style.display = visible ? "none" : "block";
   });
 }
 
-// Auth UI
+// --- Duplicate sheet ---
 
-function setLoggedOutUI() {
-  state.currentUid = null;
-  document.getElementById("loginBtn").style.display = "inline-flex";
-  document.getElementById("userInfo").style.display = "none";
-  state.mainTasks = [];
-  state.bgTasks = [];
+function openDuplicateSheet(task) {
+  state.duplicateTarget = task;
+  const sheet = document.getElementById("duplicateSheet");
+  sheet.style.display = "block";
+}
+
+function closeDuplicateSheet() {
+  const sheet = document.getElementById("duplicateSheet");
+  sheet.style.display = "none";
+  state.duplicateTarget = null;
+}
+
+function setupDuplicateUI() {
+  const sheet = document.getElementById("duplicateSheet");
+  if (!sheet) return;
+
+  const buttons = sheet.querySelectorAll(".sheet-option-btn");
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const shift = btn.getAttribute("data-shift");
+      if (!state.duplicateTarget) return;
+
+      if (shift === "custom") {
+        openCustomDateDialog();
+      } else {
+        const shiftDays = parseInt(shift, 10);
+        performDuplicateWithShift(shiftDays);
+        closeDuplicateSheet();
+      }
+    });
+  });
+
+  const cancel = document.getElementById("duplicateCancelBtn");
+  cancel.addEventListener("click", () => {
+    closeDuplicateSheet();
+  });
+
+  const dialog = document.getElementById("customDateDialog");
+  const confirmBtn = document.getElementById("customDateConfirmBtn");
+  const cancelCustom = document.getElementById("customDateCancelBtn");
+
+  confirmBtn.addEventListener("click", () => {
+    const dateStr = document.getElementById("customDateInput").value;
+    if (!dateStr || !state.duplicateTarget) {
+      alert("Please pick a date.");
+      return;
+    }
+    performDuplicateWithCustomDate(dateStr);
+    closeCustomDateDialog();
+    closeDuplicateSheet();
+  });
+
+  cancelCustom.addEventListener("click", () => {
+    closeCustomDateDialog();
+  });
+
+  function openCustomDateDialog() {
+    dialog.style.display = "block";
+  }
+
+  function closeCustomDateDialog() {
+    dialog.style.display = "none";
+    document.getElementById("customDateInput").value = "";
+  }
+}
+
+function performDuplicateWithShift(shiftDays) {
+  const t = state.duplicateTarget;
+  if (!t) return;
+
+  let newDeadline = t.deadline ? new Date(t.deadline) : null;
+  if (shiftDays !== 0) {
+    if (!newDeadline) newDeadline = new Date();
+    newDeadline.setDate(newDeadline.getDate() + shiftDays);
+  }
+
+  performDuplicateBase(t, newDeadline ? newDeadline.toISOString() : null);
+}
+
+function performDuplicateWithCustomDate(dateStr) {
+  const t = state.duplicateTarget;
+  if (!t) return;
+
+  const d = new Date(dateStr + "T23:59:00");
+  performDuplicateBase(t, d.toISOString());
+}
+
+async function performDuplicateBase(task, newDeadlineIso) {
+  if (!state.currentUid) {
+    alert("Please sign in first.");
+    return;
+  }
+
+  const shortId = await getAndIncrementCounter(
+    state.currentUid,
+    "mainShortCounter"
+  );
+
+  const payload = {
+    shortId,
+    title: task.title,
+    description: task.description,
+    durationMinutes: task.durationMinutes,
+    deadline: newDeadlineIso || task.deadline,
+    onlyMode: task.onlyMode || "NONE",
+    dayPills: Array.isArray(task.dayPills) ? task.dayPills : [],
+    slotPills: Array.isArray(task.slotPills) ? task.slotPills : [],
+    isPending: false,
+    pendingUntil: null,
+    isDone: false,
+    createdAt: new Date().toISOString()
+  };
+
+  await addDoc(mainTasksColRef(state.currentUid), payload);
+
+  await loadMainTasksFromFirestore();
   recomputeTimeline();
 }
+
+// --- Edit modal ---
+
+function openEditModal(task) {
+  state.currentEditTask = task;
+
+  document.getElementById("editTitle").value = task.title || "";
+  document.getElementById("editDescription").value =
+    task.description || "";
+  document.getElementById("editDuration").value =
+    task.durationMinutes || 30;
+  document.getElementById("editDeadline").value = isoToLocalInput(
+    task.deadline
+  );
+  document.getElementById("editPendingUntil").value =
+    isoToLocalInput(task.pendingUntil);
+
+  const modePills = document.querySelectorAll("#editOnlyModePills .pill");
+  modePills.forEach((p) => {
+    p.classList.toggle(
+      "pill-selected",
+      (task.onlyMode || "NONE") === p.getAttribute("data-mode")
+    );
+  });
+
+  const dayPills = document.querySelectorAll("#editDayPills .pill");
+  dayPills.forEach((p) => {
+    const day = parseInt(p.getAttribute("data-day"), 10);
+    const has = Array.isArray(task.dayPills)
+      ? task.dayPills.includes(day)
+      : false;
+    p.classList.toggle("pill-selected", has);
+  });
+
+  const slotPills = document.querySelectorAll("#editSlotPills .pill");
+  slotPills.forEach((p) => {
+    const slot = parseInt(p.getAttribute("data-slot"), 10);
+    const has = Array.isArray(task.slotPills)
+      ? task.slotPills.includes(slot)
+      : false;
+    p.classList.toggle("pill-selected", has);
+  });
+
+  document.getElementById("editModal").style.display = "block";
+}
+
+function closeEditModal() {
+  document.getElementById("editModal").style.display = "none";
+  state.currentEditTask = null;
+}
+
+function setupEditModal() {
+  const form = document.getElementById("editTaskForm");
+  const cancelBtn = document.getElementById("editCancelBtn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.currentEditTask || !state.currentUid) return;
+
+    const t = state.currentEditTask;
+
+    const title = document.getElementById("editTitle").value.trim();
+    const description = document
+      .getElementById("editDescription")
+      .value.trim();
+    const duration = parseInt(
+      document.getElementById("editDuration").value,
+      10
+    );
+    const deadlineInput = document.getElementById("editDeadline").value;
+    const deadlineIso = localInputToIso(deadlineInput);
+
+    if (!title || !duration || !deadlineIso) {
+      alert("Title, duration and deadline are required.");
+      return;
+    }
+
+    const modePills = document.querySelectorAll(
+      "#editOnlyModePills .pill"
+    );
+    let onlyMode = "NONE";
+    modePills.forEach((p) => {
+      if (p.classList.contains("pill-selected")) {
+        onlyMode = p.getAttribute("data-mode");
+      }
+    });
+
+    const dayPills = document.querySelectorAll("#editDayPills .pill");
+    const dayArr = [];
+    dayPills.forEach((p) => {
+      if (p.classList.contains("pill-selected")) {
+        dayArr.push(parseInt(p.getAttribute("data-day"), 10));
+      }
+    });
+
+    const slotPills = document.querySelectorAll("#editSlotPills .pill");
+    const slotArr = [];
+    slotPills.forEach((p) => {
+      if (p.classList.contains("pill-selected")) {
+        slotArr.push(parseInt(p.getAttribute("data-slot"), 10));
+      }
+    });
+
+    const pendingUntilInput =
+      document.getElementById("editPendingUntil").value;
+    const pendingUntilIso = pendingUntilInput
+      ? localInputToIso(pendingUntilInput)
+      : null;
+
+    const docRef = doc(mainTasksColRef(state.currentUid), t.id);
+    await setDoc(
+      docRef,
+      {
+        title,
+        description,
+        durationMinutes: duration,
+        deadline: deadlineIso,
+        onlyMode,
+        dayPills: dayArr,
+        slotPills: slotArr,
+        pendingUntil: pendingUntilIso
+      },
+      { merge: true }
+    );
+
+    closeEditModal();
+    await loadMainTasksFromFirestore();
+    recomputeTimeline();
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    closeEditModal();
+  });
+}
+
+// --- Toggle done / delete ---
+
+async function toggleDone(task) {
+  if (!state.currentUid) return;
+  const docRef = doc(mainTasksColRef(state.currentUid), task.id);
+  await setDoc(
+    docRef,
+    {
+      isDone: !task.isDone
+    },
+    { merge: true }
+  );
+  await loadMainTasksFromFirestore();
+  recomputeTimeline();
+}
+
+async function deleteMainTask(task) {
+  if (!state.currentUid) return;
+  if (!confirm("Delete this main task?")) return;
+  const docRef = doc(mainTasksColRef(state.currentUid), task.id);
+  await deleteDoc(docRef);
+  await loadMainTasksFromFirestore();
+  recomputeTimeline();
+}
+
+async function deleteBgTask(task) {
+  if (!state.currentUid) return;
+  if (!confirm("Delete this background block?")) return;
+  const docRef = doc(bgTasksColRef(state.currentUid), task.id);
+  await deleteDoc(docRef);
+  await loadBgTasksFromFirestore();
+  recomputeTimeline();
+}
+
+// --- Timeline tooltip ---
+
+function openTimelineTooltipForTask(task, pos) {
+  state.currentTooltipTask = task;
+
+  const tooltip = document.getElementById("timelineTooltip");
+  const titleEl = document.getElementById("tooltipTitle");
+  const deadlineEl = document.getElementById("tooltipDeadline");
+  const idEl = document.getElementById("tooltipId");
+  const durEl = document.getElementById("tooltipDuration");
+  const modeEl = document.getElementById("tooltipMode");
+  const pendingEl = document.getElementById("tooltipPending");
+  const descEl = document.getElementById("tooltipDescription");
+
+  titleEl.textContent = task.title || "(untitled)";
+  idEl.textContent = `#${task.shortId ?? ""}`;
+  durEl.textContent = `${task.durationMinutes} min`;
+
+  if (task.deadline) {
+    const dlMs = new Date(task.deadline).getTime();
+    deadlineEl.textContent = `Deadline: ${formatHM(dlMs)}`;
+  } else {
+    deadlineEl.textContent = "Deadline: none";
+  }
+
+  modeEl.textContent = `Mode: ${task.onlyMode || "NONE"}`;
+
+  if (task.pendingUntil) {
+    const pm = new Date(task.pendingUntil).getTime();
+    pendingEl.style.display = "inline-flex";
+    pendingEl.textContent = `Pending until ${formatHM(pm)}`;
+  } else if (task.isPending) {
+    pendingEl.style.display = "inline-flex";
+    pendingEl.textContent = "Pending (flag)";
+  } else {
+    pendingEl.style.display = "none";
+  }
+
+  descEl.textContent = task.description || "";
+
+  const canvasRect = document
+    .getElementById("timelineCanvasWrapper")
+    .getBoundingClientRect();
+
+  const x = canvasRect.left + (pos?.x || 0) - 10;
+  const y = canvasRect.top + (pos?.lane === "pending" ? 160 : 80);
+
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+  tooltip.style.display = "block";
+
+  const editBtn = document.getElementById("tooltipEditBtn");
+  const doneBtn = document.getElementById("tooltipDoneBtn");
+  const delBtn = document.getElementById("tooltipDeleteBtn");
+
+  editBtn.onclick = () => {
+    tooltip.style.display = "none";
+    openEditModal(task);
+  };
+  doneBtn.onclick = () => {
+    tooltip.style.display = "none";
+    toggleDone(task);
+  };
+  delBtn.onclick = () => {
+    tooltip.style.display = "none";
+    deleteMainTask(task);
+  };
+}
+
+function setupTimelineTooltipGlobalClose() {
+  const tooltip = document.getElementById("timelineTooltip");
+  document.addEventListener("click", (e) => {
+    if (!tooltip.contains(e.target)) {
+      tooltip.style.display = "none";
+    }
+  });
+}
+
+// --- Auth UI ---
 
 function setLoggedInUI(user) {
-  state.currentUid = user.uid;
-  document.getElementById("loginBtn").style.display = "none";
+  const loginBtn = document.getElementById("loginBtn");
   const userInfo = document.getElementById("userInfo");
+  const avatar = document.getElementById("userAvatar");
+  const emailSpan = document.getElementById("userEmail");
+
+  loginBtn.style.display = "none";
   userInfo.style.display = "flex";
 
-  const userEmail = document.getElementById("userEmail");
-  const userAvatar = document.getElementById("userAvatar");
-  userEmail.textContent = user.email || "";
-  if (user.photoURL) {
-    userAvatar.src = user.photoURL;
-  } else {
-    userAvatar.src =
-      "https://ui-avatars.com/api/?name=" +
-      encodeURIComponent(user.email || "User");
-  }
+  avatar.src = user.photoURL || "";
+  emailSpan.textContent = user.email || "";
+
+  state.currentUid = user.uid;
 }
 
-document.getElementById("loginBtn").addEventListener("click", async () => {
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (err) {
-    console.error("Login error:", err);
-    alert("Unable to sign in with Google.");
-  }
-});
+function setLoggedOutUI() {
+  const loginBtn = document.getElementById("loginBtn");
+  const userInfo = document.getElementById("userInfo");
 
-document.getElementById("logoutBtn").addEventListener("click", async () => {
-  try {
-    await signOut(auth);
-  } catch (err) {
-    console.error("Logout error:", err);
-    alert("Unable to sign out.");
-  }
-});
+  loginBtn.style.display = "inline-flex";
+  userInfo.style.display = "none";
 
-// Load data
-
-async function loadMainTasksFromFirestore() {
-  if (!state.currentUid) {
-    state.mainTasks = [];
-    return;
-  }
-  const snap = await getDocs(
-    collection(db, "users", state.currentUid, "mainTasks")
-  );
-  const items = [];
-  snap.forEach((docSnap) =>
-    items.push({ id: docSnap.id, ...docSnap.data() })
-  );
-
-  const now = Date.now();
-
-  state.mainTasks = items.map((d, index) => {
-    const durationMinutes =
-      d.durationMinutes ??
-      d.duration ??
-      30;
-    const deadline =
-      d.deadline ??
-      d.deadlineAt ??
-      null;
-
-    const pendingUntil =
-      d.pendingUntil ?? null;
-
-    // Optional "wake up" logic for pendingUntil <= now can be added here
-    // if we want to clear pendingUntil automatically in Firestore.
-    // For now we keep the value and only interpret at runtime.
-
-    return {
-      id: d.id,
-      shortId: d.shortId ?? d.taskId ?? index + 1,
-      title: d.title || "",
-      description: d.description || "",
-      durationMinutes,
-      deadline,
-      isPending: !!d.isPending,
-      isDone: !!d.isDone,
-      onlyMode: d.onlyMode ?? "NONE",
-      dayPills: Array.isArray(d.dayPills) ? d.dayPills : [],
-      slotPills: Array.isArray(d.slotPills) ? d.slotPills : [],
-      pendingUntil,
-      createdAt: d.createdAt ?? null
-    };
-  });
-}
-
-async function loadBgTasksFromFirestore() {
-  if (!state.currentUid) {
-    state.bgTasks = [];
-    return;
-  }
-  const snap = await getDocs(
-    collection(db, "users", state.currentUid, "backgroundTasks")
-  );
-  const items = [];
-  snap.forEach((docSnap) =>
-    items.push({ id: docSnap.id, ...docSnap.data() })
-  );
-
-  const now = Date.now();
-  const active = [];
-  const deletePromises = [];
-
-  for (const d of items) {
-    if (!d.start || !d.end) continue;
-    const sMs = new Date(d.start).getTime();
-    const eMs = new Date(d.end).getTime();
-    if (isNaN(sMs) || isNaN(eMs) || eMs <= sMs) continue;
-
-    if (eMs <= now) {
-      // auto delete expired background tasks
-      deletePromises.push(
-        deleteDoc(
-          doc(db, "users", state.currentUid, "backgroundTasks", d.id)
-        )
-      );
-    } else {
-      active.push(d);
-    }
-  }
-
-  if (deletePromises.length) {
-    try {
-      await Promise.all(deletePromises);
-    } catch (err) {
-      console.error("Error auto-deleting expired background tasks:", err);
-    }
-  }
-
-  state.bgTasks = active.map((d, index) => ({
-    id: d.id,
-    shortId: d.shortId ?? d.taskId ?? index + 1,
-    title: d.title || "",
-    description: d.description || "",
-    start: d.start,
-    end: d.end,
-    createdAt: d.createdAt ?? null
-  }));
-}
-
-async function loadAllData() {
-  if (!state.currentUid) {
-    state.mainTasks = [];
-    state.bgTasks = [];
-    recomputeTimeline();
-    return;
-  }
-  await Promise.all([
-    loadMainTasksFromFirestore(),
-    loadBgTasksFromFirestore()
-  ]);
+  state.currentUid = null;
+  state.mainTasks = [];
+  state.bgTasks = [];
+  state.scheduledMain = [];
+  state.overdueTasks = [];
+  state.pendingTasks = [];
   recomputeTimeline();
 }
 
-async function recomputeAfterReload() {
-  await loadAllData();
-}
-
-// Init
+// --- Init ---
 
 function init() {
   setupTabs();
@@ -1928,12 +1815,7 @@ function init() {
     }
   });
 
-  state.now = Date.now();
-  state.timelineStart = startOfToday();
-  state.timelineEnd =
-    state.timelineStart +
-    state.settings.horizonDays * 24 * HOUR_MS -
-    1;
+  // Initial empty timeline (before auth & data load)
   recomputeTimeline();
 }
 
