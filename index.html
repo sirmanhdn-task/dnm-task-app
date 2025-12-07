@@ -1,390 +1,426 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>DNM's Tasker v1.5.3 – Magnet Timeline</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="format-detection" content="telephone=no,time=no,date=no" />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>DNM's Tasker v1.6.1 – Magnet Timeline</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="format-detection"
+      content="telephone=no,time=no,date=no,address=no"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
 
-  <div class="page-bg"></div>
+  <body>
+    <div class="page-bg"></div>
 
-  <div class="app-shell">
-    <header class="app-header card-glass">
-      <div class="app-title-block">
-        <div class="logo-orb"></div>
-        <div class="title-texts">
-          <span class="title-main">DNM's Tasker</span>
-          <span class="title-sub">v1.5.3 · Magnet timeline · Pending Until · Firebase</span>
-        </div>
-      </div>
-
-      <div class="header-right">
-        <button id="loginBtn" class="btn secondary-btn">
-          Sign in with Google
-        </button>
-        <div id="userInfo" class="user-info" style="display:none">
-          <img id="userAvatar" class="user-avatar" alt="avatar" />
-          <div class="user-text">
-            <span id="userEmail" class="user-email"></span>
-            <span class="user-status">Premium-ready</span>
+    <div class="app-shell">
+      <!-- HEADER -->
+      <header class="app-header card-glass">
+        <div class="app-title-block">
+          <div class="logo-orb"></div>
+          <div class="title-texts">
+            <span class="title-main">DNM's Tasker</span>
+            <span class="title-sub">v1.6.1 · Magnet timeline · Firebase</span>
           </div>
-          <button id="logoutBtn" class="btn ghost-btn">
-            Sign out
+        </div>
+
+        <div class="header-right">
+          <button id="loginBtn" class="btn secondary-btn">
+            Sign in with Google
+          </button>
+
+          <div id="userInfo" class="user-info" style="display: none">
+            <img id="userAvatar" class="user-avatar" alt="avatar" />
+
+            <div class="user-text">
+              <span id="userEmail" class="user-email"></span>
+              <span class="user-status">Premium-ready</span>
+            </div>
+
+            <button id="logoutBtn" class="btn ghost-btn">Sign out</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- TABS -->
+      <nav class="tab-bar card-soft">
+        <button id="tabTimeline" class="tab-btn active">Timeline</button>
+        <button id="tabBackground" class="tab-btn">Background</button>
+        <button id="tabSettings" class="tab-btn">Settings</button>
+      </nav>
+
+      <!-- MAIN CONTENT -->
+      <main class="app-main card-main">
+        <!-- ===================== -->
+        <!-- TIMELINE TAB -->
+        <!-- ===================== -->
+        <section id="timelineTab" class="tab-content active">
+          <header class="section-header">
+            <div>
+              <h1 class="section-title">Timeline</h1>
+              <p class="section-subtitle">
+                Automatically generated schedule based on NOW-centric engine.
+              </p>
+            </div>
+          </header>
+
+          <section class="timeline-shell card-soft">
+            <header id="timelineHeader" class="timeline-header"></header>
+            <div id="timelineCanvas" class="timeline-canvas"></div>
+          </section>
+
+          <section class="panel-grid">
+            <!-- Main tasks form -->
+            <div class="panel-main card-soft">
+              <header class="panel-header">
+                <div>
+                  <h2>Main tasks</h2>
+                  <p>Create work that the engine will place automatically.</p>
+                </div>
+              </header>
+
+              <form id="mainTaskForm" class="form-grid">
+                <div class="form-row">
+                  <label>Title</label>
+                  <input type="text" id="mtTitle" required />
+                </div>
+
+                <div class="form-row">
+                  <label>Description</label>
+                  <textarea id="mtDescription" rows="2"></textarea>
+                </div>
+
+                <div class="form-row">
+                  <label>Duration (minutes)</label>
+                  <input
+                    type="number"
+                    id="mtDuration"
+                    min="1"
+                    step="1"
+                    required
+                  />
+                </div>
+
+                <div class="form-row">
+                  <label>Deadline</label>
+                  <input type="datetime-local" id="mtDeadline" required />
+                </div>
+
+                <div class="form-row">
+                  <label class="pill-label">Mode</label>
+                  <div class="pill-group" id="mtModeGroup">
+                    <button
+                      type="button"
+                      data-value="NONE"
+                      class="pill active"
+                    >
+                      Normal
+                    </button>
+                    <button type="button" data-value="ONLY" class="pill">
+                      ONLY
+                    </button>
+                    <button type="button" data-value="PREFER" class="pill">
+                      PREFER
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <label>Days (ONLY/PREFER)</label>
+                  <div class="pill-group pill-wrap" id="mtDayPills">
+                    <button type="button" data-day="0" class="pill">Sun</button>
+                    <button type="button" data-day="1" class="pill">Mon</button>
+                    <button type="button" data-day="2" class="pill">Tue</button>
+                    <button type="button" data-day="3" class="pill">Wed</button>
+                    <button type="button" data-day="4" class="pill">Thu</button>
+                    <button type="button" data-day="5" class="pill">Fri</button>
+                    <button type="button" data-day="6" class="pill">Sat</button>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <label>Time windows (3h blocks)</label>
+                  <div class="pill-group pill-wrap" id="mtSlotPills">
+                    <button type="button" data-slot="0" class="pill">
+                      00–03
+                    </button>
+                    <button type="button" data-slot="1" class="pill">
+                      03–06
+                    </button>
+                    <button type="button" data-slot="2" class="pill">
+                      06–09
+                    </button>
+                    <button type="button" data-slot="3" class="pill">
+                      09–12
+                    </button>
+                    <button type="button" data-slot="4" class="pill">
+                      12–15
+                    </button>
+                    <button type="button" data-slot="5" class="pill">
+                      15–18
+                    </button>
+                    <button type="button" data-slot="6" class="pill">
+                      18–21
+                    </button>
+                    <button type="button" data-slot="7" class="pill">
+                      21–24
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <label>Pending until (optional)</label>
+                  <input type="datetime-local" id="mtPendingUntil" />
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn primary-btn">
+                    Add main task
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Main tasks list -->
+            <div class="panel-main card-soft">
+              <header class="panel-header">
+                <div>
+                  <h2>Main task list</h2>
+                  <p>All your added tasks (active, pending, overdue).</p>
+                </div>
+              </header>
+
+              <div id="mainTaskList" class="task-list"></div>
+            </div>
+          </section>
+        </section>
+
+        <!-- ===================== -->
+        <!-- BACKGROUND TAB -->
+        <!-- ===================== -->
+        <section id="backgroundTab" class="tab-content">
+          <header class="section-header">
+            <div>
+              <h1 class="section-title">Background tasks</h1>
+              <p class="section-subtitle">
+                Fixed blocks (sleep, office hours, etc.) that fully block main
+                tasks.
+              </p>
+            </div>
+          </header>
+
+          <section class="panel-grid single">
+            <!-- BG Task Create -->
+            <div class="panel-main card-soft">
+              <header class="panel-header">
+                <div>
+                  <h2>Create background task</h2>
+                  <p>Define when your time is not available for main work.</p>
+                </div>
+              </header>
+
+              <form id="bgTaskForm" class="form-grid">
+                <div class="form-row">
+                  <label>Title</label>
+                  <input type="text" id="bgTitle" required />
+                </div>
+
+                <div class="form-row">
+                  <label>Description</label>
+                  <textarea id="bgDescription" rows="2"></textarea>
+                </div>
+
+                <div class="form-row two-cols">
+                  <div>
+                    <label>Start</label>
+                    <input type="datetime-local" id="bgStart" required />
+                  </div>
+
+                  <div>
+                    <label>End</label>
+                    <input type="datetime-local" id="bgEnd" required />
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn primary-btn">
+                    Add background task
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- BG List -->
+            <div class="panel-main card-soft">
+              <header class="panel-header">
+                <div>
+                  <h2>Background task list</h2>
+                  <p>
+                    Active blocking windows within your horizon (expired
+                    auto-removed).
+                  </p>
+                </div>
+              </header>
+
+              <div id="bgTaskList" class="task-list"></div>
+            </div>
+          </section>
+        </section>
+
+        <!-- ===================== -->
+        <!-- SETTINGS TAB -->
+        <!-- ===================== -->
+        <section id="settingsTab" class="tab-content">
+          <header class="section-header">
+            <div>
+              <h1 class="section-title">Settings</h1>
+              <p class="section-subtitle">
+                Adjust engine parameters (advanced users only).
+              </p>
+            </div>
+          </header>
+
+          <section class="panel-grid single">
+            <div class="panel-main card-soft">
+              <form id="settingsForm" class="form-grid">
+                <div class="form-row">
+                  <label>Slice minutes</label>
+                  <input
+                    type="number"
+                    id="setSliceMinutes"
+                    min="5"
+                    max="60"
+                    required
+                  />
+                </div>
+
+                <div class="form-row">
+                  <label>Timeline horizon (days)</label>
+                  <input
+                    type="number"
+                    id="setHorizonDays"
+                    min="1"
+                    max="30"
+                    required
+                  />
+                </div>
+
+                <div class="form-row">
+                  <label>kShort multiplier</label>
+                  <input type="number" id="setKShort" step="0.1" required />
+                </div>
+
+                <div class="form-row">
+                  <label>kOnlyPrefer multiplier</label>
+                  <input type="number" id="setKOnlyPrefer" step="0.1" required />
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn primary-btn">
+                    Save settings
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <!-- TOOLTIP -->
+    <div id="tooltipTask" class="tooltip-task" style="display: none"></div>
+
+    <!-- EDIT MAIN TASK MODAL -->
+    <div id="editTaskModal" class="modal-overlay" style="display: none">
+      <div class="modal-card">
+        <h2>Edit task</h2>
+        <form id="editTaskForm" class="form-grid">
+          <div class="form-row">
+            <label>Title</label>
+            <input type="text" id="editTitle" required />
+          </div>
+
+          <div class="form-row">
+            <label>Description</label>
+            <textarea id="editDescription" rows="2"></textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Duration (minutes)</label>
+            <input
+              type="number"
+              id="editDuration"
+              min="1"
+              step="1"
+              required
+            />
+          </div>
+
+          <div class="form-row">
+            <label>Deadline</label>
+            <input type="datetime-local" id="editDeadline" required />
+          </div>
+
+          <div class="form-row">
+            <label>Pending until</label>
+            <input type="datetime-local" id="editPendingUntil" />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" id="editCancel" class="btn ghost-btn">
+              Cancel
+            </button>
+            <button type="submit" class="btn primary-btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- DUPLICATE ACTION SHEET -->
+    <div id="duplicateSheet" class="modal-overlay" style="display: none">
+      <div class="modal-card">
+        <h2>Duplicate task</h2>
+
+        <div class="duplicate-options">
+          <button data-offset="0" class="btn secondary-btn">
+            Same deadline
+          </button>
+          <button data-offset="1" class="btn secondary-btn">+1 day</button>
+          <button data-offset="3" class="btn secondary-btn">+3 days</button>
+          <button data-offset="7" class="btn secondary-btn">+7 days</button>
+
+          <button id="duplicateCustom" class="btn primary-btn">
+            Custom date…
           </button>
         </div>
       </div>
-    </header>
-
-    <main class="app-main card-main">
-
-      <nav class="tabs">
-        <button class="tab-button active" data-tab="timelineTab">Timeline</button>
-        <button class="tab-button" data-tab="backgroundTab">Background</button>
-        <button class="tab-button" data-tab="settingsTab">Settings</button>
-      </nav>
-
-      <!-- TIMELINE TAB -->
-      <section id="timelineTab" class="tab-content active">
-        <div class="section-header">
-          <div>
-            <h1 class="section-title">Timeline</h1>
-            <p class="section-subtitle">
-              NOW-centered magnet engine with overdue cluster, Pending Until, and 1-day past view.
-            </p>
-          </div>
-          <div class="timeline-actions">
-            <button id="jumpNowBtn" class="btn primary-btn">Jump to now</button>
-            <div class="jump-date-group">
-              <label for="jumpDateInput">Jump to date</label>
-              <input type="date" id="jumpDateInput" />
-              <button id="jumpDateBtn" class="btn subtle-btn">Go</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="timeline-legend">
-          <span class="legend-item">
-            <span class="legend-color legend-main"></span>Main task
-          </span>
-          <span class="legend-item">
-            <span class="legend-color legend-bg"></span>Background (blocks)
-          </span>
-          <span class="legend-item">
-            <span class="legend-color legend-overdue"></span>Overdue cluster
-          </span>
-        </div>
-
-        <section class="timeline-shell card-soft">
-          <header id="timelineHeader" class="timeline-header"></header>
-          <div id="timelineCanvas" class="timeline-canvas"></div>
-        </section>
-
-        <section class="panel-grid">
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Main tasks</h2>
-                <p>Create work that the engine will place automatically.</p>
-              </div>
-            </header>
-
-            <form id="mainTaskForm" class="form-grid">
-              <div class="form-row">
-                <label>Title</label>
-                <input type="text" id="mtTitle" required />
-              </div>
-              <div class="form-row">
-                <label>Description</label>
-                <textarea id="mtDescription" rows="2"></textarea>
-              </div>
-              <div class="form-row">
-                <label>Duration (minutes)</label>
-                <input type="number" id="mtDuration" min="1" step="1" required />
-              </div>
-              <div class="form-row">
-                <label>Deadline</label>
-                <input type="datetime-local" id="mtDeadline" required />
-              </div>
-
-              <div class="form-row">
-                <label class="pill-label">Mode</label>
-                <div class="pill-group" id="mtModeGroup">
-                  <button type="button" data-value="NONE" class="pill active">Normal</button>
-                  <button type="button" data-value="ONLY" class="pill">ONLY</button>
-                  <button type="button" data-value="PREFER" class="pill">PREFER</button>
-                </div>
-              </div>
-
-              <div class="form-row">
-                <label>Days (ONLY/PREFER)</label>
-                <div class="pill-group pill-wrap" id="mtDayPills">
-                  <button type="button" data-day="0" class="pill">Sun</button>
-                  <button type="button" data-day="1" class="pill">Mon</button>
-                  <button type="button" data-day="2" class="pill">Tue</button>
-                  <button type="button" data-day="3" class="pill">Wed</button>
-                  <button type="button" data-day="4" class="pill">Thu</button>
-                  <button type="button" data-day="5" class="pill">Fri</button>
-                  <button type="button" data-day="6" class="pill">Sat</button>
-                </div>
-              </div>
-
-              <div class="form-row">
-                <label>Time windows (3h blocks)</label>
-                <div class="pill-group pill-wrap" id="mtSlotPills">
-                  <button type="button" data-slot="0" class="pill">00–03</button>
-                  <button type="button" data-slot="1" class="pill">03–06</button>
-                  <button type="button" data-slot="2" class="pill">06–09</button>
-                  <button type="button" data-slot="3" class="pill">09–12</button>
-                  <button type="button" data-slot="4" class="pill">12–15</button>
-                  <button type="button" data-slot="5" class="pill">15–18</button>
-                  <button type="button" data-slot="6" class="pill">18–21</button>
-                  <button type="button" data-slot="7" class="pill">21–24</button>
-                </div>
-              </div>
-
-              <div class="form-row">
-                <label>Pending control</label>
-                <div class="pill-group pending-group">
-                  <button type="button" id="mtPendingToggle" class="pill">Pending until…</button>
-                  <input type="datetime-local" id="mtPendingUntil" class="pending-input" disabled />
-                </div>
-              </div>
-
-              <div class="form-actions">
-                <button type="submit" class="btn primary-btn">Add main task</button>
-              </div>
-            </form>
-          </div>
-
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Task list</h2>
-                <p>Sorted by magnet w (active), plus pending and overdue status.</p>
-              </div>
-            </header>
-            <div id="mainTaskList" class="task-list"></div>
-          </div>
-        </section>
-
-        <section class="debug-panel card-soft">
-          <header class="panel-header">
-            <div>
-              <h2>Magnet Debug</h2>
-              <p>Inspect weights, slice assignments, and modes.</p>
-            </div>
-            <button id="toggleDebugBtn" class="btn subtle-btn small">Collapse</button>
-          </header>
-          <div id="debugBody" class="debug-body">
-            <div id="debugSummary" class="debug-summary"></div>
-            <div id="debugTableWrapper" class="debug-table-wrapper"></div>
-          </div>
-        </section>
-      </section>
-
-      <!-- BACKGROUND TAB -->
-      <section id="backgroundTab" class="tab-content">
-        <header class="section-header">
-          <div>
-            <h1 class="section-title">Background tasks</h1>
-            <p class="section-subtitle">Fixed blocks that fully block main tasks.</p>
-          </div>
-        </header>
-
-        <section class="panel-grid single">
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Create background task</h2>
-                <p>Define when your time is not available for main work.</p>
-              </div>
-            </header>
-
-            <form id="bgTaskForm" class="form-grid">
-              <div class="form-row">
-                <label>Title</label>
-                <input type="text" id="bgTitle" required />
-              </div>
-              <div class="form-row">
-                <label>Description</label>
-                <textarea id="bgDescription" rows="2"></textarea>
-              </div>
-              <div class="form-row two-cols">
-                <div>
-                  <label>Start</label>
-                  <input type="datetime-local" id="bgStart" required />
-                </div>
-                <div>
-                  <label>End</label>
-                  <input type="datetime-local" id="bgEnd" required />
-                </div>
-              </div>
-              <div class="form-actions">
-                <button type="submit" class="btn primary-btn">Add background task</button>
-              </div>
-            </form>
-          </div>
-
-          <div class="panel-main card-soft">
-            <header class="panel-header">
-              <div>
-                <h2>Background task list</h2>
-                <p>Active blocking windows within your horizon.</p>
-              </div>
-            </header>
-            <div id="bgTaskList" class="task-list"></div>
-          </div>
-        </section>
-      </section>
-
-      <!-- SETTINGS TAB -->
-      <section id="settingsTab" class="tab-content">
-        <header class="section-header">
-          <div>
-            <h1 class="section-title">Settings</h1>
-            <p class="section-subtitle">Tune your magnet engine and timeline horizon.</p>
-          </div>
-        </header>
-
-        <section class="panel-grid single">
-          <div class="panel-main card-soft">
-            <form class="form-grid">
-              <div class="form-row">
-                <label>Slice length (minutes)</label>
-                <input type="number" id="setSliceMinutes" min="5" max="60" step="5" />
-              </div>
-              <div class="form-row">
-                <label>Horizon (days)</label>
-                <input type="number" id="setHorizonDays" min="1" max="30" />
-              </div>
-              <div class="form-row">
-                <label>k (ONLY/PREFER multiplier)</label>
-                <input type="number" id="setKOnlyPrefer" min="1" step="0.1" />
-              </div>
-              <div class="form-row">
-                <label>Short task boost (k_short)</label>
-                <input type="number" id="setKShort" min="1" step="10" />
-              </div>
-              <div class="form-actions">
-                <button id="saveSettingsBtn" type="button" class="btn primary-btn">Save & recompute</button>
-              </div>
-            </form>
-          </div>
-        </section>
-      </section>
-
-    </main>
-  </div>
-
-  <!-- Duplicate sheet -->
-  <div id="duplicateSheetBackdrop" class="overlay">
-    <div class="action-sheet">
-      <div class="sheet-header">
-        <div class="sheet-title">Duplicate task</div>
-        <div id="dupTaskLabel" class="sheet-subtitle"></div>
-      </div>
-      <div class="sheet-options">
-        <button type="button" class="sheet-option" data-dup-shift="same">Keep same deadline</button>
-        <button type="button" class="sheet-option" data-dup-shift="1">Move +1 day</button>
-        <button type="button" class="sheet-option" data-dup-shift="3">Move +3 days</button>
-        <button type="button" class="sheet-option" data-dup-shift="7">Move +7 days</button>
-        <button type="button" class="sheet-option strong" data-dup-shift="custom">Custom date…</button>
-      </div>
-      <button type="button" id="dupCancelBtn" class="sheet-cancel">Cancel</button>
     </div>
-  </div>
 
-  <!-- Custom date modal -->
-  <div id="duplicateDateModalBackdrop" class="overlay center">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title">Pick new deadline</div>
-        <p class="modal-subtitle">Choose the exact date & time.</p>
-      </div>
-      <div class="modal-body">
-        <input type="datetime-local" id="dupDateInput" />
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="dupDateCancelBtn" class="btn subtle-btn small">Cancel</button>
-        <button type="button" id="dupDateConfirmBtn" class="btn primary-btn small">Duplicate</button>
+    <!-- CUSTOM DATE MODAL -->
+    <div id="customDateModal" class="modal-overlay" style="display: none">
+      <div class="modal-card">
+        <h2>Select custom duplicate deadline</h2>
+
+        <form id="customDateForm" class="form-grid">
+          <div class="form-row">
+            <label>Deadline</label>
+            <input type="datetime-local" id="customDateInput" required />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" id="customCancel" class="btn ghost-btn">
+              Cancel
+            </button>
+            <button type="submit" class="btn primary-btn">Duplicate</button>
+          </div>
+        </form>
       </div>
     </div>
-  </div>
 
-  <!-- Edit modal -->
-  <div id="editTaskModalBackdrop" class="overlay center">
-    <div class="modal-card modal-edit">
-      <div class="modal-header">
-        <div class="modal-title">Edit task</div>
-        <p class="modal-subtitle">Magnet engine will recompute automatically.</p>
-      </div>
-      <div class="modal-body">
-        <div class="form-grid">
-          <div class="form-row"><label>Title</label><input type="text" id="etTitle" /></div>
-          <div class="form-row"><label>Description</label><textarea id="etDescription" rows="2"></textarea></div>
-          <div class="form-row"><label>Duration (minutes)</label><input type="number" id="etDuration" min="1" /></div>
-          <div class="form-row"><label>Deadline</label><input type="datetime-local" id="etDeadline" /></div>
+    <!-- TOAST -->
+    <div id="toast" class="toast"></div>
 
-          <div class="form-row">
-            <label class="pill-label">Mode</label>
-            <div class="pill-group" id="etModeGroup">
-              <button type="button" data-value="NONE" class="pill active">Normal</button>
-              <button type="button" data-value="ONLY" class="pill">ONLY</button>
-              <button type="button" data-value="PREFER" class="pill">PREFER</button>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label>Days</label>
-            <div class="pill-group pill-wrap" id="etDayPills">
-              <button type="button" data-day="0" class="pill">Sun</button>
-              <button type="button" data-day="1" class="pill">Mon</button>
-              <button type="button" data-day="2" class="pill">Tue</button>
-              <button type="button" data-day="3" class="pill">Wed</button>
-              <button type="button" data-day="4" class="pill">Thu</button>
-              <button type="button" data-day="5" class="pill">Fri</button>
-              <button type="button" data-day="6" class="pill">Sat</button>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label>Time windows</label>
-            <div class="pill-group pill-wrap" id="etSlotPills">
-              <button type="button" data-slot="0" class="pill">00–03</button>
-              <button type="button" data-slot="1" class="pill">03–06</button>
-              <button type="button" data-slot="2" class="pill">06–09</button>
-              <button type="button" data-slot="3" class="pill">09–12</button>
-              <button type="button" data-slot="4" class="pill">12–15</button>
-              <button type="button" data-slot="5" class="pill">15–18</button>
-              <button type="button" data-slot="6" class="pill">18–21</button>
-              <button type="button" data-slot="7" class="pill">21–24</button>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label>Pending control</label>
-            <div class="pill-group pending-group">
-              <button type="button" id="etPendingToggle" class="pill">Pending until…</button>
-              <input type="datetime-local" id="etPendingUntil" class="pending-input" />
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" id="editTaskCancelBtn" class="btn subtle-btn small">Cancel</button>
-        <button type="button" id="editTaskSaveBtn" class="btn primary-btn small">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tooltip -->
-  <div id="timelineTooltip" class="timeline-tooltip" style="display:none;"></div>
-
-  <script type="module" src="app.js"></script>
-</body>
+    <script src="app.js"></script>
+  </body>
 </html>
