@@ -215,6 +215,8 @@ body {
   background: #f3f4f6;
   border: 1px solid rgba(229, 231, 235, 0.9);
   margin-bottom: 10px;
+  position: relative;
+  z-index: 50; /* đảm bảo nằm trên timeline */
 }
 
 .tab-button {
@@ -230,14 +232,17 @@ body {
 
 .tab-button.active {
   background: #ffffff;
+  box-shadow: 0 1px 6px rgba(148, 163, 184, 0.5);
   color: #0f172a;
   font-weight: 600;
-  box-shadow: 0 1px 6px rgba(148, 163, 184, 0.5);
 }
 
+/* CONTENT */
 .tab-content {
   display: none;
   margin-top: 6px;
+  position: relative;
+  z-index: 20;
 }
 
 .tab-content.active {
@@ -261,21 +266,7 @@ body {
   color: var(--text-soft);
 }
 
-.timeline-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.jump-date-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.74rem;
-  color: var(--text-muted);
-}
-
-/* LEGEND */
+/* TIMELINE LEGEND */
 .timeline-legend {
   display: flex;
   gap: 8px;
@@ -314,12 +305,16 @@ body {
   background: var(--bg-soft);
   border: 1px solid var(--border-subtle);
   padding: 10px;
+  position: relative;
+  z-index: 20;
 }
 
 /* TIMELINE SHELL */
 .timeline-shell {
   margin-top: 4px;
   margin-bottom: 10px;
+  position: relative;
+  z-index: 10;
 }
 
 /* TIMELINE HEADER */
@@ -371,25 +366,29 @@ body {
   border: 1px solid var(--border-subtle);
   background: #ffffff;
   overflow-x: auto;
+  overflow-y: hidden;
   margin-top: 4px;
+  pointer-events: none; /* FIX CLICK */
 }
 
 .timeline-inner {
   position: relative;
   height: 100%;
+  pointer-events: none; /* FIX CLICK */
 }
 
-/* LANES – UPDATED v1.5.3 */
+/* LANE – rectangles */
 .timeline-lane {
   position: relative;
   height: var(--lane-height);
   margin: var(--lane-gap) 10px;
-  border-radius: 10px; /* giảm từ 999px */
+  border-radius: 10px;
   background: linear-gradient(
     135deg,
     rgba(248, 250, 252, 1),
     rgba(241, 245, 249, 1)
   );
+  pointer-events: auto; /* interactive */
 }
 
 .lane-label {
@@ -409,22 +408,24 @@ body {
   background: linear-gradient(to bottom, #f97316, #ef4444);
   box-shadow: 0 0 8px rgba(248, 113, 113, 0.9);
   z-index: 9999;
+  pointer-events: auto;
 }
 
-/* BLOCKS — UPDATED v1.5.3 RECTANGLES */
+/* TIMELINE BLOCKS – rectangles */
 .timeline-block {
   position: absolute;
   top: 10px;
   height: calc(100% - 20px);
-  border-radius: 6px; /* từ 14 → 6 */
+  border-radius: 6px;
   padding: 6px 11px;
   font-size: 0.7rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  overflow: hidden;
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: auto; /* interactive */
 }
 
 /* MAIN BLOCK */
@@ -440,7 +441,7 @@ body {
     inset 0 1px 2px rgba(255, 255, 255, 0.6);
 }
 
-/* OVERDUE BLOCK */
+/* OVERDUE */
 .timeline-block.main.overdue {
   background: linear-gradient(
     135deg,
@@ -483,95 +484,11 @@ body {
   opacity: 0.65;
 }
 
-/* PANEL GRID */
-.panel-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 10px;
-  margin-top: 6px;
-}
-
-.panel-grid.single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-/* FORM (unchanged) */
-.form-grid {
-  display: grid;
-  gap: 8px;
-}
-
-/* INPUTS */
-input[type="text"],
-input[type="number"],
-input[type="datetime-local"],
-input[type="date"],
-textarea {
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  padding: 6px 9px;
-  font-size: 0.8rem;
-}
-
-/* PILLS (unchanged) */
-.pill-group {
-  display: inline-flex;
-  gap: 5px;
-  padding: 3px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  border: 1px solid rgba(209, 213, 219, 0.9);
-}
-
-.pill {
-  border: none;
-  background: transparent;
-  padding: 3px 9px;
-  font-size: 0.72rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  border-radius: 999px;
-}
-
-.pill.active {
-  background: rgba(37, 99, 235, 0.14);
-  color: #1d4ed8;
-  font-weight: 500;
-}
-
-/* TASK LIST (unchanged) */
-.task-item {
-  padding: 7px 9px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid rgba(229, 231, 235, 0.95);
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-/* DEBUG PANEL (unchanged) */
-
-/* OVERLAY + MODAL + SHEET */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.25);
-  display: none;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 50;
-}
-
-.overlay.center {
-  align-items: center;
-}
-
-/* MODAL — UPDATED v1.5.3: bo nhẹ */
+/* MODAL – bo nhẹ */
 .modal-card {
   width: 100%;
   max-width: 360px;
-  border-radius: 12px; /* từ 18 → 12 */
+  border-radius: 12px;
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.95);
   padding: 12px 14px 10px;
@@ -582,7 +499,7 @@ textarea {
   max-width: 520px;
 }
 
-/* TOOLTIP — UPDATED v1.5.3: bo nhẹ */
+/* TOOLTIP – bo nhẹ */
 .timeline-tooltip {
   position: fixed;
   z-index: 60;
@@ -590,10 +507,11 @@ textarea {
   max-width: 320px;
   padding: 8px 10px;
   background: rgba(255, 255, 255, 0.98);
-  border-radius: 10px; /* từ 14 → 10 */
+  border-radius: 10px;
   border: 1px solid rgba(226, 232, 240, 0.95);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
   font-size: 0.78rem;
+  pointer-events: auto;
 }
 
 /* RESPONSIVE */
